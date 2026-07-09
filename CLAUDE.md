@@ -39,10 +39,13 @@ Local backend note: `--backend cpu` (default) resumes the existing
 `outputs/local_grpo_gsm8k_eac028bfcc87` stratum; `--backend mps` is validated
 but measured at CPU parity (per-token sync overhead in transformers generate on
 MPS) — see `eaaj-pilot/LOCAL_EXPERIMENT_PLAN.md` §2026-07-08 before using it.
-`--backend cuda` is the Windows RTX 4070 Laptop stratum (bf16, mirrors the
-notebook-01 Colab recipe); its plan, setup scripts, and runbook live in
-`eaaj-pilot-win4070/` — read `eaaj-pilot-win4070/WIN4070_EXPERIMENT_PLAN.md`
-before touching that machine. Never mix backends within one run's phases;
+`--backend cuda` is the Windows RTX 4070 Laptop stratum, v2: fp32 master
+weights + bf16 autocast + 8-bit paged AdamW — never load the params themselves
+in bf16; at lr=1e-6 that rounds every update to zero (the v1 run was a no-op,
+see `eaaj-pilot-win4070/WIN4070_RUN_ANALYSIS.md`). Plan and setup live in
+`eaaj-pilot-win4070/`; for reruns on that machine follow
+`eaaj-pilot-win4070/WIN4070_RERUN_GUIDE.md` (includes the step-25
+update-sentinel kill-gate). Never mix backends within one run's phases;
 phases 2–4 auto-follow the active run's recorded execution profile.
 `outputs/ACTIVE_RUN.txt` is machine-local (untracked) so per-machine active
 runs never collide in git.

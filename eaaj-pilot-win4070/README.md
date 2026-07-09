@@ -8,14 +8,20 @@ measurement at each checkpoint, then an identical fixed-budget SVAMP adaptation
 
 **Nothing scientific is defined here.** The single recipe stays in
 `eaaj-pilot/pilot_config.json`; this folder only adds the Windows/CUDA execution
-profile (`--backend cuda`, bf16 + gradient checkpointing), environment setup,
-preflight checks, and the runbook. Read
-[`WIN4070_EXPERIMENT_PLAN.md`](WIN4070_EXPERIMENT_PLAN.md) before running
-anything — it is the detailed plan, VRAM budget, deviation log, and failure
-playbook.
+profile (`--backend cuda`, v2: fp32 master weights + bf16 autocast + 8-bit
+paged AdamW, gradient checkpointing), environment setup, preflight checks, and
+the runbook. Read [`WIN4070_EXPERIMENT_PLAN.md`](WIN4070_EXPERIMENT_PLAN.md)
+before running anything — it is the detailed plan, VRAM budget, deviation log,
+and failure playbook.
 
-Pre-registered run directory for this stratum (deterministic from the measured
-Windows/CUDA config): `eaaj-pilot/outputs/local_cuda_grpo_gsm8k_6a075c15808e`.
+**Status 2026-07-09:** the first run (v1,
+`outputs/local_cuda_grpo_gsm8k_6a075c15808e`) is **invalidated** — pure-bf16
+weights at lr=1e-6 rounded every update to zero; it is preserved as a negative
+control. Analysis: [`WIN4070_RUN_ANALYSIS.md`](WIN4070_RUN_ANALYSIS.md).
+The v2 rerun (pre-registered run dir
+`outputs/local_cuda_grpo_gsm8k_e9b0b52aab6c`) follows
+[`WIN4070_RERUN_GUIDE.md`](WIN4070_RERUN_GUIDE.md) — 重跑请从这份指引开始,
+里面有第 25 步哨兵检查,15 分钟内就能确认这次训练是真实生效的。
 
 ## 快速开始（中文）
 
@@ -48,7 +54,9 @@ powershell -ExecutionPolicy Bypass -File run_pipeline.ps1 -Phase 4
 
 | File | Purpose |
 |---|---|
-| `WIN4070_EXPERIMENT_PLAN.md` | The detailed plan: contract, VRAM budget, deviations, runbook, playbook |
+| `WIN4070_RERUN_GUIDE.md` | **Start here for the v2 rerun**: hash check, probes, step-25 sentinel gate, recording protocol |
+| `WIN4070_RUN_ANALYSIS.md` | Analysis of the v1 run (why it was a no-op) + cpu-stratum comparison |
+| `WIN4070_EXPERIMENT_PLAN.md` | The detailed plan: contract, VRAM budget, deviations, runbook, playbook, change log |
 | `setup_win4070.ps1` | One-shot environment setup (venv, torch cu128, pins, prefetch, tests) |
 | `run_pipeline.ps1` | Phase wrapper: keep-awake + nvidia-smi telemetry + `--backend cuda` |
 | `requirements-win4070.txt` | Same pins as `eaaj-pilot/requirements.txt` (torch installed separately) |

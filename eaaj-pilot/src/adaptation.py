@@ -35,6 +35,8 @@ def run_fixed_budget_adaptation(checkpoint_path,
                                 bf16: bool = True,
                                 device: str | None = None,
                                 dtype_name: str | None = None,
+                                autocast_dtype_name: str | None = None,
+                                optim: str | None = None,
                                 gradient_checkpointing: bool = True,
                                 save_steps: int = 10) -> dict:
     """Adapt one checkpoint to SVAMP under a fixed budget; returns summary.
@@ -47,7 +49,8 @@ def run_fixed_budget_adaptation(checkpoint_path,
     from transformers.trainer_utils import get_last_checkpoint
     from trl import GRPOConfig, GRPOTrainer
 
-    from .callbacks import ExactAnswerEvalCallback, JsonlDashboardLogger, LocalSafetyCallback
+    from .callbacks import (ExactAnswerEvalCallback, JsonlDashboardLogger,
+                            LocalSafetyCallback, UpdateEffectivenessSentinel)
     from .data import svamp_eval_set, svamp_grpo_dataset
     from .evaluate import exact_answer_accuracy
     from .reward import exact_answer_reward
@@ -73,10 +76,18 @@ def run_fixed_budget_adaptation(checkpoint_path,
     if device == "mps" and not torch.backends.mps.is_available():
         raise RuntimeError("MPS requested but unavailable")
     if dtype_name is None:
-        dtype_name = "bfloat16" if bf16 else "float32"
+        # 2026-07-09: bf16=True now means fp32 MASTER weights + bf16 autocast.
+        # Loading the params themselves in bf16 makes every lr=1e-6 AdamW
+        # update round to zero (bf16 ulp ~|w|*2^-8 >> 1e-6) — verified on run
+        # local_cuda_grpo_gsm8k_6a075c15808e, see
+        # eaaj-pilot-win4070/WIN4070_RUN_ANALYSIS.md.
+        dtype_name = "float32"
+        if bf16 and autocast_dtype_name is None:
+            autocast_dtype_name = "bfloat16"
+    compute_dtype_name = autocast_dtype_name or dtype_name
     dtype = {"float32": torch.float32, "float16": torch.float16,
              "bfloat16": torch.bfloat16}[dtype_name]
-    if dtype_name == "bfloat16" and device == "cuda" and not torch.cuda.is_bf16_supported():
+    if compute_dtype_name == "bfloat16" and device == "cuda" and not torch.cuda.is_bf16_supported():
         raise RuntimeError("bf16 requested on a GPU without bf16 support; use L4/A100 or log an fp16 deviation")
     if device == "mps":
         from .mps_compat import apply_mps_grpo_patches
@@ -114,8 +125,10 @@ def run_fixed_budget_adaptation(checkpoint_path,
         temperature=temperature,
         top_p=top_p,
         max_completion_length=max_completion_length,
-        bf16=(dtype_name == "bfloat16" and device == "cuda"),
-        fp16=(dtype_name == "float16" and device == "cuda"),
+        bf16=(compute_dtype_name == "bfloat16" and device == "cuda"),
+        fp16=(compute_dtype_name == "float16" and device == "cuda"),
+        # only override the trainer's optimizer when a profile asks for it
+        **({"optim": optim} if optim else {}),
         use_cpu=(device == "cpu"),
         gradient_checkpointing=gradient_checkpointing,
         gradient_checkpointing_kwargs=(
@@ -136,6 +149,8 @@ def run_fixed_budget_adaptation(checkpoint_path,
         processing_class=tokenizer,
         callbacks=[
             JsonlDashboardLogger(out_dir / "dashboard.jsonl"),
+            UpdateEffectivenessSentinel(out_dir / "update_sentinel.jsonl",
+                                        every=eval_every),
             ExactAnswerEvalCallback(eval_prompts, eval_golds,
                                     out_dir / "svamp_eval_curve.jsonl",
                                     every=eval_every),
@@ -164,9 +179,11 @@ def run_fixed_budget_adaptation(checkpoint_path,
         "gradient_accumulation_steps": grad_accum,
         "max_prompt_length": max_prompt_length,
         "max_completion_length": max_completion_length,
-        "bf16": dtype_name == "bfloat16",
+        "bf16": compute_dtype_name == "bfloat16",
         "device": device,
         "dtype": dtype_name,
+        "autocast_dtype": autocast_dtype_name,
+        "optim": optim,
         "gradient_checkpointing": gradient_checkpointing,
         "resume_from_checkpoint": resume_from,
         "acc_before": acc_before,

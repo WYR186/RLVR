@@ -9,12 +9,13 @@ Backends (--backend):
          with CPU results). Uses the two mathematically identical execution
          patches from src/mps_compat.py; see LOCAL_EXPERIMENT_PLAN.md
          2026-07-08 update for the measurements behind them.
-  cuda — bfloat16 NVIDIA-GPU stratum (new run dir = new stratum; never merged
-         with the fp32 strata). Mirrors the pre-registered Colab recipe from
-         notebook 01 (bf16 weights + bf16 autocast) plus gradient
-         checkpointing so GRPO rollouts fit in 8 GiB VRAM. Designed for the
-         Windows RTX 4070 Laptop machine — read
-         eaaj-pilot-win4070/WIN4070_EXPERIMENT_PLAN.md before running it.
+  cuda — NVIDIA-GPU stratum, v2 (new run dir = new stratum; never merged with
+         other strata): fp32 MASTER weights + bf16 autocast + 8-bit paged
+         AdamW. v1 loaded the params themselves in bf16 and every lr=1e-6
+         update rounded to zero (run local_cuda_grpo_gsm8k_6a075c15808e is a
+         no-op control — see eaaj-pilot-win4070/WIN4070_RUN_ANALYSIS.md).
+         Designed for the Windows RTX 4070 Laptop machine — read
+         eaaj-pilot-win4070/WIN4070_RERUN_GUIDE.md before running it.
 
 Backend is a Phase-1 choice only: phases 2–4 read device/dtype from the
 active run's config.json so measurement and adaptation always match the
@@ -40,7 +41,8 @@ from trl import GRPOConfig, GRPOTrainer
 from src.adaptation import run_fixed_budget_adaptation
 from src.analysis import run_analysis
 from src.callbacks import (ExactAnswerEvalCallback, JsonlDashboardLogger,
-                           LocalSafetyCallback, SaveAtSteps)
+                           LocalSafetyCallback, SaveAtSteps,
+                           UpdateEffectivenessSentinel)
 from src.data import gsm8k_eval_set, gsm8k_grpo_dataset, load_probe_prompts
 from src.metrics import checkpoint_q_metrics
 from src.preflight import sparse_reward_preflight
@@ -66,16 +68,20 @@ EXECUTION_PROFILES = {
                    "LOCAL_EXPERIMENT_PLAN.md 2026-07-08 update."),
     },
     "cuda": {
-        "backend": "pytorch_cuda", "device": "cuda", "dtype": "bfloat16",
+        "backend": "pytorch_cuda", "device": "cuda", "dtype": "float32",
+        "autocast_dtype": "bfloat16", "optim": "paged_adamw_8bit",
         "torch_threads": 8, "gradient_checkpointing": True,
         "per_device_train_batch_size": 4,
         "gradient_accumulation_steps": 16,
-        "reason": ("Windows RTX 4070 Laptop (8 GiB VRAM) stratum: bf16 "
-                   "weights + bf16 autocast mirror the pre-registered Colab "
-                   "recipe (notebook 01); gradient checkpointing plus "
-                   "micro-batch 4 x grad-accum 16 keep the same 64-completion "
-                   "effective update while fitting the measured 4070 VRAM "
-                   "budget. See eaaj-pilot-win4070/WIN4070_EXPERIMENT_PLAN.md."),
+        "reason": ("Windows RTX 4070 Laptop (8 GiB VRAM) stratum, v2 "
+                   "precision fix: fp32 MASTER weights + bf16 autocast, "
+                   "because pure-bf16 params at lr=1e-6 round every update "
+                   "to zero (v1 run local_cuda_grpo_gsm8k_6a075c15808e "
+                   "trained a no-op; see eaaj-pilot-win4070/"
+                   "WIN4070_RUN_ANALYSIS.md). bitsandbytes paged_adamw_8bit "
+                   "keeps fp32 master + optimizer states inside 8 GiB; "
+                   "micro-batch 4 x grad-accum 16 keeps the same "
+                   "64-completion effective update (measured 2026-07-09)."),
     },
 }
 
@@ -172,7 +178,9 @@ def setup_backend(execution: dict) -> None:
     elif execution["device"] == "cuda":
         if not torch.cuda.is_available():
             raise RuntimeError("cuda backend requested but CUDA is unavailable")
-        if execution["dtype"] == "bfloat16" and not torch.cuda.is_bf16_supported():
+        wants_bf16 = "bfloat16" in (execution["dtype"],
+                                    execution.get("autocast_dtype"))
+        if wants_bf16 and not torch.cuda.is_bf16_supported():
             raise RuntimeError(
                 "bf16 requested but this GPU lacks bf16 support; "
                 "log an fp16 deviation before switching dtypes")
@@ -239,6 +247,9 @@ def phase1(pilot: dict, backend: str = "cpu") -> Path:
     set_seed(cfg["seed"])
     trainer_dir = run_dir / "trainer"
     resume_from = get_last_checkpoint(str(trainer_dir)) if trainer_dir.exists() else None
+    # Autocast/compute dtype may differ from the master-weight dtype (cuda v2
+    # profile); strata without autocast_dtype compute in their master dtype.
+    compute_dtype = execution.get("autocast_dtype", execution["dtype"])
     args = GRPOConfig(
         output_dir=str(trainer_dir), seed=cfg["seed"], max_steps=cfg["max_steps"],
         learning_rate=cfg["learning_rate"],
@@ -248,8 +259,10 @@ def phase1(pilot: dict, backend: str = "cpu") -> Path:
         temperature=cfg["temperature"], top_p=cfg["top_p"],
         max_completion_length=cfg["max_completion_length"],
         use_cpu=(device == "cpu"),
-        bf16=(execution["dtype"] == "bfloat16"),
-        fp16=(execution["dtype"] == "float16"),
+        bf16=(compute_dtype == "bfloat16"),
+        fp16=(compute_dtype == "float16"),
+        # only override the trainer's optimizer when a profile asks for it
+        **({"optim": execution["optim"]} if "optim" in execution else {}),
         gradient_checkpointing=execution.get("gradient_checkpointing", False),
         gradient_checkpointing_kwargs=(
             {"use_reentrant": False}
@@ -262,6 +275,8 @@ def phase1(pilot: dict, backend: str = "cpu") -> Path:
         reward_funcs=exact_answer_reward, processing_class=tok,
         callbacks=[
             JsonlDashboardLogger(run_dir / "dashboard.jsonl"),
+            UpdateEffectivenessSentinel(run_dir / "update_sentinel.jsonl",
+                                        every=25),
             SaveAtSteps(cfg["checkpoint_steps"][1:], run_dir, tokenizer=tok),
             ExactAnswerEvalCallback(
                 eval_prompts, eval_golds, run_dir / "gsm8k_eval.jsonl",
@@ -363,6 +378,8 @@ def phase3(pilot: dict, run_dir: Path, only_checkpoint: int | None = None) -> No
             max_completion_length=recipe["max_completion_length"],
             bf16=False, device=execution["device"],
             dtype_name=execution["dtype"],
+            autocast_dtype_name=execution.get("autocast_dtype"),
+            optim=execution.get("optim"),
             gradient_checkpointing=execution.get("gradient_checkpointing", False),
             save_steps=10)
         print(f"Phase 3 checkpoint {n}: Δacc={summary['delta_acc']:+.4f}")

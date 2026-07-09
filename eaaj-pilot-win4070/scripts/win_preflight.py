@@ -145,6 +145,13 @@ def grpo_probe(full: bool, per_device_batch: int | None = None,
         cuda_profile = EXECUTION_PROFILES["cuda"]
     except Exception:
         cuda_profile = {}
+    # Rehearse exactly what the formal cuda profile will do: master-weight
+    # dtype, autocast dtype, and optimizer all come from the profile (v2 =
+    # fp32 master + bf16 autocast + paged_adamw_8bit; pure-bf16 params made
+    # v1 a no-op run - see ../WIN4070_RUN_ANALYSIS.md).
+    master_dtype_name = cuda_profile.get("dtype", "float32")
+    autocast_dtype_name = cuda_profile.get("autocast_dtype", master_dtype_name)
+    optim = cuda_profile.get("optim")
     if full:
         default_batch = cuda_profile.get(
             "per_device_train_batch_size", stage_a["per_device_train_batch_size"])
@@ -170,21 +177,28 @@ def grpo_probe(full: bool, per_device_batch: int | None = None,
         shutil.rmtree(scratch)
     scratch.mkdir(parents=True)
 
-    print(f"\n== GRPO probe ({label}): one update, bf16 + gradient checkpointing ==")
+    print(f"\n== GRPO probe ({label}): one update, master={master_dtype_name} "
+          f"autocast={autocast_dtype_name} optim={optim or 'trainer-default'} "
+          "+ gradient checkpointing ==")
     set_seed(20260708)  # probe-only seed; probe artifacts are never results
     tokenizer = AutoTokenizer.from_pretrained(
         pilot["model_id"], revision=pilot["model_revision"], local_files_only=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    dtypes = {"float32": torch.float32, "float16": torch.float16,
+              "bfloat16": torch.bfloat16}
     model = AutoModelForCausalLM.from_pretrained(
         pilot["model_id"], revision=pilot["model_revision"],
-        dtype=torch.bfloat16, local_files_only=True).to("cuda")
+        dtype=dtypes[master_dtype_name], local_files_only=True).to("cuda")
 
     args = GRPOConfig(
         output_dir=str(scratch / "trainer"), seed=20260708, max_steps=1,
         learning_rate=stage_a["learning_rate"], beta=stage_a["beta"],
         temperature=stage_a["temperature"], top_p=stage_a["top_p"],
-        bf16=True, gradient_checkpointing=True,
+        bf16=(autocast_dtype_name == "bfloat16"),
+        fp16=(autocast_dtype_name == "float16"),
+        **({"optim": optim} if optim else {}),
+        gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         logging_steps=1, save_strategy="no", report_to="none", **geometry)
     trainer = GRPOTrainer(model=model, args=args,
@@ -199,10 +213,8 @@ def grpo_probe(full: bool, per_device_batch: int | None = None,
         print("\nCUDA OOM at the", label, "geometry. Fallback ladder "
               "(log every rung you take in compute_log.md + notebook header):")
         print("  1. free VRAM: close GPU apps, move the display to the iGPU")
-        print("  2. micro-batch 4 x grad-accum 16 (same 64-completion update)")
-        print("  3. micro-batch 2 x grad-accum 32")
-        print("  4. last resort: bitsandbytes paged_adamw_8bit "
-              "(new dependency - flag to the team first)")
+        print("  2. micro-batch 2 x grad-accum 32 (same 64-completion update)")
+        print("  3. stop and flag to the team - do not change scientific knobs")
         raise
     wall = time.time() - t0
     row = {
@@ -211,7 +223,8 @@ def grpo_probe(full: bool, per_device_batch: int | None = None,
         "peak_alloc_gib": round(torch.cuda.max_memory_allocated() / 1024 ** 3, 3),
         "peak_reserved_gib": round(torch.cuda.max_memory_reserved() / 1024 ** 3, 3),
         "geometry": geometry,
-        "dtype": "bfloat16", "gradient_checkpointing": True,
+        "master_dtype": master_dtype_name, "autocast_dtype": autocast_dtype_name,
+        "optim": optim or "trainer-default", "gradient_checkpointing": True,
         "gpu": torch.cuda.get_device_name(0),
         "torch": torch.__version__, "cuda": torch.version.cuda,
         "unix_time": time.time(),

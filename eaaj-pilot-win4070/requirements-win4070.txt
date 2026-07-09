@@ -9,6 +9,10 @@ transformers==5.13.0
 datasets==5.0.0
 accelerate==1.14.0
 pytest==8.4.2
+# 8-bit paged AdamW for the cuda v2 profile (fp32 master weights + optimizer
+# states inside 8 GiB VRAM). Windows wheels exist since 0.43; the run
+# manifest records the exact installed version.
+bitsandbytes>=0.45
 numpy==2.3.5
 scipy==1.16.3
 pandas==2.3.3

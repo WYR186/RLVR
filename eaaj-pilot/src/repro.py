@@ -77,7 +77,7 @@ def runtime_manifest(project_dir, config: dict) -> dict:
         "git_sha": git_sha or None,
         "versions": {name: _version(name) for name in (
             "torch", "trl", "transformers", "datasets", "accelerate",
-            "numpy", "scipy", "pandas", "matplotlib")},
+            "bitsandbytes", "numpy", "scipy", "pandas", "matplotlib")},
         "tracked_input_sha256": hashes,
     }
 

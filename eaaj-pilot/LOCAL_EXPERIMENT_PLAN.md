@@ -213,3 +213,32 @@ non-reentrant `gradient_checkpointing_kwargs` wherever checkpointing is
 enabled (inert for cpu/mps, which keep it off). `outputs/ACTIVE_RUN.txt` is
 now machine-local (untracked) so the two machines cannot fight over the
 pointer.
+
+## 2026-07-09 cuda stratum v1 invalidated; v2 precision fix landed
+
+The first Windows 4070 run (`local_cuda_grpo_gsm8k_6a075c15808e`) completed
+all four phases but was a scientific no-op: **pure-bf16 parameters at lr=1e-6
+round every AdamW update to zero** (per-step update ~1e-6 vs bf16 ulp
+~|w|·2⁻⁸ ≈ 8e-5). Evidence: max relative weight-norm change over 200 updates
+2.4e-8 (cpu stratum: 3.9e-6 with reward 0.364→0.653); reward flat at
+~0.37; Q moved ≤0.14%; all SVAMP deltas within ±2pp eval noise. Full analysis
+and the cpu-stratum comparison: `../eaaj-pilot-win4070/WIN4070_RUN_ANALYSIS.md`.
+The same latent bug existed in the notebook-01 Colab recipe (bf16 load +
+`bf16=True` without fp32 master weights) — caught before any Colab spend.
+
+Fixes landed 2026-07-09 (cpu run-dir hash re-verified unchanged; 45/45 tests):
+
+- cuda profile v2: **fp32 master weights + bf16 autocast + bitsandbytes
+  `paged_adamw_8bit`**; new pre-registered run dir
+  `local_cuda_grpo_gsm8k_e9b0b52aab6c`.
+- notebook 01 loads fp32 master (`CONFIG` gained `master_dtype` → new Colab
+  run-dir hash); deviation noted in the notebook header.
+- `src/adaptation.py`: `bf16=True` now means fp32 master + bf16 autocast
+  (fixes notebook 03 transparently); new `autocast_dtype_name`/`optim` params.
+- New `UpdateEffectivenessSentinel` callback on all strata (phase 1 every 25
+  steps, phase-3 adaptations every 10, notebook 01): logs sampled ‖Δw‖/‖w‖ per
+  window to `update_sentinel.jsonl` and warns when updates round to zero.
+  Instrumentation only — no effect on training math, RNG, or run-dir hashes.
+  Reference scales: healthy fp32 ~5e-7/window; the broken bf16 run ~3e-9.
+- `bitsandbytes` added to `requirements-win4070.txt` and the manifest version
+  list. Windows rerun runbook: `../eaaj-pilot-win4070/WIN4070_RERUN_GUIDE.md`.

@@ -6,10 +6,13 @@ Qwen2.5-0.5B over 512 GSM8K questions with exact-answer reward, checkpoints at
 0/25/50/100/200 updates, effective-rank + dormant-fraction measurement at every
 checkpoint, then the identical fixed-budget SVAMP adaptation (256 train / 100
 eval / 50 updates) from every checkpoint.
-Status: **environment and CUDA probes executed; Phase 1 not yet started**.
-The original micro-batch 8 × grad-accum 8 probe failed the VRAM gate, and the
-pre-declared ladder rung micro-batch 4 × grad-accum 16 passed; the formal cuda
-profile now uses that measured geometry.
+Status: **v1 executed and invalidated; v2 precision fix ready to run.**
+v1 (`local_cuda_grpo_gsm8k_6a075c15808e`) completed all four phases but
+trained a no-op: pure-bf16 params at lr=1e-6 round every AdamW update to
+zero — see `WIN4070_RUN_ANALYSIS.md`. v2 uses **fp32 master weights + bf16
+autocast + bitsandbytes `paged_adamw_8bit`**; geometry stays micro-batch 4 ×
+grad-accum 16 (measured 2026-07-09). Rerun instructions, including the
+step-25 sentinel kill-gate: `WIN4070_RERUN_GUIDE.md`. Change history: §11.
 
 ## 1. What this is and is not
 
@@ -21,7 +24,8 @@ pilot runs, never *what* is run:
 |---|---|---|---|---|
 | cpu-fp32 | M3 Max (macOS) | CPU float32 | running (Phase 3 in flight) | `local_grpo_gsm8k_eac028bfcc87` |
 | mps-fp32 | M3 Max (macOS) | Apple GPU float32 | validated, parked (CPU parity) | `local_mps_grpo_gsm8k_42323d70490c` |
-| **cuda-bf16** | **RTX 4070 Laptop (Windows 11)** | **CUDA bfloat16** | **this plan** | **`local_cuda_grpo_gsm8k_6a075c15808e`** |
+| cuda v1 | RTX 4070 Laptop (Windows 11) | CUDA pure-bf16 | executed, **invalidated** (update underflow; kept as negative control) | `local_cuda_grpo_gsm8k_6a075c15808e` |
+| **cuda v2** | **RTX 4070 Laptop (Windows 11)** | **CUDA fp32 master + bf16 autocast** | **this plan** | **`local_cuda_grpo_gsm8k_e9b0b52aab6c`** |
 
 The run-dir hash is deterministic from the config, so the cuda directory name
 above is **pre-registered**; verify it on the Windows box with:
@@ -75,11 +79,11 @@ Profile `EXECUTION_PROFILES["cuda"]` in `eaaj-pilot/scripts/run_local_pipeline.p
 
 | Deviation vs. what | Setting | Justification (mirror to Research Doc) |
 |---|---|---|
-| vs. cpu stratum | device `cuda`, dtype **bfloat16** | Matches the pre-registered Colab recipe (notebook 01 loads bf16 + `bf16=True`); the 4070 (Ada, sm_89) has native bf16. Strata stay separate. |
+| vs. cpu stratum | device `cuda`, **fp32 master weights + bf16 autocast** | v2 precision fix: pure-bf16 params at lr=1e-6 round every update to zero (v1 evidence: `WIN4070_RUN_ANALYSIS.md`). Matches notebook 01 post-fix (fp32 load + `bf16=True`). |
 | vs. Colab notebook | **gradient_checkpointing ON** (non-reentrant) plus micro-batch 4 × grad-accum 16 | Execution optimization to fit GRPO activations+logits in 8 GiB VRAM; keeps the same 64-completion effective update and does not change objective, data, or update count (same precedent as the cpu stratum disabling it for RAM abundance). |
 | vs. Colab notebook | trainer checkpoints every 25/10 steps, keep 2, with optimizer state | Resumability for a laptop that may sleep/crash; same policy the cpu stratum already uses. |
-| vs. notebook 02 | Q measured in **bf16** (stratum dtype), not float16 | Local-runner convention: phases 2–4 always follow the run's recorded execution profile, so Q dtype is fixed *within* the stratum (comparability holds where it matters). Cross-stratum Q values are never pooled. |
-| — | optimizer states in bf16 (params bf16 ⇒ AdamW moments bf16) | Identical to what the notebook-01 recipe produces on Colab; noted because LR=1e-6 with bf16 moments is a known precision trade-off — flagged, not "fixed", to stay recipe-faithful. |
+| vs. notebook 02 | Q measured in **float32** (stratum master dtype), not float16 | Local-runner convention: phases 2–4 always follow the run's recorded execution profile; v2's master dtype is fp32, which also matches the cpu stratum's measurement dtype. Cross-stratum Q values are still never pooled. |
+| vs. Colab notebook | optimizer **`paged_adamw_8bit`** (bitsandbytes) | fp32 AdamW states do not fit 8 GiB next to fp32 master weights; 8-bit paged states keep the fp32 master update path intact. Colab (≥16 GiB) keeps plain fp32 AdamW — logged cross-venue difference. |
 | — | `torch_threads=8`, pinned dataloader memory | Host-side only. |
 
 Also fixed for this stratum (Windows-portability changes to shared code, all
@@ -102,15 +106,17 @@ same logged defaults as the existing runs.
 Qwen2.5-0.5B ≈ 0.494 B parameters (24 layers, hidden 896, MLP 4864, vocab
 151 936, tied embeddings).
 
+v2 budget (fp32 master + bf16 autocast + 8-bit paged AdamW, micro-batch 4):
+
 | Component | Est. GiB | Notes |
 |---|---:|---|
-| Weights (bf16) | 0.92 | |
-| Gradients (bf16) | 0.92 | |
-| AdamW moments (2 × bf16) | 1.84 | follow param dtype, as on Colab |
-| Rollout KV cache + generation | 0.2–0.5 | 64 seqs × ≤1024 tok; GQA (2 KV heads) keeps this small |
-| Logits / log-prob chunks + checkpointed activations | 1.5–2.5 | vocab 152 k dominates; TRL 1.6 chunks selective log-softmax |
+| Weights (fp32 master) | 1.84 | |
+| Gradients (fp32) | 1.84 | |
+| AdamW states (8-bit paged, bitsandbytes) | ~0.55 | can page to host RAM on spikes |
+| Rollout KV cache + generation (bf16 autocast) | 0.2–0.5 | 64 seqs × ≤1024 tok; GQA (2 KV heads) keeps this small |
+| Logits / log-prob chunks + checkpointed activations | 1.0–2.0 | micro-batch 4; vocab 152 k dominates; TRL 1.6 chunks selective log-softmax |
 | CUDA context, cuDNN, allocator slack | 0.4–0.7 | `expandable_segments:True` set by the wrapper |
-| **Peak estimate** | **≈ 5.8–7.3** | measured, not trusted: the full-geometry probe prints true peaks |
+| **Peak estimate** | **≈ 5.9–7.4** | v1 measured 6.94 GiB reserved at this geometry with bf16 params; v2 must re-probe |
 
 Windows itself holds 0.3–0.8 GiB of VRAM for the desktop if the display runs
 on the dGPU. Before Phase 1: close GPU apps, ideally leave the panel on the
@@ -121,10 +127,12 @@ header; scientific knobs — generations, lengths, LR, update counts — are nev
 touched):
 
 1. Free VRAM (close apps / iGPU display), retry.
-2. Micro-batch 4 × grad-accum 16 — same 64-completion effective update.
-3. Micro-batch 2 × grad-accum 32.
-4. Last resort, team-flagged first: `bitsandbytes` `paged_adamw_8bit` (new
-   dependency; changes optimizer-state numerics — a bigger deviation than 2–3).
+2. Micro-batch 2 × grad-accum 32 — same 64-completion effective update.
+3. Stop and flag to the team — never touch the scientific knobs.
+
+(`paged_adamw_8bit` is no longer a ladder rung: it became part of the v2
+profile itself, since fp32 AdamW states cannot sit next to fp32 master
+weights in 8 GiB.)
 
 ## 5. Time & storage budget
 
@@ -144,9 +152,11 @@ Reference points: same recipe measured ~300 s/update on M3-Max CPU fp32;
 LOCAL_EXPERIMENT_PLAN.md projects 30–90 s/update for Colab CUDA bf16. A
 90–140 W laptop 4070 with thermal throttling should land inside 25–75 s.
 
-Storage: 5 scientific ckpts × ~0.95 GiB (bf16 safetensors) + ≤2 resumable
-trainer checkpoints per live phase (~3 GiB each with optimizer state) + Phase-3
-equivalents ≈ **30–45 GiB peak**; preflight requires ≥ 80 GB free.
+Storage (v2): 5 scientific ckpts × ~1.9 GiB (fp32 safetensors) + ≤2 resumable
+trainer checkpoints per live phase (~2.5 GiB each: fp32 model + 8-bit optimizer
+state) + Phase-3 equivalents ≈ **40–60 GiB peak**; preflight requires ≥ 80 GB
+free. The v1 run dir (~10 GiB of JSON/weights) stays on disk as the negative
+control — do not delete or write into it.
 
 Stop / reassess conditions (LocalSafetyCallback, active on all strata): 3
 consecutive updates > 8 min; non-finite loss/grad; 5 consecutive updates with
@@ -183,6 +193,10 @@ Optional manual step: add the repo + `%USERPROFILE%\.cache\huggingface` to
 Windows Defender exclusions to speed up many-small-file IO.
 
 ## 7. Runbook
+
+**For the v2 rerun, follow `WIN4070_RERUN_GUIDE.md`** — it adds the
+pre-registration hash check, the re-probe, and the step-25 sentinel
+kill-gate on top of the generic commands below.
 
 On the 4070 box (all resumable; re-run the same command after interruption):
 
@@ -233,9 +247,10 @@ Notes:
 
 ## 9. Two-machine git workflow (conflict-free by construction)
 
-- Run artifacts live under stratum-specific dirs (`local_grpo_gsm8k_…` mac,
-  `local_cuda_grpo_gsm8k_6a075c15808e` win) — disjoint paths, so merges never
-  collide on artifacts.
+- Run artifacts live under stratum-specific dirs (`local_grpo_gsm8k_…` mac;
+  `local_cuda_grpo_gsm8k_6a075c15808e` win v1, preserved;
+  `local_cuda_grpo_gsm8k_e9b0b52aab6c` win v2) — disjoint paths, so merges
+  never collide on artifacts.
 - `outputs/ACTIVE_RUN.txt` is **machine-local and untracked** (as of
   2026-07-08): each machine's phases 2–4 follow its own active run; the
   wrapper additionally refuses phases 2–4 if the pointer isn't the cuda
@@ -254,3 +269,31 @@ Notes:
 - [ ] Phase 4: checkpoint × {erank/layer, dormant/τ, GSM8K acc, SVAMP Δacc & final} table + 3 plots (Q vs updates; reward curve with Q overlay; Q vs fixed-budget outcome scatter with Spearman ρ)
 - [ ] `compute_log.md` rows + `logs/gpu_*.csv` per phase; wall-clock extrapolation to the full-experiment sweep
 - [ ] Deviation lines from §3 mirrored into the Research Doc
+- [ ] (v2) `update_sentinel.jsonl` healthy in phase 1 and every phase-3 adaptation
+
+## 11. Change log
+
+- **2026-07-08 — v1 design** (macOS): pure-bf16 weights + bf16 autocast
+  (mirror of the then-current notebook-01 recipe), gradient checkpointing,
+  micro-batch 8 × grad-accum 8.
+- **2026-07-09 — v1 probes & run** (Windows box): mb8×ga8 failed the VRAM
+  gate (11.87 GiB reserved); pre-declared ladder rung mb4×ga16 passed
+  (31.97 s/upd, 6.94 GiB) and became the profile. torch pin relaxed to
+  `2.11.0+cu128` (2.12 unavailable on the cu128 index). v1 executed all four
+  phases → run `local_cuda_grpo_gsm8k_6a075c15808e`.
+- **2026-07-09 — v1 invalidated** (analysis): bf16 update underflow made all
+  450 updates no-ops (max relative weight-norm change 2.4e-8; reward flat).
+  Full evidence: `WIN4070_RUN_ANALYSIS.md`. Run kept as negative control.
+- **2026-07-09 — v2 precision fix**: fp32 master weights + bf16 autocast +
+  bitsandbytes `paged_adamw_8bit` in the cuda profile;
+  `UpdateEffectivenessSentinel` (sampled ‖Δw‖/‖w‖ per window →
+  `update_sentinel.jsonl`) added to runner phase 1 (every 25), phase-3
+  adaptations (every 10), and notebook 01; notebook 01 now loads fp32 master
+  (CONFIG gained `master_dtype`, so its Colab run-dir hash changed);
+  `src/adaptation.py` `bf16=True` now means fp32 master + bf16 autocast
+  (fixes notebook 03 transparently); bitsandbytes added to
+  `requirements-win4070.txt` and to the manifest version list. cpu/mps strata
+  re-verified byte-identical (`--backend cpu` still resumes
+  `local_grpo_gsm8k_eac028bfcc87`; 45/45 tests pass). New pre-registered v2
+  run dir: `local_cuda_grpo_gsm8k_e9b0b52aab6c`. Rerun guide:
+  `WIN4070_RERUN_GUIDE.md`.

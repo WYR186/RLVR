@@ -154,6 +154,78 @@ class LocalSafetyCallback(TrainerCallback):
         return control
 
 
+class UpdateEffectivenessSentinel(TrainerCallback):
+    """Detect silently ineffective optimizer updates (e.g. bf16 rounding).
+
+    Motivation (2026-07-09): the first win4070 cuda run trained 200 GRPO
+    updates while >98% of parameter updates rounded to zero (pure-bf16 params
+    with lr=1e-6: the per-step update ~1e-6 is far below the bf16 ulp of a
+    typical weight, ~|w|*2^-8) and every dashboard signal still looked
+    plausible — see eaaj-pilot-win4070/WIN4070_RUN_ANALYSIS.md.
+
+    Every `every` steps this callback samples a fixed strided subset of every
+    parameter tensor (a few MB, deterministic order) and logs the relative L2
+    change of the sample over the last window and since the first observation.
+    It NEVER stops training: it prints a loud warning and flags the JSONL row
+    (`updates_effective: false`) so a human or the run guide's step-25 gate
+    can abort a dead run early. Reference scale: the healthy cpu-fp32 stratum
+    moved ~5e-7 per 25-update window; the broken bf16 run moved ~3e-9.
+    """
+
+    def __init__(self, out_path, every: int = 25, max_per_tensor: int = 4096,
+                 warn_threshold: float = 1e-8):
+        self.out_path = Path(out_path)
+        self.out_path.parent.mkdir(parents=True, exist_ok=True)
+        self.every = every
+        self.max_per_tensor = max_per_tensor
+        self.warn_threshold = warn_threshold
+        self._ref0 = None
+        self._prev = None
+        self._prev_step = None
+
+    def _sample(self, model):
+        import torch
+
+        chunks = []
+        with torch.no_grad():
+            for _, p in sorted(model.named_parameters()):
+                flat = p.detach().reshape(-1)
+                stride = max(1, flat.numel() // self.max_per_tensor)
+                chunks.append(flat[::stride].float().cpu())
+        return torch.cat(chunks)
+
+    def on_train_begin(self, args, state, control, model=None, **kwargs):
+        self._ref0 = self._sample(model)
+        self._prev = self._ref0
+        self._prev_step = state.global_step
+
+    def on_step_end(self, args, state, control, model=None, **kwargs):
+        if self._ref0 is None or state.global_step % self.every != 0:
+            return
+        import torch
+
+        cur = self._sample(model)
+        denom = float(torch.linalg.vector_norm(self._prev)) or 1.0
+        rel_window = float(torch.linalg.vector_norm(cur - self._prev)) / denom
+        denom0 = float(torch.linalg.vector_norm(self._ref0)) or 1.0
+        rel_total = float(torch.linalg.vector_norm(cur - self._ref0)) / denom0
+        row = {"step": state.global_step,
+               "window_start_step": self._prev_step,
+               "rel_change_window": rel_window,
+               "rel_change_since_start": rel_total,
+               "warn_threshold": self.warn_threshold,
+               "updates_effective": rel_window >= self.warn_threshold,
+               "wall_time": time.time()}
+        with self.out_path.open("a") as f:
+            f.write(json.dumps(row) + "\n")
+        if rel_window < self.warn_threshold:
+            print(f"[update-sentinel] WARNING step {state.global_step}: sampled "
+                  f"parameters moved {rel_window:.2e} (< {self.warn_threshold:.0e}) "
+                  "over the last window — optimizer updates may be rounding to "
+                  "zero (see eaaj-pilot-win4070/WIN4070_RUN_ANALYSIS.md)")
+        self._prev, self._prev_step = cur, state.global_step
+
+
 class ExactAnswerEvalCallback(TrainerCallback):
     """Greedy exact-answer accuracy on a fixed slice every `every` updates.
 
