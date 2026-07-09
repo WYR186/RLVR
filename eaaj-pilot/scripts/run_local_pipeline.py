@@ -9,6 +9,12 @@ Backends (--backend):
          with CPU results). Uses the two mathematically identical execution
          patches from src/mps_compat.py; see LOCAL_EXPERIMENT_PLAN.md
          2026-07-08 update for the measurements behind them.
+  cuda — bfloat16 NVIDIA-GPU stratum (new run dir = new stratum; never merged
+         with the fp32 strata). Mirrors the pre-registered Colab recipe from
+         notebook 01 (bf16 weights + bf16 autocast) plus gradient
+         checkpointing so GRPO rollouts fit in 8 GiB VRAM. Designed for the
+         Windows RTX 4070 Laptop machine — read
+         eaaj-pilot-win4070/WIN4070_EXPERIMENT_PLAN.md before running it.
 
 Backend is a Phase-1 choice only: phases 2–4 read device/dtype from the
 active run's config.json so measurement and adaptation always match the
@@ -59,7 +65,19 @@ EXECUTION_PROFILES = {
                    "kernels are pathologically slow on MPS — see "
                    "LOCAL_EXPERIMENT_PLAN.md 2026-07-08 update."),
     },
+    "cuda": {
+        "backend": "pytorch_cuda", "device": "cuda", "dtype": "bfloat16",
+        "torch_threads": 8, "gradient_checkpointing": True,
+        "reason": ("Windows RTX 4070 Laptop (8 GiB VRAM) stratum: bf16 "
+                   "weights + bf16 autocast mirror the pre-registered Colab "
+                   "recipe (notebook 01); gradient checkpointing is an "
+                   "execution optimization to fit GRPO logits/activations in "
+                   "8 GiB. See eaaj-pilot-win4070/WIN4070_EXPERIMENT_PLAN.md."),
+    },
 }
+
+DTYPES = {"float32": torch.float32, "float16": torch.float16,
+          "bfloat16": torch.bfloat16}
 
 
 def load_pilot() -> dict:
@@ -82,6 +100,36 @@ def run_execution(run_dir: Path) -> dict:
     return json.loads((run_dir / "config.json").read_text())["execution"]
 
 
+def _pid_alive(pid: int) -> bool:
+    """Liveness probe for the runner lock. POSIX uses signal 0; on Windows
+    os.kill(pid, 0) TERMINATES the target process instead of probing it, so
+    the pid is queried through OpenProcess there."""
+    import os
+
+    if sys.platform == "win32":
+        import ctypes
+
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return False
+            return code.value == STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except (ProcessLookupError, PermissionError):
+        return False  # gone, or not ours — same reclaim semantics as before
+    return True
+
+
 def acquire_runner_lock(run_dir: Path) -> None:
     """Refuse to start if another runner process is live on this run dir.
 
@@ -96,10 +144,9 @@ def acquire_runner_lock(run_dir: Path) -> None:
     if lock.exists():
         try:
             other = int(lock.read_text().strip())
-            os.kill(other, 0)  # raises if not running
-        except (ValueError, ProcessLookupError, PermissionError):
-            pass  # stale or unreadable lock -> reclaim
-        else:
+        except ValueError:
+            other = None  # unreadable lock -> stale -> reclaim
+        if other is not None and _pid_alive(other):
             raise RuntimeError(
                 f"another runner (pid {other}) is already active on {run_dir}; "
                 "stop it first or wait for it to finish")
@@ -114,6 +161,13 @@ def setup_backend(execution: dict) -> None:
             raise RuntimeError("mps backend requested but MPS is unavailable")
         from src.mps_compat import apply_mps_grpo_patches
         apply_mps_grpo_patches()
+    elif execution["device"] == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("cuda backend requested but CUDA is unavailable")
+        if execution["dtype"] == "bfloat16" and not torch.cuda.is_bf16_supported():
+            raise RuntimeError(
+                "bf16 requested but this GPU lacks bf16 support; "
+                "log an fp16 deviation before switching dtypes")
 
 
 def append_compute(run_dir: Path, phase: str, started: float, status: str,
@@ -150,8 +204,8 @@ def phase1(pilot: dict, backend: str = "cpu") -> Path:
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     model = AutoModelForCausalLM.from_pretrained(
-        cfg["model"], revision=cfg["model_revision"], dtype=torch.float32,
-        local_files_only=True)
+        cfg["model"], revision=cfg["model_revision"],
+        dtype=DTYPES[execution["dtype"]], local_files_only=True)
     if device != "cpu":
         model.to(device)
     ckpt0 = run_dir / "ckpt-0"
@@ -185,9 +239,14 @@ def phase1(pilot: dict, backend: str = "cpu") -> Path:
         num_generations=cfg["num_generations"], beta=cfg["beta"],
         temperature=cfg["temperature"], top_p=cfg["top_p"],
         max_completion_length=cfg["max_completion_length"],
-        use_cpu=(device == "cpu"), bf16=False, fp16=False,
-        gradient_checkpointing=False,
-        dataloader_pin_memory=(device == "cpu"),  # unsupported no-op on MPS
+        use_cpu=(device == "cpu"),
+        bf16=(execution["dtype"] == "bfloat16"),
+        fp16=(execution["dtype"] == "float16"),
+        gradient_checkpointing=execution.get("gradient_checkpointing", False),
+        gradient_checkpointing_kwargs=(
+            {"use_reentrant": False}
+            if execution.get("gradient_checkpointing") else None),
+        dataloader_pin_memory=(device != "mps"),  # unsupported no-op on MPS
         logging_steps=1, save_strategy="steps", save_steps=25,
         save_total_limit=2, save_only_model=False, report_to="none")
     trainer = GRPOTrainer(
@@ -292,7 +351,8 @@ def phase3(pilot: dict, run_dir: Path, only_checkpoint: int | None = None) -> No
             max_completion_length=recipe["max_completion_length"],
             bf16=False, device=execution["device"],
             dtype_name=execution["dtype"],
-            gradient_checkpointing=False, save_steps=10)
+            gradient_checkpointing=execution.get("gradient_checkpointing", False),
+            save_steps=10)
         print(f"Phase 3 checkpoint {n}: Δacc={summary['delta_acc']:+.4f}")
     expected = pilot["stage_a"]["checkpoint_steps"]
     if all((root / f"ckpt-{n}" / "summary.json").exists() for n in expected):

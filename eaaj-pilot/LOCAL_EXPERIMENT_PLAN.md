@@ -191,3 +191,25 @@ from trainer checkpoint-50.
 Phase 3 ≈ 3–5 h, well inside the ~300-unit pair budget. The local CPU run can
 either be resumed to completion as the cpu-fp32 stratum (~12.5 h Phase 1
 remaining + ~21 h Phase 3) or parked; its artifacts stay valid either way.
+
+## 2026-07-08 Windows RTX 4070 Laptop stratum (designed, not yet run)
+
+A third execution stratum was designed for Aaron's Windows 4070 laptop:
+`--backend cuda` — bfloat16 weights + bf16 autocast (exactly the notebook-01
+Colab recipe) plus gradient checkpointing as the execution optimization that
+fits GRPO logits/activations in 8 GiB VRAM. Pre-registered run dir:
+`outputs/local_cuda_grpo_gsm8k_c1ea6e11b8ca`. Full plan, VRAM budget,
+environment setup, preflight probes, runbook, and failure playbook:
+`../eaaj-pilot-win4070/WIN4070_EXPERIMENT_PLAN.md`.
+
+Invariants preserved by the change (re-verified after editing the runner):
+the cpu profile dict stayed byte-identical, so `--backend cpu` still resumes
+`local_grpo_gsm8k_eac028bfcc87`; all 45 unit tests pass. Shared-code fixes
+that ride along are Windows-portability only and behavior-preserving on
+macOS/Linux: optional `resource` import (POSIX-only module) with a psapi
+fallback for peak-RSS, a runner-lock pid probe that no longer uses
+`os.kill(pid, 0)` on Windows (it terminates the target process there), and
+non-reentrant `gradient_checkpointing_kwargs` wherever checkpointing is
+enabled (inert for cpu/mps, which keep it off). `outputs/ACTIVE_RUN.txt` is
+now machine-local (untracked) so the two machines cannot fight over the
+pointer.

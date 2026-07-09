@@ -3,4 +3,6 @@ __pycache__/
 *.pyc
 outputs/grpo_gsm8k_*/ckpt-*/
 outputs/*/trainer/
+# machine-local pointer: each machine's phases 2-4 follow its own active run
+outputs/ACTIVE_RUN.txt
 .DS_Store

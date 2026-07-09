@@ -1,0 +1,15 @@
+# Windows RTX 4070 Laptop stratum — pins mirror eaaj-pilot/requirements.txt
+# exactly (validated 2026-07-07 against the one-step GRPO contract test).
+# torch is NOT listed here: setup_win4070.ps1 installs torch==2.12.* from the
+# PyTorch cu128 index first, matching the torch version recorded in the macOS
+# run manifests (only the build/backend differs). Every run records the exact
+# torch/CUDA versions in its manifest.
+trl==1.6.0
+transformers==5.13.0
+datasets==5.0.0
+accelerate==1.14.0
+pytest==8.4.2
+numpy==2.3.5
+scipy==1.16.3
+pandas==2.3.3
+matplotlib==3.10.6

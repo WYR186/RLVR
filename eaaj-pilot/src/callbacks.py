@@ -11,9 +11,13 @@ from __future__ import annotations
 
 import json
 import math
-import resource
 import time
 from pathlib import Path
+
+try:
+    import resource  # POSIX only
+except ImportError:  # Windows has no `resource` module
+    resource = None
 
 from transformers import TrainerCallback
 
@@ -81,10 +85,38 @@ class LocalSafetyCallback(TrainerCallback):
 
     @staticmethod
     def _rss_gib() -> float:
-        # macOS ru_maxrss is bytes; Linux is KiB.
-        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         import sys
-        return rss / (1024 ** 3) if sys.platform == "darwin" else rss / (1024 ** 2)
+
+        if resource is not None:
+            # macOS ru_maxrss is bytes; Linux is KiB.
+            rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            return rss / (1024 ** 3) if sys.platform == "darwin" else rss / (1024 ** 2)
+        if sys.platform == "win32":
+            # ru_maxrss analog: peak working set via psapi.
+            import ctypes
+            from ctypes import wintypes
+
+            class _ProcessMemoryCounters(ctypes.Structure):
+                _fields_ = [
+                    ("cb", wintypes.DWORD),
+                    ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t),
+                ]
+
+            counters = _ProcessMemoryCounters()
+            counters.cb = ctypes.sizeof(counters)
+            ok = ctypes.windll.psapi.GetProcessMemoryInfo(
+                ctypes.windll.kernel32.GetCurrentProcess(),
+                ctypes.byref(counters), counters.cb)
+            return counters.PeakWorkingSetSize / (1024 ** 3) if ok else 0.0
+        return 0.0
 
     def _stop(self, state, control, reason, logs):
         self.out_path.parent.mkdir(parents=True, exist_ok=True)

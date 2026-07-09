@@ -118,6 +118,8 @@ def run_fixed_budget_adaptation(checkpoint_path,
         fp16=(dtype_name == "float16" and device == "cuda"),
         use_cpu=(device == "cpu"),
         gradient_checkpointing=gradient_checkpointing,
+        gradient_checkpointing_kwargs=(
+            {"use_reentrant": False} if gradient_checkpointing else None),
         dataloader_pin_memory=(device == "cpu"),  # unsupported no-op on MPS
         logging_steps=1,
         save_strategy="steps",

@@ -32,15 +32,20 @@ python -m pytest tests/ -v          # run all unit tests (metrics, reward parsin
 python -m pytest tests/test_reward.py -v   # single test file
 python scripts/smoke_test_grpo.py          # tiny CPU API-contract test, not an experiment
 python scripts/dry_run_metrics.py 8        # activation plumbing, not comparable Q
-python scripts/run_local_pipeline.py --phase 1  # resumable local pilot runner (--backend cpu|mps)
+python scripts/run_local_pipeline.py --phase 1  # resumable local pilot runner (--backend cpu|mps|cuda)
 ```
 
 Local backend note: `--backend cpu` (default) resumes the existing
 `outputs/local_grpo_gsm8k_eac028bfcc87` stratum; `--backend mps` is validated
 but measured at CPU parity (per-token sync overhead in transformers generate on
 MPS) — see `eaaj-pilot/LOCAL_EXPERIMENT_PLAN.md` §2026-07-08 before using it.
-Never mix backends within one run's phases; phases 2–4 auto-follow the active
-run's recorded execution profile.
+`--backend cuda` is the Windows RTX 4070 Laptop stratum (bf16, mirrors the
+notebook-01 Colab recipe); its plan, setup scripts, and runbook live in
+`eaaj-pilot-win4070/` — read `eaaj-pilot-win4070/WIN4070_EXPERIMENT_PLAN.md`
+before touching that machine. Never mix backends within one run's phases;
+phases 2–4 auto-follow the active run's recorded execution profile.
+`outputs/ACTIVE_RUN.txt` is machine-local (untracked) so per-machine active
+runs never collide in git.
 
 ## Hard constraints (violating these invalidates results)
 
