@@ -1,0 +1,8 @@
+{
+ "run_dir": "/Users/ipanda/Documents/algoverse/eaaj-pilot/outputs/local_grpo_gsm8k_eac028bfcc87",
+ "n_checkpoints": 5,
+ "primary_q": "erank_L12",
+ "primary_outcome": "svamp_delta",
+ "spearman_rho": -0.6,
+ "spearman_p": 0.28475697986529375
+}
