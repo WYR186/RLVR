@@ -1,0 +1,42 @@
+{
+ "created_utc": "2026-07-09T05:06:26.470130+00:00",
+ "config_hash": "6a075c15808e",
+ "python": "3.13.14 | packaged by conda-forge | (main, Jun 12 2026, 09:44:26) [MSC v.1944 64 bit (AMD64)]",
+ "platform": "Windows-11-10.0.22621-SP0",
+ "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU, 596.49",
+ "git_sha": "8aa11e3910a20a08ccb17cc815ad7143c144270e",
+ "versions": {
+  "torch": "2.11.0+cu128",
+  "trl": "1.6.0",
+  "transformers": "5.13.0",
+  "datasets": "5.0.0",
+  "accelerate": "1.14.0",
+  "numpy": "2.3.5",
+  "scipy": "1.16.3",
+  "pandas": "2.3.3",
+  "matplotlib": "3.10.6"
+ },
+ "tracked_input_sha256": {
+  "pilot_config.json": "eda32653522817ac699882ded417a82ec44120d78a34644248840279c7d10668",
+  "requirements.txt": "33b5603723696f5197daed8e117bf27e52d4d01c1c89f23187adee6e672f84b6",
+  "LOCAL_EXPERIMENT_PLAN.md": "6b79f45c360f7b421a19ed95063a210f35063b5b64ad560c2ea5d8e799c4085c",
+  "01_grpo_gsm8k.ipynb": "ffd437b8ef4459baac5dd1f52e18d9f3a9293368accdebe5128018308d131e34",
+  "02_measure_Q.ipynb": "eb93e58a5401b47a3ec7f45df39e8164fdb6a04c36ca344c4373b2da7e84a15c",
+  "03_svamp_adaptation.ipynb": "5316737186ff518061f760346e034308b3727a1a80321774632783670adc58ab",
+  "04_analysis.ipynb": "3d4d4eb6bfb0e997ea85cb3a49ba2d6770f8291f751d5eedcccd05677f1ee7d2",
+  "src/metrics.py": "ba037f1cf1e8e6b9f2e61cac5058eccdd78c9aa47119acc3ab1b7db8615d1986",
+  "src/reward.py": "bfe54c29582bf01159da3aaec291d37cf29c70d5e33366be7c6a5fa7f38f8e18",
+  "src/data.py": "924e5108155e7f664f5b2bc658e873c336caba3f31da720697caa9a65861f7fb",
+  "src/callbacks.py": "55450f72ba6cd2b3b10acc60b9081108f069e65a1e76b24c9992ff30b65ea398",
+  "src/evaluate.py": "6b113cc4ef0e53402f5d35013afc2d67fbde64ce98b7bf76c736b03bc5b98be5",
+  "src/adaptation.py": "b933a63cd2997e632a887ee0125dba41a08561e442574836ebe2f020cc854eb5",
+  "src/analysis.py": "5d10f2a3a0a4b7a62e0e4ed8334a8d035bed92aeff3f21ee9bca5f636020fb18",
+  "src/mps_compat.py": "0c71a746e844076ff22476012e69b62c5d7da47e340c74c63e9ea7ef316a11be",
+  "src/preflight.py": "1c68121a9771c64f0a1e1db1bcb66334ef570201580f61457511787c85d68387",
+  "src/repro.py": "41ec22c116223703afd2bb746c5364a22fae39ad895502d91bfca114e44206ff",
+  "scripts/run_local_pipeline.py": "22c228f657ed593786c14d3e22606f5185c802aea8fe77a408089670cfef8721",
+  "data/gsm8k_splits.json": "fb78857d9207d71a64ed1ebbeeee54f86dc12f2cbe2f4dc07d09ee028babf59c",
+  "data/svamp_splits.json": "70b1b0945aa2203385c45f93bf77b4dc3e52fdc8abf3b93c0aa09201352df11a",
+  "data/probe_set_ids.json": "b5b0196463d95aa270d6b7ec55dad0b6bdb2c93b9b73ad8b0696b16b95f4a4ff"
+ }
+}

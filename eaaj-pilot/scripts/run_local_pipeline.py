@@ -68,11 +68,14 @@ EXECUTION_PROFILES = {
     "cuda": {
         "backend": "pytorch_cuda", "device": "cuda", "dtype": "bfloat16",
         "torch_threads": 8, "gradient_checkpointing": True,
+        "per_device_train_batch_size": 4,
+        "gradient_accumulation_steps": 16,
         "reason": ("Windows RTX 4070 Laptop (8 GiB VRAM) stratum: bf16 "
                    "weights + bf16 autocast mirror the pre-registered Colab "
-                   "recipe (notebook 01); gradient checkpointing is an "
-                   "execution optimization to fit GRPO logits/activations in "
-                   "8 GiB. See eaaj-pilot-win4070/WIN4070_EXPERIMENT_PLAN.md."),
+                   "recipe (notebook 01); gradient checkpointing plus "
+                   "micro-batch 4 x grad-accum 16 keep the same 64-completion "
+                   "effective update while fitting the measured 4070 VRAM "
+                   "budget. See eaaj-pilot-win4070/WIN4070_EXPERIMENT_PLAN.md."),
     },
 }
 
@@ -85,10 +88,15 @@ def load_pilot() -> dict:
 
 
 def local_run_dir(pilot: dict, backend: str = "cpu") -> tuple[Path, dict]:
+    execution = EXECUTION_PROFILES[backend]
+    stage_a = dict(pilot["stage_a"])
+    for key in ("per_device_train_batch_size", "gradient_accumulation_steps"):
+        if key in execution:
+            stage_a[key] = execution[key]
     cfg = {
         "model": pilot["model_id"], "model_revision": pilot["model_revision"],
-        "seed": pilot["seed"], **pilot["stage_a"],
-        "execution": EXECUTION_PROFILES[backend],
+        "seed": pilot["seed"], **stage_a,
+        "execution": execution,
     }
     prefix = "local_grpo_gsm8k" if backend == "cpu" else f"local_{backend}_grpo_gsm8k"
     run_dir = PROJECT / "outputs" / f"{prefix}_{config_hash(cfg)}"
@@ -331,6 +339,10 @@ def phase3(pilot: dict, run_dir: Path, only_checkpoint: int | None = None) -> No
     started = time.time()
     execution = run_execution(run_dir)
     recipe = pilot["adaptation"]
+    per_device_batch = execution.get(
+        "per_device_train_batch_size", recipe["per_device_train_batch_size"])
+    grad_accum = execution.get(
+        "gradient_accumulation_steps", recipe["gradient_accumulation_steps"])
     ckpts = pilot["stage_a"]["checkpoint_steps"]
     if only_checkpoint is not None:
         if only_checkpoint not in ckpts:
@@ -344,8 +356,8 @@ def phase3(pilot: dict, run_dir: Path, only_checkpoint: int | None = None) -> No
             budget_updates=recipe["budget_updates"], eval_every=recipe["eval_every"],
             seed=pilot["seed"], learning_rate=recipe["learning_rate"],
             num_generations=recipe["num_generations"],
-            per_device_batch=recipe["per_device_train_batch_size"],
-            grad_accum=recipe["gradient_accumulation_steps"], beta=recipe["beta"],
+            per_device_batch=per_device_batch,
+            grad_accum=grad_accum, beta=recipe["beta"],
             temperature=recipe["temperature"], top_p=recipe["top_p"],
             max_prompt_length=recipe["max_prompt_length"],
             max_completion_length=recipe["max_completion_length"],

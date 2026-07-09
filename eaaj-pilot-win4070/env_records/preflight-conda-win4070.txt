@@ -1,0 +1,17 @@
+﻿[  ok] platform - Windows-11-10.0.22621-SP0 (win32 expected on the 4070 laptop)
+[  ok] python - 3.13.14
+[  ok] torch - 2.11.0+cu128 (cuda build: 12.8)
+[  ok] gpu - NVIDIA GeForce RTX 4070 Laptop GPU, 8.0 GiB VRAM
+[  ok] vram >= 7.5 GiB - 8.00 GiB
+[  ok] bf16 support - required by the cuda profile (mirrors the notebook-01 Colab recipe)
+[  ok] free VRAM at start - 6.90 GiB free of 8.00 (close other GPU apps / move display to the iGPU if low)
+[  ok] free disk >= 80 GB - 1495 GB free
+[  ok] RAM >= 16 GiB - 48 GiB
+[warn] long paths enabled - set HKLM\...\FileSystem\LongPathsEnabled=1 if HF cache paths ever error
+[  ok] repo outside OneDrive
+[  ok] model cached - Qwen/Qwen2.5-0.5B @ 060db649
+[  ok] data/gsm8k_splits.json
+[  ok] data/svamp_splits.json
+[  ok] data/probe_set_ids.json
+
+env checks: 15 ok, 0 failed

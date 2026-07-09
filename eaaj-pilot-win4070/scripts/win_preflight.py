@@ -5,11 +5,14 @@ Three levels, all read-only with respect to scientific artifacts:
 
   (no flag)            environment checks only (seconds, no GPU load)
   --grpo-probe-small   tiny GRPO update on CUDA (~2-3 min): stack contract
-  --grpo-probe         ONE update at the full pre-registered geometry
-                       (micro-batch 8 x grad-accum 8 x 8 generations x 512
+  --grpo-probe         ONE update at the current cuda profile geometry
+                       (micro-batch x grad-accum x 8 generations x 512
                        completion tokens, bf16 + gradient checkpointing).
                        This is the VRAM/throughput go/no-go before the
                        200-update spend.
+                       Optional --per-device-batch/--grad-accum probe the
+                       pre-declared VRAM ladder while keeping the effective
+                       64-completion update fixed.
 
 Probe outputs are plumbing (like eaaj-pilot/scripts/dry_run_metrics.py),
 never results: they train a throwaway model copy for one step in a scratch
@@ -28,6 +31,7 @@ HERE = Path(__file__).resolve().parent.parent   # eaaj-pilot-win4070/
 REPO = HERE.parent
 PILOT = REPO / "eaaj-pilot"
 sys.path.insert(0, str(PILOT))
+sys.path.insert(0, str(PILOT / "scripts"))
 
 OK, WARN, FAIL = "ok", "warn", "FAIL"
 RESULTS: list = []
@@ -125,7 +129,8 @@ def env_checks() -> None:
               "" if path.exists() else "frozen split file missing from checkout")
 
 
-def grpo_probe(full: bool) -> None:
+def grpo_probe(full: bool, per_device_batch: int | None = None,
+               grad_accum: int | None = None) -> None:
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
     from trl import GRPOConfig, GRPOTrainer
@@ -135,17 +140,31 @@ def grpo_probe(full: bool) -> None:
 
     pilot = json.loads((PILOT / "pilot_config.json").read_text())
     stage_a = pilot["stage_a"]
+    try:
+        from run_local_pipeline import EXECUTION_PROFILES
+        cuda_profile = EXECUTION_PROFILES["cuda"]
+    except Exception:
+        cuda_profile = {}
     if full:
+        default_batch = cuda_profile.get(
+            "per_device_train_batch_size", stage_a["per_device_train_batch_size"])
+        default_accum = cuda_profile.get(
+            "gradient_accumulation_steps", stage_a["gradient_accumulation_steps"])
+        per_device_batch = per_device_batch or default_batch
+        grad_accum = grad_accum or default_accum
         geometry = dict(
-            per_device_train_batch_size=stage_a["per_device_train_batch_size"],
-            gradient_accumulation_steps=stage_a["gradient_accumulation_steps"],
+            per_device_train_batch_size=per_device_batch,
+            gradient_accumulation_steps=grad_accum,
             num_generations=stage_a["num_generations"],
             max_completion_length=stage_a["max_completion_length"])
     else:
         geometry = dict(per_device_train_batch_size=4,
                         gradient_accumulation_steps=2,
                         num_generations=4, max_completion_length=64)
-    label = "full-geometry" if full else "small"
+    if full and (per_device_batch != default_batch or grad_accum != default_accum):
+        label = f"full-geometry-mb{per_device_batch}-ga{grad_accum}"
+    else:
+        label = "full-geometry" if full else "small"
     scratch = HERE / "logs" / f"_grpo_probe_{label}"
     if scratch.exists():
         shutil.rmtree(scratch)
@@ -219,7 +238,13 @@ def main() -> None:
                        help="one update at the full pre-registered geometry")
     group.add_argument("--grpo-probe-small", action="store_true",
                        help="one tiny update (fast stack check)")
+    parser.add_argument("--per-device-batch", type=int,
+                        help="full-geometry fallback ladder micro-batch")
+    parser.add_argument("--grad-accum", type=int,
+                        help="full-geometry fallback ladder gradient accumulation")
     args = parser.parse_args()
+    if (args.per_device_batch or args.grad_accum) and not args.grpo_probe:
+        parser.error("--per-device-batch/--grad-accum only apply to --grpo-probe")
 
     env_checks()
     fails = [r for r in RESULTS if r[1] == FAIL]
@@ -227,7 +252,8 @@ def main() -> None:
     if fails:
         sys.exit(1)
     if args.grpo_probe or args.grpo_probe_small:
-        grpo_probe(full=args.grpo_probe)
+        grpo_probe(full=args.grpo_probe, per_device_batch=args.per_device_batch,
+                   grad_accum=args.grad_accum)
 
 
 if __name__ == "__main__":

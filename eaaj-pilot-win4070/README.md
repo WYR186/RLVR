@@ -14,8 +14,8 @@ preflight checks, and the runbook. Read
 anything — it is the detailed plan, VRAM budget, deviation log, and failure
 playbook.
 
-Pre-registered run directory for this stratum (deterministic from the config):
-`eaaj-pilot/outputs/local_cuda_grpo_gsm8k_c1ea6e11b8ca`.
+Pre-registered run directory for this stratum (deterministic from the measured
+Windows/CUDA config): `eaaj-pilot/outputs/local_cuda_grpo_gsm8k_6a075c15808e`.
 
 ## 快速开始（中文）
 

@@ -1,3 +1,4 @@
-logs/
+logs/*
+!logs/gpu_*.csv
 __pycache__/
 *.pyc

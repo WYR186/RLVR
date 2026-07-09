@@ -1,0 +1,8 @@
+{
+ "run_dir": "D:\\algoverse\\eaaj-pilot\\outputs\\local_cuda_grpo_gsm8k_6a075c15808e",
+ "n_checkpoints": 5,
+ "primary_q": "erank_L12",
+ "primary_outcome": "svamp_delta",
+ "spearman_rho": -0.051298917604257706,
+ "spearman_p": 0.9347128481082341
+}

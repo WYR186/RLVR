@@ -6,9 +6,10 @@ Qwen2.5-0.5B over 512 GSM8K questions with exact-answer reward, checkpoints at
 0/25/50/100/200 updates, effective-rank + dormant-fraction measurement at every
 checkpoint, then the identical fixed-budget SVAMP adaptation (256 train / 100
 eval / 50 updates) from every checkpoint.
-Status: **designed and code-ready; not yet executed** (authored on the macOS
-machine, which has no CUDA — the two preflight probes are the first thing to
-run on the Windows box).
+Status: **environment and CUDA probes executed; Phase 1 not yet started**.
+The original micro-batch 8 × grad-accum 8 probe failed the VRAM gate, and the
+pre-declared ladder rung micro-batch 4 × grad-accum 16 passed; the formal cuda
+profile now uses that measured geometry.
 
 ## 1. What this is and is not
 
@@ -20,7 +21,7 @@ pilot runs, never *what* is run:
 |---|---|---|---|---|
 | cpu-fp32 | M3 Max (macOS) | CPU float32 | running (Phase 3 in flight) | `local_grpo_gsm8k_eac028bfcc87` |
 | mps-fp32 | M3 Max (macOS) | Apple GPU float32 | validated, parked (CPU parity) | `local_mps_grpo_gsm8k_42323d70490c` |
-| **cuda-bf16** | **RTX 4070 Laptop (Windows 11)** | **CUDA bfloat16** | **this plan** | **`local_cuda_grpo_gsm8k_c1ea6e11b8ca`** |
+| **cuda-bf16** | **RTX 4070 Laptop (Windows 11)** | **CUDA bfloat16** | **this plan** | **`local_cuda_grpo_gsm8k_6a075c15808e`** |
 
 The run-dir hash is deterministic from the config, so the cuda directory name
 above is **pre-registered**; verify it on the Windows box with:
@@ -51,7 +52,7 @@ SVAMP position / sees harder questions" confound.
 From `pilot_config.json`, consumed verbatim by `run_local_pipeline.py`:
 
 - Model `Qwen/Qwen2.5-0.5B` @ `060db649…`; GSM8K @ `740312ad…`; SVAMP @ `5e0bf1e5…`; seed 42.
-- Stage A: GRPO, 200 updates, LR 1e-6, micro-batch 8 × grad-accum 8 (64
+- Stage A: GRPO, 200 updates, LR 1e-6, micro-batch 4 × grad-accum 16 (64
   completions/update), 8 generations/prompt, β(KL)=0, T=0.7, top-p=1.0,
   prompt/completion caps 512/512, eval every 25 on the frozen 64-question
   GSM8K slice, checkpoints saved at exactly 0/25/50/100/200.
@@ -75,7 +76,7 @@ Profile `EXECUTION_PROFILES["cuda"]` in `eaaj-pilot/scripts/run_local_pipeline.p
 | Deviation vs. what | Setting | Justification (mirror to Research Doc) |
 |---|---|---|
 | vs. cpu stratum | device `cuda`, dtype **bfloat16** | Matches the pre-registered Colab recipe (notebook 01 loads bf16 + `bf16=True`); the 4070 (Ada, sm_89) has native bf16. Strata stay separate. |
-| vs. Colab notebook | **gradient_checkpointing ON** (non-reentrant) | Execution optimization to fit GRPO activations+logits in 8 GiB VRAM; does not change objective, data, or update count (same precedent as the cpu stratum disabling it for RAM abundance). |
+| vs. Colab notebook | **gradient_checkpointing ON** (non-reentrant) plus micro-batch 4 × grad-accum 16 | Execution optimization to fit GRPO activations+logits in 8 GiB VRAM; keeps the same 64-completion effective update and does not change objective, data, or update count (same precedent as the cpu stratum disabling it for RAM abundance). |
 | vs. Colab notebook | trainer checkpoints every 25/10 steps, keep 2, with optimizer state | Resumability for a laptop that may sleep/crash; same policy the cpu stratum already uses. |
 | vs. notebook 02 | Q measured in **bf16** (stratum dtype), not float16 | Local-runner convention: phases 2–4 always follow the run's recorded execution profile, so Q dtype is fixed *within* the stratum (comparability holds where it matters). Cross-stratum Q values are never pooled. |
 | — | optimizer states in bf16 (params bf16 ⇒ AdamW moments bf16) | Identical to what the notebook-01 recipe produces on Colab; noted because LR=1e-6 with bf16 moments is a known precision trade-off — flagged, not "fixed", to stay recipe-faithful. |
@@ -159,7 +160,8 @@ driver resets (see §8). Fallback venue remains Colab with the same config.
   Laptop 8 GiB.
 - Python 3.13 preferred (matches macOS manifests; 3.12/3.11 acceptable —
   the per-run `manifest.json` records the actual version either way).
-- `torch==2.12.*` from the **cu128** index (cu126 fallback, logged);
+- `torch==2.11.0+cu128` from the **cu128** index (logged deviation from the
+  unavailable `torch==2.12.*` pin);
   `trl==1.6.0`, `transformers==5.13.0`, `datasets==5.0.0`,
   `accelerate==1.14.0` + the rest of `requirements-win4070.txt` — same pins as
   the macOS venv and `eaaj-pilot/requirements.txt`.
@@ -190,7 +192,7 @@ cd C:\src\algoverse\eaaj-pilot-win4070
 powershell -ExecutionPolicy Bypass -File setup_win4070.ps1
 
 .venv\Scripts\python.exe scripts\win_preflight.py --grpo-probe-small   # ~2-3 min
-.venv\Scripts\python.exe scripts\win_preflight.py --grpo-probe         # full geometry, go/no-go
+.venv\Scripts\python.exe scripts\win_preflight.py --grpo-probe         # current cuda geometry, go/no-go
 
 powershell -ExecutionPolicy Bypass -File run_pipeline.ps1 -Phase 1     # gate + 200 updates
 powershell -ExecutionPolicy Bypass -File run_pipeline.ps1 -Phase 2
@@ -209,6 +211,10 @@ Notes:
 - Go/no-go after the full-geometry probe: peak reserved < 7.3 GiB and
   s/update < 120 → go. Otherwise apply the §4 ladder before Phase 1, or move
   to Colab.
+- 2026-07-09 probe result: original micro-batch 8 × grad-accum 8 was fast
+  enough (52.77 s/update) but failed the VRAM gate (11.865 GiB peak reserved).
+  Ladder rung 2, micro-batch 4 × grad-accum 16, passed both gates
+  (31.97 s/update, 6.941 GiB peak reserved) and is now the cuda profile.
 - After every phase: append the `compute_log.md` row (date, GPU, phase,
   duration, pointer to the `logs/gpu_*.csv` file — the local substitute for
   Colab dashboard screenshots, units column n/a) and commit.
@@ -228,7 +234,7 @@ Notes:
 ## 9. Two-machine git workflow (conflict-free by construction)
 
 - Run artifacts live under stratum-specific dirs (`local_grpo_gsm8k_…` mac,
-  `local_cuda_grpo_gsm8k_c1ea6e11b8ca` win) — disjoint paths, so merges never
+  `local_cuda_grpo_gsm8k_6a075c15808e` win) — disjoint paths, so merges never
   collide on artifacts.
 - `outputs/ACTIVE_RUN.txt` is **machine-local and untracked** (as of
   2026-07-08): each machine's phases 2–4 follow its own active run; the

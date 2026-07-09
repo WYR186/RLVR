@@ -21,8 +21,19 @@ $ErrorActionPreference = "Stop"
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Repo = Split-Path -Parent $Here
 $Pilot = Join-Path $Repo "eaaj-pilot"
+$RepoCondaPy = Join-Path $Repo ".conda\envs\eaaj-win4070\python.exe"
 $VenvPy = Join-Path $Here ".venv\Scripts\python.exe"
-if (-not (Test-Path $VenvPy)) { throw "no venv - run setup_win4070.ps1 first" }
+if ($env:EAAJ_PYTHON -and (Test-Path $env:EAAJ_PYTHON)) {
+    $PythonExe = $env:EAAJ_PYTHON
+} elseif ($env:CONDA_PREFIX -and (Test-Path (Join-Path $env:CONDA_PREFIX "python.exe"))) {
+    $PythonExe = Join-Path $env:CONDA_PREFIX "python.exe"
+} elseif (Test-Path $RepoCondaPy) {
+    $PythonExe = $RepoCondaPy
+} elseif (Test-Path $VenvPy) {
+    $PythonExe = $VenvPy
+} else {
+    throw "no Python environment found - run setup_win4070.ps1, or create D:\algoverse\.conda\envs\eaaj-win4070"
+}
 
 $env:PYTHONUTF8 = "1"
 $env:HF_HUB_DISABLE_SYMLINKS_WARNING = "1"
@@ -65,7 +76,7 @@ try {
     $CliArgs = @((Join-Path $Pilot "scripts\run_local_pipeline.py"),
                  "--phase", $Phase, "--backend", "cuda")
     if ($AdaptCheckpoint -ge 0) { $CliArgs += @("--adapt-checkpoint", "$AdaptCheckpoint") }
-    & $VenvPy @CliArgs
+    & $PythonExe @CliArgs
     if ($LASTEXITCODE -ne 0) { throw "pipeline exited with code $LASTEXITCODE" }
 } finally {
     Stop-Job $GpuJob -ErrorAction SilentlyContinue
