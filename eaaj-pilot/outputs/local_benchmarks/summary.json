@@ -1,0 +1,46 @@
+{
+  "date": "2026-07-07",
+  "hardware": {
+    "model": "MacBook Pro Mac15,8",
+    "chip": "Apple M3 Max",
+    "cpu_cores": 16,
+    "gpu_cores": 40,
+    "unified_memory_gib": 128,
+    "free_disk_tib": 2.6,
+    "macos": "26.5.1"
+  },
+  "software": {
+    "python": "3.13.9 arm64",
+    "torch": "2.12.0",
+    "trl": "1.6.0",
+    "transformers": "5.13.0",
+    "execution_device": "cpu",
+    "mps_built": true,
+    "mps_available": false,
+    "mps_versions_tested": ["2.8.0", "2.11.0", "2.12.0"]
+  },
+  "microbenchmarks": {
+    "generation_batch8_64_tokens": {
+      "tokens_per_second": 73.86
+    },
+    "full_parameter_lm_step_batch1_seq512": {
+      "seconds": 1.519,
+      "peak_rss_gib": 11.08
+    },
+    "real_grpo_step_max_completion64": {
+      "seconds": 37.25,
+      "peak_rss_gib": 11.73,
+      "mean_completion_tokens": 62.70,
+      "clipped_ratio": 0.921875,
+      "reward_mean": 0.046875
+    },
+    "real_grpo_step_max_completion512": {
+      "seconds": 300.47,
+      "peak_rss_gib": 31.02,
+      "mean_completion_tokens": 179.61,
+      "clipped_ratio": 0.015625,
+      "reward_mean": 0.3125,
+      "groups_with_zero_reward_std_fraction": 0.125
+    }
+  }
+}

@@ -1,0 +1,26 @@
+# OS / editor cruft
+.DS_Store
+.claude/
+~$*
+*.lock
+.pytest_cache/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Python virtual environments
+.venv/
+venv/
+
+# Slides / PPTs (not needed in the repo per team decision)
+Slides/
+*.pptx
+
+# Model weights and optimizer/trainer state — too large for git, not
+# needed since they're reproducible from pilot_config.json + checkpoints.
+# Metrics, dashboards, configs, and logs under eaaj-pilot/outputs/ are kept.
+*.safetensors
+*.pt
+*.pth
+*.bin
+tokenizer.json

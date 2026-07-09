@@ -1,0 +1,59 @@
+{
+  "experiment": "eaaj_rlvr_plasticity_pilot_v1",
+  "model_id": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "dataset_revisions": {
+    "openai/gsm8k": "740312add88f781978c0658806c59bc2815b9866",
+    "ChilleD/SVAMP": "5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef"
+  },
+  "seed": 42,
+  "stage_a": {
+    "task": "GSM8K",
+    "train_questions": 512,
+    "algorithm": "GRPO",
+    "max_steps": 200,
+    "checkpoint_steps": [0, 25, 50, 100, 200],
+    "learning_rate": 1e-6,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "eval_every": 25
+  },
+  "measurement": {
+    "probe_questions": 512,
+    "sensitivity_probe_questions": 2048,
+    "layers": [4, 12, 22],
+    "model_dtype": "float16",
+    "batch_size": 16,
+    "max_prompt_length": 512,
+    "dormant_taus": [0.025, 0.1]
+  },
+  "adaptation": {
+    "task": "SVAMP",
+    "algorithm": "GRPO",
+    "train_questions": 256,
+    "eval_questions": 100,
+    "budget_updates": 50,
+    "eval_every": 10,
+    "learning_rate": 1e-6,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512
+  },
+  "open_team_questions": [
+    "Base vs Instruct model",
+    "GRPO vs SFT adaptation",
+    "Whether SVAMP is too close to GSM8K",
+    "Whether to add a beta>0 baseline"
+  ]
+}

@@ -1,0 +1,13 @@
+# Validated 2026-07-07 against a one-step GRPO contract smoke test. Colab's
+# CUDA-enabled torch is intentionally not reinstalled; TRL 1.6 supports the
+# preinstalled torch (<2.12 is the tested range). Every run records the exact
+# torch/CUDA version in its manifest.
+trl==1.6.0
+transformers==5.13.0
+datasets==5.0.0
+accelerate==1.14.0
+pytest==8.4.2
+numpy==2.3.5
+scipy==1.16.3
+pandas==2.3.3
+matplotlib==3.10.6

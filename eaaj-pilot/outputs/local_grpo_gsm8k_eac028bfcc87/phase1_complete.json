@@ -1,0 +1,5 @@
+{
+ "completed_unix": 1783531774.476915,
+ "global_step": 200,
+ "resume_from_checkpoint": "/Users/ipanda/Documents/algoverse/eaaj-pilot/outputs/local_grpo_gsm8k_eac028bfcc87/trainer/checkpoint-75"
+}

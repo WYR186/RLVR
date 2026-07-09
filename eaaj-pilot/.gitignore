@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+outputs/grpo_gsm8k_*/ckpt-*/
+outputs/*/trainer/
+.DS_Store

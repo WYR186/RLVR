@@ -1,0 +1,32 @@
+{
+ "step": 30,
+ "reason": "five consecutive updates exceeded 10% completion clipping",
+ "rss_gib": 38.13694763183594,
+ "logs": {
+  "loss": 0.13346965610980988,
+  "grad_norm": 4.7549943923950195,
+  "learning_rate": 4.1999999999999995e-07,
+  "num_tokens": 509080.0,
+  "completions/mean_length": 240.796875,
+  "completions/min_length": 130.0,
+  "completions/max_length": 512.0,
+  "completions/clipped_ratio": 0.109375,
+  "completions/mean_terminated_length": 207.49122619628906,
+  "completions/min_terminated_length": 130.0,
+  "completions/max_terminated_length": 483.0,
+  "rewards/exact_answer_reward/mean": 0.453125,
+  "rewards/exact_answer_reward/std": 0.501733124256134,
+  "reward": 0.453125,
+  "reward_std": 0.501733124256134,
+  "frac_reward_zero_std": 0.0,
+  "entropy": 0.19726505503058434,
+  "clip_ratio/low_mean": 0.0,
+  "clip_ratio/low_min": 0.0,
+  "clip_ratio/high_mean": 0.0,
+  "clip_ratio/high_max": 0.0,
+  "clip_ratio/region_mean": 0.0,
+  "step_time": 262.26018629099417,
+  "epoch": 0.9375
+ },
+ "wall_time": 1783551186.998583
+}

@@ -1,0 +1,46 @@
+{
+ "seconds": 300.46937154199986,
+ "max_completion_length": 512,
+ "per_device_batch": 8,
+ "grad_accum": 8,
+ "num_generations": 8,
+ "rss_gib": 31769.53125,
+ "log_history": [
+  {
+   "loss": -0.06740905344486237,
+   "grad_norm": 2.629298686981201,
+   "learning_rate": 1e-06,
+   "num_tokens": 16311.0,
+   "completions/mean_length": 179.609375,
+   "completions/min_length": 8.0,
+   "completions/max_length": 512.0,
+   "completions/clipped_ratio": 0.015625,
+   "completions/mean_terminated_length": 174.3333282470703,
+   "completions/min_terminated_length": 8.0,
+   "completions/max_terminated_length": 474.0,
+   "rewards/exact_answer_reward/mean": 0.3125,
+   "rewards/exact_answer_reward/std": 0.467176616191864,
+   "reward": 0.3125,
+   "reward_std": 0.467176616191864,
+   "frac_reward_zero_std": 0.125,
+   "entropy": 0.23851737193763256,
+   "clip_ratio/low_mean": 0.0,
+   "clip_ratio/low_min": 0.0,
+   "clip_ratio/high_mean": 0.0,
+   "clip_ratio/high_max": 0.0,
+   "clip_ratio/region_mean": 0.0,
+   "step_time": 299.86592941799245,
+   "epoch": 1.0,
+   "step": 1
+  },
+  {
+   "train_runtime": 300.3528,
+   "train_samples_per_second": 0.213,
+   "train_steps_per_second": 0.003,
+   "total_flos": 0.0,
+   "train_loss": -0.06740905344486237,
+   "epoch": 1.0,
+   "step": 1
+  }
+ ]
+}
