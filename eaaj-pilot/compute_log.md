@@ -38,6 +38,7 @@ Run dir: `outputs/local_cuda_grpo_gsm8k_e9b0b52aab6c`.
 |-------|----------|-----------|-------|
 | Probes: small + full-geometry GRPO | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast, paged_adamw_8bit) | <5 min | small probe passed; full probe completed without OOM at 86.45 s/update, but PyTorch reported 10.809 GiB peak reserved, above the 7.3 GiB go/no-go threshold; accepted as allocator/accounting deviation on the 8 GiB WDDM stack and logged in `telemetry/probe_results.jsonl` |
 | Phase 1: GSM8K GRPO 200 updates | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast, paged_adamw_8bit) | 5.18 h active wrapper time across resumes; final resume 2.92 h | run ckpts 0/25/50/100/200 saved; trainer final checkpoint-200 saved; all sentinel windows healthy (`rel_change_window`: 6.58e-06, 5.82e-06, 4.72e-06, 3.89e-06, 2.26e-06, 1.55e-06, 9.36e-07, 3.23e-07); eval step200 accuracy 0.4219; telemetry copied under `outputs/local_cuda_grpo_gsm8k_e9b0b52aab6c/telemetry/` |
+| Phase 2: Q metrics | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast) | 3.9 min | metrics saved for ckpts 0/25/50/100/200 under `measurements/`; telemetry `outputs/local_cuda_grpo_gsm8k_e9b0b52aab6c/telemetry/gpu_20260710_123718_phase2.csv` |
 
 Notes:
 - bitsandbytes `paged_adamw_8bit` optimizer checkpointing hung or produced corrupt optimizer state on Windows. For this optimizer, local CUDA training now uses `save_only_model=True`; phase-3 adaptation uses the same guard.
