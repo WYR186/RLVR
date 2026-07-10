@@ -250,6 +250,7 @@ def phase1(pilot: dict, backend: str = "cpu") -> Path:
     # Autocast/compute dtype may differ from the master-weight dtype (cuda v2
     # profile); strata without autocast_dtype compute in their master dtype.
     compute_dtype = execution.get("autocast_dtype", execution["dtype"])
+    skip_optimizer_checkpoints = execution.get("optim") == "paged_adamw_8bit"
     args = GRPOConfig(
         output_dir=str(trainer_dir), seed=cfg["seed"], max_steps=cfg["max_steps"],
         learning_rate=cfg["learning_rate"],
@@ -269,7 +270,8 @@ def phase1(pilot: dict, backend: str = "cpu") -> Path:
             if execution.get("gradient_checkpointing") else None),
         dataloader_pin_memory=(device != "mps"),  # unsupported no-op on MPS
         logging_steps=1, save_strategy="steps", save_steps=25,
-        save_total_limit=2, save_only_model=False, report_to="none")
+        save_total_limit=2, save_only_model=skip_optimizer_checkpoints,
+        report_to="none")
     trainer = GRPOTrainer(
         model=model, args=args, train_dataset=train_ds,
         reward_funcs=exact_answer_reward, processing_class=tok,

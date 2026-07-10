@@ -113,6 +113,7 @@ def run_fixed_budget_adaptation(checkpoint_path,
         baseline_path.write_text(json.dumps({"acc_before": acc_before}, indent=1))
     print(f"[adapt] {checkpoint_path}: SVAMP accuracy BEFORE = {acc_before:.4f}")
 
+    skip_optimizer_checkpoints = optim == "paged_adamw_8bit"
     cfg = GRPOConfig(
         output_dir=str(trainer_dir),
         seed=seed,
@@ -138,7 +139,7 @@ def run_fixed_budget_adaptation(checkpoint_path,
         save_strategy="steps",
         save_steps=save_steps,
         save_total_limit=2,
-        save_only_model=False,
+        save_only_model=skip_optimizer_checkpoints,
         report_to="none",
     )
     trainer = GRPOTrainer(

@@ -297,3 +297,13 @@ Notes:
   `local_grpo_gsm8k_eac028bfcc87`; 45/45 tests pass). New pre-registered v2
   run dir: `local_cuda_grpo_gsm8k_e9b0b52aab6c`. Rerun guide:
   `WIN4070_RERUN_GUIDE.md`.
+- **2026-07-10 - v2 Phase 1 Windows execution**: Phase 1 completed 200/200
+  updates in `local_cuda_grpo_gsm8k_e9b0b52aab6c`; every sentinel window was
+  healthy (`updates_effective: true`, final window `rel_change_window =
+  3.23e-07`). Windows bitsandbytes optimizer checkpointing hung or produced
+  corrupt optimizer state, so cuda `paged_adamw_8bit` runs now save model-only
+  checkpoints (`save_only_model=True`) in phase 1 and phase 3. Checkpoints at
+  steps 25/50/75 were manually repaired to resume; optimizer moments and RNG
+  state across those resume boundaries are therefore a logged numeric
+  deviation from an uninterrupted run, while seeds, splits, LR, geometry,
+  reward, and generation settings were unchanged.

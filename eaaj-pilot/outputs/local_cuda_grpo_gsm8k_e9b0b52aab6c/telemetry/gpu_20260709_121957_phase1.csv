@@ -1,0 +1,3 @@
+﻿timestamp, name, utilization.gpu [%], memory.used [MiB], memory.total [MiB], temperature.gpu, power.draw [W], clocks.current.sm [MHz]
+2026/07/09 12:19:59.541, NVIDIA GeForce RTX 4070 Laptop GPU, 0 %, 0 MiB, 8188 MiB, 49, 590.01 W, 2175 MHz
+2026/07/09 12:20:59.546, NVIDIA GeForce RTX 4070 Laptop GPU, [Unknown Error], 0 MiB, 8188 MiB, 0, 21.47 W, 2175 MHz

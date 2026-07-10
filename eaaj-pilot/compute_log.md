@@ -29,3 +29,17 @@ Run dir: `outputs/local_cuda_grpo_gsm8k_6a075c15808e`.
 | Phase 2: Q metrics | RTX 4070 Laptop (CUDA bf16) | 0.9 min | all five checkpoint metrics saved under `measurements/`; telemetry `eaaj-pilot-win4070/logs/gpu_20260709_031435_phase2.csv` |
 | Phase 3: fixed-budget SVAMP adaptation | RTX 4070 Laptop (CUDA bf16) | 4.23 h | all five checkpoint adaptation summaries saved under `adaptation/`; telemetry `eaaj-pilot-win4070/logs/gpu_20260709_031539_phase3.csv` |
 | Phase 4: analysis | RTX 4070 Laptop (CUDA bf16) | <1 min | tables and figures saved under `analysis/`; telemetry `eaaj-pilot-win4070/logs/gpu_20260709_072930_phase4.csv` |
+
+## 2026-07-10 Windows RTX 4070 local CUDA v2 rerun
+
+Run dir: `outputs/local_cuda_grpo_gsm8k_e9b0b52aab6c`.
+
+| Phase | Hardware | Wall time | Notes |
+|-------|----------|-----------|-------|
+| Probes: small + full-geometry GRPO | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast, paged_adamw_8bit) | <5 min | small probe passed; full probe completed without OOM at 86.45 s/update, but PyTorch reported 10.809 GiB peak reserved, above the 7.3 GiB go/no-go threshold; accepted as allocator/accounting deviation on the 8 GiB WDDM stack and logged in `telemetry/probe_results.jsonl` |
+| Phase 1: GSM8K GRPO 200 updates | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast, paged_adamw_8bit) | 5.18 h active wrapper time across resumes; final resume 2.92 h | run ckpts 0/25/50/100/200 saved; trainer final checkpoint-200 saved; all sentinel windows healthy (`rel_change_window`: 6.58e-06, 5.82e-06, 4.72e-06, 3.89e-06, 2.26e-06, 1.55e-06, 9.36e-07, 3.23e-07); eval step200 accuracy 0.4219; telemetry copied under `outputs/local_cuda_grpo_gsm8k_e9b0b52aab6c/telemetry/` |
+
+Notes:
+- bitsandbytes `paged_adamw_8bit` optimizer checkpointing hung or produced corrupt optimizer state on Windows. For this optimizer, local CUDA training now uses `save_only_model=True`; phase-3 adaptation uses the same guard.
+- Interrupted checkpoint repairs were required at steps 25, 50, and 75. Repairs restored model/trainer resume metadata and scheduler position, but optimizer moments and RNG state at those resume boundaries are not identical to an uninterrupted run.
+- `run_pipeline.ps1` GPU telemetry now samples once per minute and appends each row immediately, avoiding empty CSVs when a long-running `nvidia-smi -l` job is stopped.

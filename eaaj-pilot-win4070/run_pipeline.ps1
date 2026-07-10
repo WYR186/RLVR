@@ -67,8 +67,13 @@ $Stamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $GpuLog = Join-Path $LogDir "gpu_${Stamp}_phase$Phase.csv"
 $GpuJob = Start-Job -ScriptBlock {
     param($OutFile)
-    & nvidia-smi "--query-gpu=timestamp,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,clocks.sm" `
-        --format=csv -l 60 | Out-File -FilePath $OutFile -Encoding utf8
+    "timestamp,name,utilization.gpu [%],memory.used [MiB],memory.total [MiB],temperature.gpu,power.draw [W],clocks.sm [MHz]" |
+        Set-Content -Path $OutFile -Encoding utf8
+    while ($true) {
+        & nvidia-smi "--query-gpu=timestamp,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,clocks.sm" `
+            --format=csv,noheader,nounits | Add-Content -Path $OutFile -Encoding utf8
+        Start-Sleep -Seconds 60
+    }
 } -ArgumentList $GpuLog
 
 $Started = Get-Date
