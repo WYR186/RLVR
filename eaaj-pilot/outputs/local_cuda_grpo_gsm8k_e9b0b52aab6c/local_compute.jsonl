@@ -2,3 +2,4 @@
 {"phase": "phase2", "status": "complete", "started_unix": 1783705113.6041942, "ended_unix": 1783705273.3591456, "wall_seconds": 159.75495171546936, "device": "cuda", "dtype": "float32"}
 {"phase": "phase3:50", "status": "complete", "started_unix": 1783738392.6455038, "ended_unix": 1783742035.7967923, "wall_seconds": 3643.1512887477875, "device": "cuda", "dtype": "float32"}
 {"phase": "phase3:all", "status": "complete", "started_unix": 1783742185.701083, "ended_unix": 1783747978.417233, "wall_seconds": 5792.7161502838135, "device": "cuda", "dtype": "float32"}
+{"phase": "phase4", "status": "complete", "started_unix": 1783749461.2763817, "ended_unix": 1783749464.7951758, "wall_seconds": 3.518794298171997, "device": "cuda", "dtype": "float32"}

@@ -262,14 +262,14 @@ Notes:
 
 ## 10. Deliverables checklist for this stratum
 
-- [ ] `probe_results.jsonl` (small + full geometry) with peak VRAM and s/update
-- [ ] Phase 1: `dashboard.jsonl`, `gsm8k_eval.jsonl`, 5 checkpoints, `sparse_reward_preflight.json`
-- [ ] Phase 2: `measurements/metrics_ckpt{0,25,50,100,200}.json` (+ 2048-probe sensitivity at 0/200)
-- [ ] Phase 3: per-checkpoint `baseline.json`, `svamp_eval_curve.jsonl`, `dashboard.jsonl`, `summary.json`
-- [ ] Phase 4: checkpoint × {erank/layer, dormant/τ, GSM8K acc, SVAMP Δacc & final} table + 3 plots (Q vs updates; reward curve with Q overlay; Q vs fixed-budget outcome scatter with Spearman ρ)
-- [ ] `compute_log.md` rows + `logs/gpu_*.csv` per phase; wall-clock extrapolation to the full-experiment sweep
+- [x] `probe_results.jsonl` (small + full geometry) with peak VRAM and s/update
+- [x] Phase 1: `dashboard.jsonl`, `gsm8k_eval.jsonl`, 5 checkpoints, `sparse_reward_preflight.json`
+- [x] Phase 2: `measurements/metrics_ckpt{0,25,50,100,200}.json` (+ 2048-probe sensitivity at 0/200)
+- [x] Phase 3: per-checkpoint `baseline.json`, `svamp_eval_curve.jsonl`, `dashboard.jsonl`, `summary.json`
+- [x] Phase 4: checkpoint × {erank/layer, dormant/τ, GSM8K acc, SVAMP Δacc & final} table + 3 plots (Q vs updates; reward curve with Q overlay; Q vs fixed-budget outcome scatter with Spearman ρ)
+- [x] `compute_log.md` rows + `logs/gpu_*.csv` per phase; wall-clock extrapolation to the full-experiment sweep
 - [ ] Deviation lines from §3 mirrored into the Research Doc
-- [ ] (v2) `update_sentinel.jsonl` healthy in phase 1 and every phase-3 adaptation
+- [x] (v2) `update_sentinel.jsonl` healthy in phase 1 and every phase-3 adaptation
 
 ## 11. Change log
 
