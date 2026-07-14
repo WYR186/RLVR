@@ -6,7 +6,7 @@
   "manifest.json": "da90fb488c58eae58ad4492939e0ad40df811aaf7be5a083bbf40a1f3d213d70"
  },
  "source_config_hash": "e9b0b52aab6c",
- "git_sha": "8eb99914d243a2eea5e9a362e51738f89dd90c02",
+ "git_sha": "ceb1c1b9bdf34580c9757e471ae714f0bca4dc48",
  "seed": 43,
  "recipe": {
   "task": "SVAMP",
@@ -39,5 +39,9 @@
   "bitsandbytes": "0.49.2",
   "datasets": "5.0.0",
   "accelerate": "1.14.0"
- }
+ },
+ "git_sha_history": [
+  "8eb99914d243a2eea5e9a362e51738f89dd90c02"
+ ],
+ "refreshed_unix": 1784008173.0566516
 }
