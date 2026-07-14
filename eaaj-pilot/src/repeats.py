@@ -317,6 +317,28 @@ def ensure_repeat_manifest(source_run, seed: int, recipe: dict,
         for key in ("source_sha256", "source_config_hash", "seed", "recipe"):
             if existing.get(key) != proposed.get(key):
                 raise RuntimeError(f"repeat manifest mismatch for {key}")
+        # Before the first scientifically complete checkpoint, allow an
+        # engineering-only retry to refresh provenance (for example, a
+        # wrapper fix after a pre-training failure). Once any canonical
+        # checkpoint is complete, the seed stratum stays pinned.
+        has_complete_checkpoint = any(
+            (root / f"ckpt-{checkpoint}" / "summary.json").exists()
+            for checkpoint in CHECKPOINTS)
+        if not has_complete_checkpoint and existing.get("git_sha") != proposed["git_sha"]:
+            history = list(existing.get("git_sha_history", []))
+            old_sha = existing.get("git_sha")
+            if old_sha and old_sha not in history:
+                history.append(old_sha)
+            existing.update({
+                "git_sha": proposed["git_sha"],
+                "git_sha_history": history,
+                "python": proposed["python"],
+                "platform": proposed["platform"],
+                "gpu": proposed["gpu"],
+                "versions": proposed["versions"],
+                "refreshed_unix": time.time(),
+            })
+            path.write_text(json.dumps(existing, indent=1), encoding="utf-8")
         return existing
     path.write_text(json.dumps(proposed, indent=1), encoding="utf-8")
     return proposed

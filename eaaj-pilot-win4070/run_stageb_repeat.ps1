@@ -79,8 +79,19 @@ try {
         "--attempt-id", $AttemptId,
         "--status-path", $StatusPath
     )
-    & $PythonExe @CliArgs 2>&1 | Tee-Object -Variable Captured
-    if ($LASTEXITCODE -ne 0) { throw "Stage-B repeat runner exited with code $LASTEXITCODE" }
+    # PowerShell 5 wraps native stderr lines as NativeCommandError records.
+    # Preserve them in the transcript, but trust the process exit code rather
+    # than turning harmless warnings (for example "triton not found") into a
+    # wrapper failure under the script-wide ErrorActionPreference=Stop.
+    $SavedErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $PythonExe @CliArgs 2>&1 | Tee-Object -Variable Captured
+        $RunnerExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $SavedErrorActionPreference
+    }
+    if ($RunnerExitCode -ne 0) { throw "Stage-B repeat runner exited with code $RunnerExitCode" }
     if (-not (Test-Path -LiteralPath $StatusPath)) {
         throw "runner status is missing: $StatusPath"
     }

@@ -9,8 +9,10 @@ import pytest
 
 from src.adaptation import (fixed_budget_completion,
                             validate_adaptation_completion)
-from src.repeats import (acquire_repeat_lock, frozen_repeat_recipe,
-                         repeat_output_dir, validate_repeat_directory)
+from src.repeats import (EXPECTED_CONFIG_HASH, acquire_repeat_lock,
+                         ensure_repeat_manifest, frozen_repeat_recipe,
+                         repeat_output_dir, sha256_file,
+                         validate_repeat_directory)
 
 
 def _write_jsonl(path, rows):
@@ -197,3 +199,39 @@ def test_repeat_lock_is_created_atomically(tmp_path):
     lock = acquire_repeat_lock(tmp_path)
     assert lock.read_text() == str(os.getpid())
     lock.unlink()
+
+
+def test_manifest_refreshes_sha_only_before_first_complete_checkpoint(
+        tmp_path, monkeypatch):
+    import src.repeats as repeats
+
+    source = tmp_path / "source"
+    source.mkdir()
+    for name in ("config.json", "manifest.json"):
+        (source / name).write_text("{}")
+    recipe = frozen_repeat_recipe()
+    root = source / "adaptation_repeats" / "seed-43"
+    root.mkdir(parents=True)
+    manifest_path = root / "repeat_manifest.json"
+    manifest_path.write_text(json.dumps({
+        "source_sha256": {
+            name: sha256_file(source / name)
+            for name in ("config.json", "manifest.json")
+        },
+        "source_config_hash": EXPECTED_CONFIG_HASH,
+        "seed": 43,
+        "recipe": recipe,
+        "git_sha": "old-sha",
+    }))
+    monkeypatch.setattr(repeats, "_git_sha", lambda repo: "fixed-sha")
+    monkeypatch.setattr(repeats, "runtime_versions", lambda: {"torch": "test"})
+    refreshed = ensure_repeat_manifest(source, 43, recipe, tmp_path, "RTX 4070")
+    assert refreshed["git_sha"] == "fixed-sha"
+    assert refreshed["git_sha_history"] == ["old-sha"]
+
+    completed = root / "ckpt-0"
+    completed.mkdir()
+    (completed / "summary.json").write_text("{}")
+    monkeypatch.setattr(repeats, "_git_sha", lambda repo: "later-artifact-sha")
+    pinned = ensure_repeat_manifest(source, 43, recipe, tmp_path, "RTX 4070")
+    assert pinned["git_sha"] == "fixed-sha"

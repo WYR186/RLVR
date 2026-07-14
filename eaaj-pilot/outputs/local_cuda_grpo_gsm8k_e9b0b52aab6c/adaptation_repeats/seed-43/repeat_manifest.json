@@ -1,0 +1,43 @@
+{
+ "created_unix": 1784007939.7546287,
+ "source_run": "D:\\algoverse\\eaaj-pilot\\outputs\\local_cuda_grpo_gsm8k_e9b0b52aab6c",
+ "source_sha256": {
+  "config.json": "e59561906b17f48ed8e6ea6b6284bc63a00cbd23a76dbed9a5598c0cbdb4a905",
+  "manifest.json": "da90fb488c58eae58ad4492939e0ad40df811aaf7be5a083bbf40a1f3d213d70"
+ },
+ "source_config_hash": "e9b0b52aab6c",
+ "git_sha": "8eb99914d243a2eea5e9a362e51738f89dd90c02",
+ "seed": 43,
+ "recipe": {
+  "task": "SVAMP",
+  "algorithm": "GRPO",
+  "train_questions": 256,
+  "eval_questions": 100,
+  "budget_updates": 50,
+  "eval_every": 10,
+  "learning_rate": 1e-06,
+  "beta": 0.0,
+  "temperature": 0.7,
+  "top_p": 1.0,
+  "num_generations": 8,
+  "max_prompt_length": 512,
+  "max_completion_length": 512,
+  "dtype": "float32",
+  "autocast_dtype": "bfloat16",
+  "optim": "paged_adamw_8bit",
+  "gradient_checkpointing": true,
+  "per_device_train_batch_size": 4,
+  "gradient_accumulation_steps": 16
+ },
+ "python": "3.13.14",
+ "platform": "Windows-11-10.0.22621-SP0",
+ "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+ "versions": {
+  "torch": "2.11.0+cu128",
+  "trl": "1.6.0",
+  "transformers": "5.13.0",
+  "bitsandbytes": "0.49.2",
+  "datasets": "5.0.0",
+  "accelerate": "1.14.0"
+ }
+}
