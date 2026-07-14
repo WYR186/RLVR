@@ -56,3 +56,4 @@ Notes:
 | 2026-07-14 00:45 | Stage-B repeat seed 43 ckpt 0 | RTX 4070 Laptop | 0.2 min | failed; telemetry `gpu_20260714_004537_stageb_seed43_ckpt0.csv` |
 | 2026-07-14 02:01 | Stage-B repeat seed 43 ckpt 0 | RTX 4070 Laptop | 72.2 min | complete; telemetry `gpu_20260714_004930_stageb_seed43_ckpt0.csv` |
 | 2026-07-14 03:01 | Stage-B repeat seed 43 ckpt 200 | RTX 4070 Laptop | 56.3 min | complete; telemetry `gpu_20260714_020451_stageb_seed43_ckpt200.csv` |
+| 2026-07-14 04:17 | Stage-B repeat seed 43 ckpt 25 | RTX 4070 Laptop | 74.4 min | complete; telemetry `gpu_20260714_030316_stageb_seed43_ckpt25.csv` |
