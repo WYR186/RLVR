@@ -55,3 +55,4 @@ Notes:
 | 2-update Stage-B repeat smoke | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast, paged_adamw_8bit) | 6.4 min | completion contract passed with actual/requested updates 2/2; baseline 0.53; sentinel windows effective at steps 1/2; telemetry `outputs/smoke_stageb_repeat_20260713_215451/gpu_20260713_215451_stageb_smoke.csv` |
 | 2026-07-14 00:45 | Stage-B repeat seed 43 ckpt 0 | RTX 4070 Laptop | 0.2 min | failed; telemetry `gpu_20260714_004537_stageb_seed43_ckpt0.csv` |
 | 2026-07-14 02:01 | Stage-B repeat seed 43 ckpt 0 | RTX 4070 Laptop | 72.2 min | complete; telemetry `gpu_20260714_004930_stageb_seed43_ckpt0.csv` |
+| 2026-07-14 03:01 | Stage-B repeat seed 43 ckpt 200 | RTX 4070 Laptop | 56.3 min | complete; telemetry `gpu_20260714_020451_stageb_seed43_ckpt200.csv` |
