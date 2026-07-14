@@ -47,3 +47,9 @@ Notes:
 - Interrupted checkpoint repairs were required at steps 25, 50, and 75. Repairs restored model/trainer resume metadata and scheduler position, but optimizer moments and RNG state at those resume boundaries are not identical to an uninterrupted run.
 - Phase 3 ckpt-50 hit a transient CUDA OOM after its first update in the original multi-checkpoint process. The incomplete attempt was preserved locally, and ckpt-50 was rerun from scratch with the identical preregistered geometry in a fresh process; the retry and remaining checkpoints completed without changing scientific knobs.
 - `run_pipeline.ps1` GPU telemetry now samples once per minute and appends each row immediately, avoiding empty CSVs when a long-running `nvidia-smi -l` job is stopped.
+
+## 2026-07-13 Stage-B seed-repeat hardening
+
+| Phase | Hardware | Wall time | Notes |
+|-------|----------|-----------|-------|
+| 2-update Stage-B repeat smoke | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast, paged_adamw_8bit) | 6.4 min | completion contract passed with actual/requested updates 2/2; baseline 0.53; sentinel windows effective at steps 1/2; telemetry `outputs/smoke_stageb_repeat_20260713_215451/gpu_20260713_215451_stageb_smoke.csv` |

@@ -24,3 +24,4 @@ Slides/
 *.pth
 *.bin
 tokenizer.json
+stageb_repeat.lock

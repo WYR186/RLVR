@@ -38,7 +38,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 from transformers.trainer_utils import get_last_checkpoint
 from trl import GRPOConfig, GRPOTrainer
 
-from src.adaptation import run_fixed_budget_adaptation
+from src.adaptation import (run_fixed_budget_adaptation,
+                            validate_adaptation_completion)
 from src.analysis import run_analysis
 from src.callbacks import (ExactAnswerEvalCallback, JsonlDashboardLogger,
                            LocalSafetyCallback, SaveAtSteps,
@@ -386,7 +387,15 @@ def phase3(pilot: dict, run_dir: Path, only_checkpoint: int | None = None) -> No
             save_steps=10)
         print(f"Phase 3 checkpoint {n}: Δacc={summary['delta_acc']:+.4f}")
     expected = pilot["stage_a"]["checkpoint_steps"]
-    if all((root / f"ckpt-{n}" / "summary.json").exists() for n in expected):
+    complete = True
+    for n in expected:
+        try:
+            validate_adaptation_completion(
+                root / f"ckpt-{n}", recipe["budget_updates"], recipe["eval_every"])
+        except (OSError, ValueError, RuntimeError, json.JSONDecodeError):
+            complete = False
+            break
+    if complete:
         (run_dir / "phase3_complete.json").write_text(json.dumps(
             {"completed_unix": time.time(), "checkpoints": expected}, indent=1))
     append_compute(run_dir, f"phase3:{only_checkpoint or 'all'}", started,

@@ -14,8 +14,105 @@ from __future__ import annotations
 
 import gc
 import json
+import math
 import time
 from pathlib import Path
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    """Read a JSONL artifact, rejecting malformed or non-object rows."""
+    rows = []
+    with path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, 1):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                raise ValueError(f"{path}:{line_number} is not a JSON object")
+            rows.append(row)
+    return rows
+
+
+def validate_adaptation_completion(out_dir, budget_updates: int = 50,
+                                   eval_every: int = 10) -> dict:
+    """Validate the full fixed-budget completion contract for one run."""
+    out_dir = Path(out_dir)
+    safety_path = out_dir / "safety_stop.json"
+    if safety_path.exists():
+        raise RuntimeError(f"safety stop exists: {safety_path}")
+    summary_path = out_dir / "summary.json"
+    if not summary_path.exists():
+        raise RuntimeError(f"summary missing: {summary_path}")
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    if summary.get("completion_status") != "complete":
+        raise RuntimeError("completion_status is not complete")
+    if int(summary.get("requested_updates", -1)) != budget_updates:
+        raise RuntimeError("requested_updates does not match the fixed budget")
+    if int(summary.get("actual_updates", -1)) != budget_updates:
+        raise RuntimeError("actual_updates does not match the fixed budget")
+
+    expected_steps = list(range(eval_every, budget_updates + 1, eval_every))
+    curve = _read_jsonl(out_dir / "svamp_eval_curve.jsonl")
+    curve_steps = [int(row["step"]) for row in curve]
+    if curve_steps != expected_steps:
+        raise RuntimeError(
+            f"eval curve steps {curve_steps} != expected {expected_steps}")
+    sentinel = _read_jsonl(out_dir / "update_sentinel.jsonl")
+    sentinel_steps = [int(row["step"]) for row in sentinel]
+    if sentinel_steps != expected_steps:
+        raise RuntimeError(
+            f"sentinel steps {sentinel_steps} != expected {expected_steps}")
+    if not all(row.get("updates_effective") is True for row in sentinel):
+        raise RuntimeError("one or more sentinel windows are ineffective")
+
+    dashboard = _read_jsonl(out_dir / "dashboard.jsonl")
+    dashboard_steps = sorted({
+        int(row["step"]) for row in dashboard
+        if "step" in row and any(key in row for key in ("loss", "grad_norm"))
+    })
+    expected_dashboard_steps = list(range(1, budget_updates + 1))
+    if dashboard_steps != expected_dashboard_steps:
+        raise RuntimeError(
+            f"dashboard training steps {dashboard_steps} != expected "
+            f"{expected_dashboard_steps}")
+    for row in dashboard:
+        for key in ("loss", "grad_norm"):
+            value = row.get(key)
+            if value is not None and not math.isfinite(float(value)):
+                raise RuntimeError(
+                    f"dashboard has non-finite {key} at step {row.get('step')}")
+    return summary
+
+
+def fixed_budget_completion(trainer, out_dir, requested_updates: int,
+                            safety_stop_path=None) -> dict:
+    """Return completion metadata or persist an auditable incomplete record."""
+    out_dir = Path(out_dir)
+    actual_updates = int(trainer.state.global_step)
+    if actual_updates == requested_updates:
+        return {
+            "requested_updates": requested_updates,
+            "actual_updates": actual_updates,
+            "completion_status": "complete",
+        }
+    safety_stop_path = Path(safety_stop_path) if safety_stop_path else None
+    incomplete = {
+        "requested_updates": requested_updates,
+        "actual_updates": actual_updates,
+        "completion_status": "incomplete",
+        "reason": "trainer returned before the requested fixed budget",
+        "safety_stop_path": (
+            str(safety_stop_path)
+            if safety_stop_path is not None and safety_stop_path.exists()
+            else None),
+        "run_path": str(out_dir),
+        "timestamp_unix": time.time(),
+    }
+    (out_dir / "incomplete.json").write_text(
+        json.dumps(incomplete, indent=1), encoding="utf-8")
+    raise RuntimeError(
+        f"adaptation incomplete: requested {requested_updates} updates, "
+        f"trainer completed {actual_updates}")
 
 
 def run_fixed_budget_adaptation(checkpoint_path,
@@ -38,7 +135,8 @@ def run_fixed_budget_adaptation(checkpoint_path,
                                 autocast_dtype_name: str | None = None,
                                 optim: str | None = None,
                                 gradient_checkpointing: bool = True,
-                                save_steps: int = 10) -> dict:
+                                save_steps: int = 10,
+                                expected_acc_before: float | None = None) -> dict:
     """Adapt one checkpoint to SVAMP under a fixed budget; returns summary.
 
     Writes to out_dir: svamp_eval_curve.jsonl (accuracy at 0,10,...,50),
@@ -59,11 +157,22 @@ def run_fixed_budget_adaptation(checkpoint_path,
     out_dir.mkdir(parents=True, exist_ok=True)
     summary_path = out_dir / "summary.json"
     if summary_path.exists():
-        return json.loads(summary_path.read_text())
+        return validate_adaptation_completion(
+            out_dir, budget_updates=budget_updates, eval_every=eval_every)
+    safety_path = out_dir / "safety_stop.json"
+    if safety_path.exists():
+        raise RuntimeError(
+            f"refusing to resume safety-stopped adaptation in {out_dir}; "
+            "preserve it as a failed attempt and start in a fresh directory")
+    if (out_dir / "incomplete.json").exists():
+        raise RuntimeError(
+            f"refusing to overwrite incomplete adaptation in {out_dir}; "
+            "preserve it as a failed attempt and start in a fresh directory")
     trainer_dir = out_dir / "trainer"
     resume_from = get_last_checkpoint(str(trainer_dir)) if trainer_dir.exists() else None
     partial = [out_dir / "dashboard.jsonl", out_dir / "svamp_eval_curve.jsonl"]
-    if any(p.exists() and p.stat().st_size for p in partial) and resume_from is None:
+    has_partial = any(p.exists() and p.stat().st_size for p in partial)
+    if has_partial and (resume_from is None or optim == "paged_adamw_8bit"):
         raise RuntimeError(
             f"partial adaptation artifacts exist in {out_dir}; move the directory "
             "aside and rerun so the fixed 50-update budget is not mixed across attempts")
@@ -112,6 +221,19 @@ def run_fixed_budget_adaptation(checkpoint_path,
         acc_before = exact_answer_accuracy(model, tokenizer, eval_prompts, eval_golds)
         baseline_path.write_text(json.dumps({"acc_before": acc_before}, indent=1))
     print(f"[adapt] {checkpoint_path}: SVAMP accuracy BEFORE = {acc_before:.4f}")
+    if (expected_acc_before is not None
+            and abs(acc_before - expected_acc_before) > 1e-12):
+        mismatch = {
+            "expected_acc_before": expected_acc_before,
+            "actual_acc_before": acc_before,
+            "checkpoint": str(checkpoint_path),
+            "timestamp_unix": time.time(),
+        }
+        (out_dir / "baseline_mismatch.json").write_text(
+            json.dumps(mismatch, indent=1), encoding="utf-8")
+        raise RuntimeError(
+            f"SVAMP baseline mismatch: expected {expected_acc_before:.4f}, "
+            f"got {acc_before:.4f}")
 
     skip_optimizer_checkpoints = optim == "paged_adamw_8bit"
     cfg = GRPOConfig(
@@ -162,13 +284,26 @@ def run_fixed_budget_adaptation(checkpoint_path,
         from .mps_compat import enable_compiled_generation
         enable_compiled_generation(trainer)
     trainer.train(resume_from_checkpoint=resume_from)
+    try:
+        completion = fixed_budget_completion(
+            trainer, out_dir, budget_updates, safety_path)
+    except RuntimeError:
+        del trainer, model
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        raise
 
     acc_after = exact_answer_accuracy(model, tokenizer, eval_prompts, eval_golds)
     print(f"[adapt] {checkpoint_path}: SVAMP accuracy AFTER = {acc_after:.4f}")
 
     summary = {
         "checkpoint": str(checkpoint_path),
+        "task": "SVAMP",
+        "train_questions": len(train_ds),
+        "eval_questions": len(eval_prompts),
         "budget_updates": budget_updates,
+        **completion,
         "seed": seed,
         "algo": "grpo",
         "learning_rate": learning_rate,
@@ -192,7 +327,10 @@ def run_fixed_budget_adaptation(checkpoint_path,
         "delta_acc": acc_after - acc_before,
         "wall_seconds": time.time() - t0,
     }
-    summary_path.write_text(json.dumps(summary, indent=1))
+    summary_path.write_text(json.dumps(summary, indent=1), encoding="utf-8")
+
+    validate_adaptation_completion(
+        out_dir, budget_updates=budget_updates, eval_every=eval_every)
 
     del trainer, model
     gc.collect()

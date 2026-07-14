@@ -40,11 +40,12 @@ def test_training_paths_do_not_pass_removed_trl_prompt_length_arg():
     # TRL 1.6 removed GRPOConfig.max_prompt_length. Keep the value in the
     # pre-registered config for preflight/eval truncation, but never pass it to
     # GRPOConfig (a real one-step benchmark caught this API drift).
-    notebook = json.loads((ROOT / "01_grpo_gsm8k.ipynb").read_text())
+    notebook = json.loads(
+        (ROOT / "01_grpo_gsm8k.ipynb").read_text(encoding="utf-8"))
     notebook_code = "\n".join(
         "".join(c["source"]) for c in notebook["cells"] if c["cell_type"] == "code")
-    runner = (ROOT / "scripts/run_local_pipeline.py").read_text()
-    adaptation = (ROOT / "src/adaptation.py").read_text()
+    runner = (ROOT / "scripts/run_local_pipeline.py").read_text(encoding="utf-8")
+    adaptation = (ROOT / "src/adaptation.py").read_text(encoding="utf-8")
     assert 'max_prompt_length=CONFIG["max_prompt_length"]' not in notebook_code
     assert 'max_prompt_length=cfg["max_prompt_length"]' not in runner
     grpo_call = adaptation.split("cfg = GRPOConfig(", 1)[1].split("trainer =", 1)[0]
