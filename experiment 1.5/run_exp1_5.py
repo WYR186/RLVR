@@ -226,7 +226,13 @@ def phase2(cfg: dict, run_dir: Path, smoke: bool) -> None:
     started = time.time()
     execution = run_execution(run_dir)
     device = execution["device"]
-    dtype = DTYPES[cfg["measurement"]["model_dtype"]]
+    # Measurement dtype follows the run's EXECUTION dtype (fp32), exactly like
+    # the pilot's local pipeline did — the pilot's committed ckpt-0 reference
+    # values (gate 3) were produced this way, and comparability requires the
+    # same path. (pilot_config's measurement.model_dtype=float16 field was
+    # never honored by run_local_pipeline.py; verified 2026-07-16 against
+    # metrics_ckpt0.json: model_dtype_requested=float32 on both strata.)
+    dtype = DTYPES[execution["dtype"]]
     ckpts = cfg["stage_a"]["checkpoint_steps"]
     layers = tuple(cfg["measurement"]["layers"])
     out_dir = run_dir / "measurements"
@@ -255,7 +261,7 @@ def phase2(cfg: dict, run_dir: Path, smoke: bool) -> None:
             max_length=cfg["measurement"]["max_prompt_length"])
         m.update({"checkpoint": n, "run_dir": str(run_dir),
                   "experiment": cfg["experiment"],
-                  "model_dtype_requested": cfg["measurement"]["model_dtype"],
+                  "model_dtype_requested": execution["dtype"],
                   "device": device, "wall_seconds": time.time() - t0})
         if n in sensitivity_at and not smoke:
             t_big = time.time()

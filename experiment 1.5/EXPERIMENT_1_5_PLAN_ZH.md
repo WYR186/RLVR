@@ -34,8 +34,10 @@ outcome 噪声压低——其余全部冻结**，检验在"病人存在"的前�
 - Stage-A 数据：同一份冻结的 512 道 GSM8K 训练题（`gsm8k_splits.json`）；
   同一 prompt 模板；exact-answer 二值 reward，代码同一文件
 - Q 测量：同一份冻结 512-prompt probe 集（`probe_set_ids.json`）、同层
-  （4/12/22）、同 dtype（fp16）、eval 模式、`src/metrics.py` 原样复用；
-  2048-prompt 敏感性检查在端点 ckpt（0 和 500）
+  （4/12/22）、同 dtype（**fp32**——pilot 本地管线实际按 execution dtype
+  测量，产物 `model_dtype_requested: float32` 为证；config 里的 float16
+  字段从未被本地管线使用，exp 1.5 已改为如实记录 fp32）、eval 模式、
+  `src/metrics.py` 原样复用；2048-prompt 敏感性检查在端点 ckpt（0 和 500）
 - Stage-B 配方：GRPO（待决项维持默认）、lr 1e-6、β=0、温度 0.7、
   top-p 1.0、8 生成、**同一份冻结的 256 道 SVAMP 训练题**、50 步固定预算、
   每 10 步记录适应速度曲线
