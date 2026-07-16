@@ -60,3 +60,10 @@ Notes:
 | 2026-07-14 05:12 | Stage-B repeat seed 43 ckpt 50 | RTX 4070 Laptop | 54.2 min | complete; telemetry `gpu_20260714_041835_stageb_seed43_ckpt50.csv` |
 | 2026-07-14 05:51 | Stage-B repeat seed 43 ckpt 100 | RTX 4070 Laptop | 38.3 min | complete; telemetry `gpu_20260714_051339_stageb_seed43_ckpt100.csv` |
 | 2026-07-14 07:05 | Stage-B repeat seed 44 ckpt 0 | RTX 4070 Laptop | 72.2 min | complete; telemetry `gpu_20260714_055316_stageb_seed44_ckpt0.csv` |
+
+## 2026-07-16 Experiment 1.5 Windows RTX 4070
+
+| Phase | Hardware | Wall time | Notes |
+|-------|----------|-----------|-------|
+| Gate 0 + CUDA environment | RTX 4070 Laptop | <2 min | pre-registered run dir `exp15_cuda_grpo_gsm8k_e73704296e47`; CUDA available; smoke completed before formal run |
+| Phase 1 | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast, paged_adamw_8bit) | stopped at update 7 | formal run started at 2026-07-16 01:58 and triggered the pre-registered safety stop: five consecutive updates exceeded 10% completion clipping; telemetry copied to `outputs/exp15_cuda_grpo_gsm8k_e73704296e47/telemetry/`; no retry or parameter change |
