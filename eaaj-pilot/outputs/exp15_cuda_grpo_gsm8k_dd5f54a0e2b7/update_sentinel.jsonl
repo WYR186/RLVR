@@ -1,0 +1,2 @@
+{"step": 25, "window_start_step": 0, "rel_change_window": 6.451688956663538e-05, "rel_change_since_start": 6.451688956663538e-05, "warn_threshold": 1e-08, "updates_effective": true, "wall_time": 1784215704.0247204}
+{"step": 50, "window_start_step": 25, "rel_change_window": 4.155451233687079e-05, "rel_change_since_start": 8.37476128616967e-05, "warn_threshold": 1e-08, "updates_effective": true, "wall_time": 1784218067.7234674}
