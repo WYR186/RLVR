@@ -21,35 +21,26 @@ eaaj-pilot/.venv/bin/python "experiment 1.5/run_exp1_5.py" --phase all --backend
 
 ## Real run (Windows RTX 4070 machine only)
 
-Same conda/venv as the pilot v2 runs. From `D:\algoverse`:
+**Follow `WIN4070_EXP15_GUIDE.md`** — the step-by-step guide for the agent
+on the Windows box (gates, kill-gate thresholds, session plan, recording
+and commit protocol). Short version:
 
 ```powershell
-# Phase 1 — GRPO 500 updates (~13 h; resumable, can be split across evenings)
-python "experiment 1.5\run_exp1_5.py" --phase 1 --backend cuda
-
-# KILL-GATE (same as pilot v2 rerun guide): after step 25, check
-# update_sentinel.jsonl in the run dir — rel_change_window must be well
-# above 1e-8 or you stop and investigate before burning 13 hours.
-
-# Phase 2 — Q metrics, all 8 checkpoints (<15 min)
-python "experiment 1.5\run_exp1_5.py" --phase 2 --backend cuda
-
-# Phase 3 — 18 adaptations (~21 h total; each (ckpt, seed) is atomic and
-# resumable; pre-registered order 0 -> 500 -> 200 -> 100 -> 50 -> 300)
-python "experiment 1.5\run_exp1_5.py" --phase 3 --backend cuda
-#   granular resume, e.g. only ckpt 500 / seed 43:
-python "experiment 1.5\run_exp1_5.py" --phase 3 --backend cuda --adapt-checkpoint 500 --adapt-seed 43
-
-# Phase 4 — analysis (manipulation checks + primary rho)
-python "experiment 1.5\run_exp1_5.py" --phase 4 --backend cuda
+python "experiment 1.5\exp15_gates.py" rundir                                    # Gate 0: pre-registered hash
+powershell -ExecutionPolicy Bypass -File "experiment 1.5\run_exp15.ps1" -Phase all -Smoke   # first contact
+powershell -ExecutionPolicy Bypass -File "experiment 1.5\run_exp15.ps1" -Phase 1  # ~13 h; sentinel gate at step 25
+python "experiment 1.5\exp15_gates.py" sentinel                                  # Gate 1
+powershell -ExecutionPolicy Bypass -File "experiment 1.5\run_exp15.ps1" -Phase 2  # <15 min
+python "experiment 1.5\exp15_gates.py" ckpt0                                     # Gate 3: measurement identity
+powershell -ExecutionPolicy Bypass -File "experiment 1.5\run_exp15.ps1" -Phase 3  # ~21 h, resumable per (ckpt, seed)
+python "experiment 1.5\exp15_gates.py" bridge                                    # Gate 4: legacy-100 bridge
+powershell -ExecutionPolicy Bypass -File "experiment 1.5\run_exp15.ps1" -Phase 4  # analysis + MC1/MC2 verdicts
 ```
 
-Run dir: `eaaj-pilot\outputs\exp15_cuda_grpo_gsm8k_<hash>\`.
-
-After every session: append to `eaaj-pilot/compute_log.md`, commit run
-artifacts (`git add eaaj-pilot/outputs/exp15_... && git commit`), attach GPU
-telemetry CSVs like the pilot did.
+The wrapper adds keep-awake, nvidia-smi telemetry CSVs, full transcripts,
+and native-stderr tolerance (judges by exit code). Run dir:
+`eaaj-pilot\outputs\exp15_cuda_grpo_gsm8k_e73704296e47\`.
 
 Disk: needs ≥30 GiB free (8 fp32 checkpoints + rolling trainer state).
 Adaptation trainer dirs are auto-deleted after validation
-(`--keep-trainer-dirs` to keep them).
+(`-KeepTrainerDirs` to keep them).
