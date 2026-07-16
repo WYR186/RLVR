@@ -48,16 +48,16 @@ def _read_jsonl(path: Path) -> list[dict]:
             if line.strip()]
 
 
-def gate_rundir(_: Path) -> int:
+def gate_rundir(run_dir: Path, cfg: dict) -> int:
     from scripts.run_local_pipeline import EXECUTION_PROFILES
 
-    cfg = lib.load_config()
-    run_dir, _ = lib.stage_a_run_dir(cfg, "cuda", EXECUTION_PROFILES["cuda"])
-    print(f"computed run dir: {run_dir.name}")
-    if run_dir.name == EXPECTED_RUN_NAME:
+    computed, _ = lib.stage_a_run_dir(cfg, "cuda", EXECUTION_PROFILES["cuda"])
+    expected = cfg.get("expected_run_name", EXPECTED_RUN_NAME)
+    print(f"computed run dir: {computed.name}")
+    if computed.name == expected and run_dir.name == expected:
         print("VERDICT: PASS — matches the pre-registered run dir")
         return 0
-    print(f"VERDICT: STOP — expected {EXPECTED_RUN_NAME}; config or execution "
+    print(f"VERDICT: STOP — expected {expected}; config or execution "
           "profile drifted. Do not train; ask Aaron.")
     return 2
 
@@ -153,8 +153,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("gate", choices=sorted(gates))
     parser.add_argument("--run-dir", type=Path, default=None)
+    parser.add_argument("--config", type=Path, default=lib.CONFIG_PATH)
     args = parser.parse_args()
-    run_dir = args.run_dir if args.run_dir is not None else _default_run_dir()
+    cfg = lib.load_config(args.config)
+    if args.run_dir is not None:
+        run_dir = args.run_dir
+    else:
+        from scripts.run_local_pipeline import EXECUTION_PROFILES
+        run_dir, _ = lib.stage_a_run_dir(cfg, "cuda", EXECUTION_PROFILES["cuda"])
+    if args.gate == "rundir":
+        return gate_rundir(run_dir, cfg)
     return gates[args.gate](run_dir)
 
 

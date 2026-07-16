@@ -101,7 +101,7 @@ def run_execution(run_dir: Path) -> dict:
 # Phase 1 — Stage A
 # ---------------------------------------------------------------------------
 
-def phase1(cfg: dict, backend: str, smoke: bool) -> Path:
+def phase1(cfg: dict, backend: str, smoke: bool, config_path=None) -> Path:
     started = time.time()
     execution = EXECUTION_PROFILES[backend]
     run_dir, run_cfg = lib.stage_a_run_dir(cfg, backend, execution, smoke)
@@ -110,7 +110,7 @@ def phase1(cfg: dict, backend: str, smoke: bool) -> Path:
     (run_dir / "config.json").write_text(json.dumps(run_cfg, indent=1))
     if not (run_dir / "manifest.json").exists():
         (run_dir / "manifest.json").write_text(
-            json.dumps(lib.exp15_manifest(cfg, run_cfg), indent=1))
+            json.dumps(lib.exp15_manifest(cfg, run_cfg, config_path), indent=1))
     stage_a = {k: run_cfg[k] for k in run_cfg if k != "execution"}
     ckpt_steps = stage_a["checkpoint_steps"]
     if (run_dir / "phase1_complete.json").exists() and all(
@@ -182,6 +182,13 @@ def phase1(cfg: dict, backend: str, smoke: bool) -> Path:
         logging_steps=1, save_strategy="steps", save_steps=25,
         save_total_limit=2, save_only_model=skip_optimizer_checkpoints,
         report_to="none")
+    safety_cfg = stage_a.get("safety", {})
+    clipping_policy = safety_cfg.get(
+        "completion_clipping_policy", "hard_stop_above_threshold")
+    if clipping_policy not in ("hard_stop_above_threshold", "diagnostic_only"):
+        raise ValueError(f"unknown completion clipping policy: {clipping_policy}")
+    max_clip_ratio = (1.0 if clipping_policy == "diagnostic_only" else
+                      float(safety_cfg.get("max_clip_ratio", 0.10)))
     trainer = GRPOTrainer(
         model=model, args=args, train_dataset=train_ds,
         reward_funcs=reward_func, processing_class=tok,
@@ -194,7 +201,13 @@ def phase1(cfg: dict, backend: str, smoke: bool) -> Path:
                 eval_prompts, eval_golds, run_dir / "gsm8k_eval.jsonl",
                 every=stage_a["eval_every"], also_at_step0=True,
                 item_metadata=eval_metadata),
-            LocalSafetyCallback(run_dir / "safety_stop.json"),
+            LocalSafetyCallback(
+                run_dir / "safety_stop.json",
+                max_step_seconds=float(safety_cfg.get("max_step_seconds", 480.0)),
+                max_rss_gib=float(safety_cfg.get("max_rss_gib", 96.0)),
+                patience=int(safety_cfg.get("timing_patience", 3)),
+                signal_patience=int(safety_cfg.get("zero_signal_patience", 5)),
+                max_clip_ratio=max_clip_ratio),
         ])
     trainer.train(resume_from_checkpoint=resume_from)
     missing = [n for n in ckpt_steps
@@ -381,6 +394,8 @@ def main() -> None:
     parser.add_argument("--adapt-seed", type=int)
     parser.add_argument("--keep-trainer-dirs", action="store_true",
                         help="keep per-adaptation trainer state (~4 GiB each)")
+    parser.add_argument("--config", type=Path, default=lib.CONFIG_PATH,
+                        help="experiment config; defaults to the frozen v1 file")
     args = parser.parse_args()
 
     if args.backend == "cpu" and not args.smoke:
@@ -388,7 +403,7 @@ def main() -> None:
             "experiment 1.5 is pre-registered on the cuda (RTX 4070) stratum; "
             "cpu is only for --smoke plumbing validation "
             "(see EXPERIMENT_1_5_PLAN_ZH.md §5)")
-    cfg = lib.load_config()
+    cfg = lib.load_config(args.config)
     if args.smoke:
         cfg = apply_smoke_overrides(cfg)
 
@@ -397,7 +412,7 @@ def main() -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     acquire_runner_lock(run_dir)
     if args.phase in ("1", "all"):
-        run_dir = phase1(cfg, args.backend, args.smoke)
+        run_dir = phase1(cfg, args.backend, args.smoke, args.config)
     else:
         if not (run_dir / "config.json").exists():
             raise SystemExit(f"run dir has no config.json yet: {run_dir}; "
