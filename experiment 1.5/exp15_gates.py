@@ -28,12 +28,12 @@ import exp1_5_lib as lib  # noqa: E402
 EXPECTED_RUN_NAME = "exp15_cuda_grpo_gsm8k_e73704296e47"
 PILOT_V2_RUN = (lib.PILOT / "outputs" / "local_cuda_grpo_gsm8k_e9b0b52aab6c")
 
-# lr 1e-5 sentinel bands, derived from pilot references (per 25-update window):
-# healthy fp32 @ lr 1e-6 moved ~5e-7..1e-6; the broken bf16 run moved ~3e-9.
-# At 10x lr we expect roughly 10x movement.
-SENTINEL_STOP_BELOW = 1e-7          # dead-update territory -> Ctrl+C now
-SENTINEL_INVESTIGATE_BELOW = 1e-6   # an order under expectation -> pause, ask
-SENTINEL_EXPECTED_BAND = "1e-6 .. 1e-4"
+# Per-25-update sentinel bands scale with Stage-A learning rate. The completed
+# fp32 pilot at lr=1e-6 moved roughly 5e-7..1e-6; the broken pure-bf16 run moved
+# roughly 3e-9. The original v1.5 lr=1e-5 bands were 10x these base thresholds.
+SENTINEL_BASE_LR = 1e-6
+SENTINEL_BASE_STOP_BELOW = 1e-8
+SENTINEL_BASE_INVESTIGATE_BELOW = 1e-7
 
 CKPT0_ERANK_ATOL = 0.01             # same machine/dtype: pilot matched to 4 dp
 BRIDGE_LEGACY_ATOL = 0.02           # informational band for legacy-100 ckpt-0
@@ -62,7 +62,7 @@ def gate_rundir(run_dir: Path, cfg: dict) -> int:
     return 2
 
 
-def gate_sentinel(run_dir: Path) -> int:
+def gate_sentinel(run_dir: Path, cfg: dict) -> int:
     path = run_dir / "update_sentinel.jsonl"
     if not path.exists():
         print(f"VERDICT: INVESTIGATE — no sentinel file yet at {path} "
@@ -73,18 +73,25 @@ def gate_sentinel(run_dir: Path) -> int:
         print(f"step {row['step']:>4}  rel_change_window={row['rel_change_window']:.3e}  "
               f"effective={row['updates_effective']}")
     last = rows[-1]
+    learning_rate = float(cfg["stage_a"]["learning_rate"])
+    scale = learning_rate / SENTINEL_BASE_LR
+    stop_below = SENTINEL_BASE_STOP_BELOW * scale
+    investigate_below = SENTINEL_BASE_INVESTIGATE_BELOW * scale
+    expected_low = 1e-7 * scale
+    expected_high = 1e-5 * scale
     rel = float(last["rel_change_window"])
-    if not last["updates_effective"] or rel < SENTINEL_STOP_BELOW:
-        print(f"VERDICT: STOP — window {rel:.3e} < {SENTINEL_STOP_BELOW:.0e} "
+    if not last["updates_effective"] or rel < stop_below:
+        print(f"VERDICT: STOP — window {rel:.3e} < {stop_below:.0e} "
               "(v1 no-op territory). Ctrl+C, keep artifacts, report.")
         return 2
-    if rel < SENTINEL_INVESTIGATE_BELOW:
+    if rel < investigate_below:
         print(f"VERDICT: INVESTIGATE — window {rel:.3e} is an order of "
-              f"magnitude under the lr-1e-5 expectation ({SENTINEL_EXPECTED_BAND}). "
+              f"magnitude under the lr={learning_rate:g} expectation "
+              f"({expected_low:.0e} .. {expected_high:.0e}). "
               "Pause after the current window and ask before continuing.")
         return 1
     print(f"VERDICT: PASS — window {rel:.3e} within/above the expected "
-          f"lr-1e-5 band ({SENTINEL_EXPECTED_BAND})")
+          f"lr={learning_rate:g} band ({expected_low:.0e} .. {expected_high:.0e})")
     return 0
 
 
@@ -163,6 +170,8 @@ def main() -> int:
         run_dir, _ = lib.stage_a_run_dir(cfg, "cuda", EXECUTION_PROFILES["cuda"])
     if args.gate == "rundir":
         return gate_rundir(run_dir, cfg)
+    if args.gate == "sentinel":
+        return gate_sentinel(run_dir, cfg)
     return gates[args.gate](run_dir)
 
 
