@@ -91,7 +91,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $RunDir "phase1_complete.json"))) {
 
 $gpuProcesses = @(
     & nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader 2>$null |
-        Where-Object { $_ -and $_.Trim() }
+        Where-Object { $_ -and $_.Trim() -and $_ -notmatch '\[N/A\]' }
 )
 if ($LASTEXITCODE -ne 0) { throw "nvidia-smi failed; refusing to start" }
 if ($gpuProcesses.Count -gt 0) {
