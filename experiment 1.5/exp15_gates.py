@@ -105,8 +105,20 @@ def gate_ckpt0(run_dir: Path) -> int:
         print(f"VERDICT: INVESTIGATE — pilot reference missing: {ref_path} "
               "(fresh clone without pilot artifacts? git pull)")
         return 1
-    mine = json.loads(mine_path.read_text(encoding="utf-8"))["per_layer"]
-    ref = json.loads(ref_path.read_text(encoding="utf-8"))["per_layer"]
+    mine_payload = json.loads(mine_path.read_text(encoding="utf-8"))
+    ref_payload = json.loads(ref_path.read_text(encoding="utf-8"))
+    mine_contract = mine_payload.get("measurement_contract", {})
+    ref_contract = ref_payload.get("measurement_contract", {})
+    mine_dtype = mine_contract.get("model_dtype")
+    ref_dtype = ref_contract.get("model_dtype")
+    print(f"measurement dtype: exp1.5={mine_dtype}, pilot={ref_dtype}")
+    if mine_dtype != ref_dtype:
+        print("VERDICT: STOP — ckpt-0 measurement dtype differs from the "
+              "pilot reference. Preserve these measurements, rerun Phase 2 "
+              "with the pilot dtype, and do not continue to Phase 3.")
+        return 2
+    mine = mine_payload["per_layer"]
+    ref = ref_payload["per_layer"]
     worst = 0.0
     for layer, ref_vals in ref.items():
         d = abs(mine[layer]["erank"] - ref_vals["erank"])

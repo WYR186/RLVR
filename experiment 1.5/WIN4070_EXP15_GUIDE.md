@@ -173,6 +173,21 @@ committed values (L4 225.14, L12 231.76, L22 354.19) within 0.01.
 **STOP** → something in the measurement path drifted; phase 3 would be
 wasted compute. Report before proceeding.
 
+### 2026-07-17 v3 float32 measurement recovery
+
+The first v3 Phase-2 run used float16 while the pilot reference used float32.
+That STOP is preserved as evidence. Do not delete the float16 metrics and do
+not retrain Stage A. Use the gated recovery entry point:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "experiment 1.5\run_exp15_v3_float32_recovery.ps1"
+```
+
+It archives the float16 results, reruns Phase 2 in float32, requires the
+ckpt-0 gate to PASS, runs the Phase-3 bridge cell and gate, then resumes the
+remaining Phase-3 grid. It never runs Phase 4. Add `-Phase2Only` to stop after
+the corrected measurement gate.
+
 ## 7. Phase 3 — 18 fixed-budget adaptations (~21 h total, split as you like)
 
 ```powershell
