@@ -1,0 +1,9 @@
+{
+  "completed_unix": 1784412019,
+  "checkpoints": [0, 50, 100, 200, 300, 500],
+  "seeds": [42, 43, 44],
+  "validator": "validate_adaptation_completion",
+  "validated_cells": 18,
+  "phase4_run": false,
+  "recovery_note": "Five missing cells were completed as isolated fresh-process reruns after the original long-loop Phase 3 encountered CUDA OOM at seed42/ckpt100; the OOM directory remains preserved as evidence."
+}

@@ -1,0 +1,5 @@
+{"step": 10, "window_start_step": 0, "rel_change_window": 4.310744630864046e-06, "rel_change_since_start": 4.310744630864046e-06, "warn_threshold": 1e-08, "updates_effective": true, "wall_time": 1784308261.6298783}
+{"step": 20, "window_start_step": 10, "rel_change_window": 2.1837031827929523e-06, "rel_change_since_start": 5.7559642573385335e-06, "warn_threshold": 1e-08, "updates_effective": true, "wall_time": 1784309109.3690379}
+{"step": 30, "window_start_step": 20, "rel_change_window": 1.2953798917644404e-06, "rel_change_since_start": 6.2916673655766655e-06, "warn_threshold": 1e-08, "updates_effective": true, "wall_time": 1784310044.890972}
+{"step": 40, "window_start_step": 30, "rel_change_window": 7.600826245669354e-07, "rel_change_since_start": 6.540252372554013e-06, "warn_threshold": 1e-08, "updates_effective": true, "wall_time": 1784310892.1202745}
+{"step": 50, "window_start_step": 40, "rel_change_window": 2.627750715697299e-07, "rel_change_since_start": 6.5852783082995125e-06, "warn_threshold": 1e-08, "updates_effective": true, "wall_time": 1784311828.0604665}

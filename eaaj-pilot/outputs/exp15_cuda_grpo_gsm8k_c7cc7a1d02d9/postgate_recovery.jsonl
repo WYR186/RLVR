@@ -1,0 +1,10 @@
+﻿{"timestamp":"2026-07-17T09:25:01.9401171-05:00","event":"gate:rundir","status":"pass","details":{"exit_code":0}}
+{"timestamp":"2026-07-17T09:25:01.9633200-05:00","event":"archive_float16_phase2","status":"complete","details":{"marker":"D:\\algoverse\\eaaj-pilot\\outputs\\exp15_cuda_grpo_gsm8k_c7cc7a1d02d9\\phase2_complete_float16_v3_gate_stop_20260717.json","measurements":"D:\\algoverse\\eaaj-pilot\\outputs\\exp15_cuda_grpo_gsm8k_c7cc7a1d02d9\\measurements_float16_v3_gate_stop_20260717"}}
+{"timestamp":"2026-07-17T09:25:01.9740203-05:00","event":"phase:2","status":"started","details":{"args":[]}}
+{"timestamp":"2026-07-17T09:29:00.5005060-05:00","event":"phase:2","status":"complete","details":{"args":[]}}
+{"timestamp":"2026-07-17T09:29:07.9735120-05:00","event":"gate:ckpt0","status":"pass","details":{"exit_code":0}}
+{"timestamp":"2026-07-17T09:29:07.9758507-05:00","event":"phase:3","status":"started","details":{"args":["-AdaptCheckpoint","0","-AdaptSeed","42"]}}
+{"timestamp":"2026-07-17T10:40:20.4645660-05:00","event":"phase:3","status":"complete","details":{"args":["-AdaptCheckpoint","0","-AdaptSeed","42"]}}
+{"timestamp":"2026-07-17T10:40:27.2592679-05:00","event":"gate:bridge","status":"pass","details":{"exit_code":0}}
+{"timestamp":"2026-07-17T10:40:27.2592679-05:00","event":"phase:3","status":"started","details":{"args":[]}}
+{"timestamp":"2026-07-18T05:25:27.9309579-05:00","event":"phase:3","status":"failed","details":{"args":[],"error":"run_exp15.ps1 Phase 3 exited with code 1"}}
