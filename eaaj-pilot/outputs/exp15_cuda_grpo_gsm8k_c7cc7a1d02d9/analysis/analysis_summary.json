@@ -1,0 +1,49 @@
+{
+ "experiment": "eaaj_rlvr_plasticity_exp1_5_v3",
+ "run_dir": "/Users/ipanda/Documents/algoverse/eaaj-pilot/outputs/exp15_cuda_grpo_gsm8k_c7cc7a1d02d9",
+ "n_checkpoints_measured": 8,
+ "n_checkpoints_adapted": 6,
+ "n_seeds": 3,
+ "primary_q": "erank_L12",
+ "primary_outcome": "svamp_delta_mean3",
+ "spearman_rho": 0.6,
+ "spearman_p": 0.20799999999999982,
+ "per_seed_rho": {
+  "42": {
+   "rho": 0.4285714285714286,
+   "p": 0.3965014577259474
+  },
+  "43": {
+   "rho": 0.7142857142857143,
+   "p": 0.1107871720116617
+  },
+  "44": {
+   "rho": 0.8986451052612952,
+   "p": 0.014888622005580311
+  }
+ },
+ "seed_pair_delta_rank_corr": {
+  "42-43": 0.7142857142857143,
+  "42-44": 0.5507824838698261,
+  "43-44": 0.6377481392176932
+ },
+ "manipulation_checks": {
+  "mc1_erank_l12_rel_change": -0.009757104230637692,
+  "mc1_threshold": 0.1,
+  "mc1_pass": false,
+  "mc2_mean_delta_drops_vs_ckpt0": {
+   "50": 0.0855555555555555,
+   "100": 0.05444444444444437,
+   "200": -0.012222222222222287,
+   "300": -0.028888888888888922,
+   "500": -0.011111111111111072
+  },
+  "mc2_max_drop": 0.0855555555555555,
+  "mc2_threshold": 0.05,
+  "mc2_pass": true
+ },
+ "rq1_primary_interpretable": true,
+ "interpretation": "MC1 fail, MC2 pass: adaptability degraded without an erank_L12 signature \u2014 informative evidence AGAINST erank_L12 as the early-warning metric",
+ "delta_between_checkpoint_var": 0.002021440329218105,
+ "delta_within_checkpoint_seed_var": 0.0004919753086419755
+}
