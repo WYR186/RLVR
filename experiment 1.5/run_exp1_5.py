@@ -36,7 +36,8 @@ sys.path.insert(0, str(EXP_DIR))
 import exp1_5_lib as lib  # noqa: E402  (also puts eaaj-pilot on sys.path)
 
 import torch  # noqa: E402
-from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed  # noqa: E402
+from transformers import (AutoModelForCausalLM, AutoTokenizer,  # noqa: E402
+                          TrainerCallback, set_seed)
 from transformers.trainer_utils import get_last_checkpoint  # noqa: E402
 from trl import GRPOConfig, GRPOTrainer  # noqa: E402
 
@@ -97,6 +98,44 @@ def run_execution(run_dir: Path) -> dict:
     return json.loads((run_dir / "config.json").read_text())["execution"]
 
 
+def terminal_stop_marker(run_dir: Path) -> str | None:
+    """Name of the marker that terminally ended Stage A early, if any.
+
+    safety_stop.json  — LocalSafetyCallback hard stop (e.g. reward-variance
+                        collapse; for exp1.5.1 this is the observation itself)
+    hard_cap_stop.json — the pre-registered schedule-preserving step cap
+    """
+    for name in ("safety_stop.json", "hard_cap_stop.json"):
+        if (run_dir / name).exists():
+            return name
+    return None
+
+
+class HardCapStop(TrainerCallback):
+    """Stop training at a fixed step WITHOUT lowering max_steps.
+
+    exp1.5.1 replicates v2's collapse conditions; the lr schedule is a
+    function of max_steps, so ending the run early must not shorten the
+    schedule (max_steps stays 500, matching v2). Writes hard_cap_stop.json
+    so later phases can tell a planned cap from a safety stop.
+    """
+
+    def __init__(self, cap_step: int, marker_path: Path):
+        self.cap_step = int(cap_step)
+        self.marker_path = Path(marker_path)
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step >= self.cap_step and not control.should_training_stop:
+            control.should_training_stop = True
+            if not self.marker_path.exists():
+                self.marker_path.write_text(json.dumps(
+                    {"step": state.global_step,
+                     "reason": "pre-registered schedule-preserving hard cap "
+                               f"(stage_a.hard_stop_step={self.cap_step})"},
+                    indent=1))
+        return control
+
+
 # ---------------------------------------------------------------------------
 # Phase 1 — Stage A
 # ---------------------------------------------------------------------------
@@ -113,10 +152,14 @@ def phase1(cfg: dict, backend: str, smoke: bool, config_path=None) -> Path:
             json.dumps(lib.exp15_manifest(cfg, run_cfg, config_path), indent=1))
     stage_a = {k: run_cfg[k] for k in run_cfg if k != "execution"}
     ckpt_steps = stage_a["checkpoint_steps"]
-    if (run_dir / "phase1_complete.json").exists() and all(
-            (run_dir / f"ckpt-{n}" / "config.json").exists() for n in ckpt_steps):
-        print(f"Phase 1 already complete: {run_dir}")
-        return run_dir
+    p1_marker = run_dir / "phase1_complete.json"
+    if p1_marker.exists():
+        p1 = json.loads(p1_marker.read_text())
+        if p1.get("terminated_by") or all(
+                (run_dir / f"ckpt-{n}" / "config.json").exists()
+                for n in ckpt_steps):
+            print(f"Phase 1 already complete: {run_dir}")
+            return run_dir
     if not smoke:
         lib.require_free_disk(run_dir)
     setup_backend(execution)
@@ -189,29 +232,50 @@ def phase1(cfg: dict, backend: str, smoke: bool, config_path=None) -> Path:
         raise ValueError(f"unknown completion clipping policy: {clipping_policy}")
     max_clip_ratio = (1.0 if clipping_policy == "diagnostic_only" else
                       float(safety_cfg.get("max_clip_ratio", 0.10)))
+    callbacks = [
+        JsonlDashboardLogger(run_dir / "dashboard.jsonl"),
+        UpdateEffectivenessSentinel(run_dir / "update_sentinel.jsonl",
+                                    every=min(25, stage_a["max_steps"])),
+        SaveAtSteps(ckpt_steps[1:], run_dir, tokenizer=tok),
+        ExactAnswerEvalCallback(
+            eval_prompts, eval_golds, run_dir / "gsm8k_eval.jsonl",
+            every=stage_a["eval_every"], also_at_step0=True,
+            item_metadata=eval_metadata),
+        LocalSafetyCallback(
+            run_dir / "safety_stop.json",
+            max_step_seconds=float(safety_cfg.get("max_step_seconds", 480.0)),
+            max_rss_gib=float(safety_cfg.get("max_rss_gib", 96.0)),
+            patience=int(safety_cfg.get("timing_patience", 3)),
+            signal_patience=int(safety_cfg.get("zero_signal_patience", 5)),
+            max_clip_ratio=max_clip_ratio),
+    ]
+    if stage_a.get("hard_stop_step"):
+        callbacks.append(HardCapStop(stage_a["hard_stop_step"],
+                                     run_dir / "hard_cap_stop.json"))
     trainer = GRPOTrainer(
         model=model, args=args, train_dataset=train_ds,
         reward_funcs=reward_func, processing_class=tok,
-        callbacks=[
-            JsonlDashboardLogger(run_dir / "dashboard.jsonl"),
-            UpdateEffectivenessSentinel(run_dir / "update_sentinel.jsonl",
-                                        every=min(25, stage_a["max_steps"])),
-            SaveAtSteps(ckpt_steps[1:], run_dir, tokenizer=tok),
-            ExactAnswerEvalCallback(
-                eval_prompts, eval_golds, run_dir / "gsm8k_eval.jsonl",
-                every=stage_a["eval_every"], also_at_step0=True,
-                item_metadata=eval_metadata),
-            LocalSafetyCallback(
-                run_dir / "safety_stop.json",
-                max_step_seconds=float(safety_cfg.get("max_step_seconds", 480.0)),
-                max_rss_gib=float(safety_cfg.get("max_rss_gib", 96.0)),
-                patience=int(safety_cfg.get("timing_patience", 3)),
-                signal_patience=int(safety_cfg.get("zero_signal_patience", 5)),
-                max_clip_ratio=max_clip_ratio),
-        ])
+        callbacks=callbacks)
     trainer.train(resume_from_checkpoint=resume_from)
     missing = [n for n in ckpt_steps
                if not (run_dir / f"ckpt-{n}" / "config.json").exists()]
+    stop_marker = terminal_stop_marker(run_dir)
+    if missing and stop_marker and safety_cfg.get("safety_stop_expected"):
+        # exp1.5.1 contract: an early terminal stop (collapse, or the
+        # schedule-preserving cap) is the pre-registered observation, not a
+        # failure. Record how far we got; phase 2 measures what exists.
+        (run_dir / "phase1_complete.json").write_text(json.dumps(
+            {"completed_unix": time.time(),
+             "global_step": trainer.state.global_step,
+             "resume_from_checkpoint": resume_from,
+             "terminated_by": stop_marker.replace(".json", ""),
+             "missing_checkpoints": missing}, indent=1))
+        lib.append_compute(run_dir, "phase1", started,
+                           "complete_terminal_stop", execution)
+        print(f"Phase 1 ended by {stop_marker} at step "
+              f"{trainer.state.global_step} (pre-registered terminal state): "
+              f"{run_dir}")
+        return run_dir
     if missing:
         lib.append_compute(run_dir, "phase1", started, "incomplete", execution)
         raise RuntimeError(
@@ -221,7 +285,9 @@ def phase1(cfg: dict, backend: str, smoke: bool, config_path=None) -> Path:
             "pre-registered observable, not something to silently retry)")
     (run_dir / "phase1_complete.json").write_text(json.dumps(
         {"completed_unix": time.time(), "global_step": trainer.state.global_step,
-         "resume_from_checkpoint": resume_from}, indent=1))
+         "resume_from_checkpoint": resume_from,
+         **({"terminated_by": "hard_cap_stop"}
+            if (run_dir / "hard_cap_stop.json").exists() else {})}, indent=1))
     lib.append_compute(run_dir, "phase1", started, "complete", execution)
     del trainer, model
     gc.collect()
@@ -247,13 +313,24 @@ def phase2(cfg: dict, run_dir: Path, smoke: bool) -> None:
     probe = load_probe_prompts()[:cfg["measurement"]["probe_questions"]]
     sensitivity_at = set(cfg["measurement"].get("sensitivity_checkpoints", []))
     probe_big = load_probe_prompts(big=True) if sensitivity_at else None
+    stop_marker = terminal_stop_marker(run_dir)
+    measured, skipped = [], []
     for n in ckpts:
         out_path = out_dir / f"metrics_ckpt{n}.json"
         if out_path.exists():
+            measured.append(n)
             continue
         ckpt = run_dir / f"ckpt-{n}"
         if not (ckpt / "config.json").exists():
+            if stop_marker:
+                # Stage A ended terminally (safety stop / hard cap) before
+                # this grid point existed: measure what exists, record the
+                # rest as skipped. Without a terminal marker a missing
+                # checkpoint is still a hard error.
+                skipped.append(n)
+                continue
             raise FileNotFoundError(f"missing Phase-1 checkpoint: {ckpt}")
+        measured.append(n)
         tok = AutoTokenizer.from_pretrained(ckpt, local_files_only=True)
         if tok.pad_token is None:
             tok.pad_token = tok.eos_token
@@ -285,7 +362,9 @@ def phase2(cfg: dict, run_dir: Path, smoke: bool) -> None:
             torch.cuda.empty_cache()
         print(f"Phase 2 checkpoint {n} complete")
     (run_dir / "phase2_complete.json").write_text(json.dumps(
-        {"completed_unix": time.time(), "checkpoints": ckpts}, indent=1))
+        {"completed_unix": time.time(), "checkpoints": measured,
+         **({"skipped_missing": skipped,
+             "terminal_stop": stop_marker} if skipped else {})}, indent=1))
     lib.append_compute(run_dir, "phase2", started, "complete", execution)
 
 
@@ -311,6 +390,11 @@ def phase3(cfg: dict, run_dir: Path, smoke: bool,
     started = time.time()
     execution = run_execution(run_dir)
     recipe = cfg["adaptation"]
+    if not recipe["checkpoints"]:
+        raise SystemExit(
+            "no adaptation cells pre-registered in this config — phase 3 is "
+            "out of scope for this experiment (exp1.5.1 stall forensics; see "
+            "EXPERIMENT_1_5_1_PLAN_ZH.md)")
     seeds = recipe["seeds"]
     order = recipe["checkpoint_order"]
     if sorted(order) != sorted(recipe["checkpoints"]):
@@ -374,6 +458,18 @@ def phase3(cfg: dict, run_dir: Path, smoke: bool,
 def phase4(cfg: dict, run_dir: Path) -> None:
     from analysis_exp1_5 import run_exp15_analysis
 
+    exp_id = str(cfg.get("experiment", ""))
+    smoke_id = exp_id.endswith("_smoke")
+    if exp_id.startswith("eaaj_rlvr_plasticity_exp1_5_1") and not smoke_id:
+        raise SystemExit(
+            "exp1.5.1 is a Stage-A forensics experiment; the runner has no "
+            "phase 4 for it — run analysis_exp1_5_1.py instead "
+            "(EXPERIMENT_1_5_1_PLAN_ZH.md §5)")
+    if len(cfg["adaptation"]["checkpoints"]) < 4 and not smoke_id:
+        raise SystemExit(
+            "phase 4 needs the expanded adaptation grid (>=4 checkpoints); "
+            "an endpoint-probe config must first pass the expansion gates "
+            "(exp1_6_gate_eval.py; EXPERIMENT_1_6_PLAN_ZH.md §4)")
     started = time.time()
     summary = run_exp15_analysis(run_dir, cfg)
     lib.append_compute(run_dir, "phase4", started, "complete",

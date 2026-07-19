@@ -1,0 +1,110 @@
+{
+  "experiment": "eaaj_rlvr_plasticity_exp1_5_1",
+  "expected_run_name": "exp15_cuda_grpo_gsm8k_5ffdb56fc613",
+  "based_on": "exp15_cuda_grpo_gsm8k_dd5f54a0e2b7 (exp1.5 v2, lr=1e-5, beta=0) policy collapse at update 55",
+  "purpose": "Stall forensics: replicate v2's collapse conditions with a DENSE (every-5-step) checkpoint grid through the collapse window, so Q (erank, dormant fraction) can be compared at matched steps against the dashboard precursors (entropy drop leads by ~3 steps in v2; clipping is chronically pathological). Phases 3/4 are out of scope; analysis is analysis_exp1_5_1.py. Registered 2026-07-19; see EXPERIMENT_1_5_1_PLAN_ZH.md.",
+  "replicate": "B (Stage-A seed 43: collapse-timing variance under a fresh on-policy trajectory)",
+  "model_id": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "dataset_revisions": {
+    "openai/gsm8k": "740312add88f781978c0658806c59bc2815b9866",
+    "ChilleD/SVAMP": "5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef"
+  },
+  "seed": 43,
+  "stage_a": {
+    "task": "GSM8K",
+    "train_questions": 512,
+    "algorithm": "GRPO",
+    "max_steps": 500,
+    "hard_stop_step": 80,
+    "checkpoint_steps": [
+      0,
+      5,
+      10,
+      15,
+      20,
+      25,
+      30,
+      35,
+      40,
+      45,
+      50,
+      55,
+      60,
+      65,
+      70,
+      75,
+      80
+    ],
+    "learning_rate": 1e-05,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "eval_every": 5,
+    "safety": {
+      "completion_clipping_policy": "diagnostic_only",
+      "max_step_seconds": 480.0,
+      "max_rss_gib": 96.0,
+      "timing_patience": 3,
+      "zero_signal_patience": 5,
+      "safety_stop_expected": true
+    }
+  },
+  "measurement": {
+    "probe_questions": 512,
+    "sensitivity_probe_questions": 2048,
+    "sensitivity_checkpoints": [],
+    "layers": [
+      4,
+      12,
+      22
+    ],
+    "model_dtype": "float32",
+    "batch_size": 16,
+    "max_prompt_length": 512,
+    "dormant_taus": [
+      0.025,
+      0.1
+    ]
+  },
+  "adaptation": {
+    "task": "SVAMP",
+    "algorithm": "GRPO",
+    "train_questions": 256,
+    "eval_questions": 300,
+    "curve_eval_questions": 100,
+    "budget_updates": 50,
+    "eval_every": 10,
+    "learning_rate": 1e-06,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "checkpoints": [],
+    "checkpoint_order": [],
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "note": "no adaptation cells pre-registered \u2014 phase 3 is forbidden for exp1.5.1 (the runner refuses an empty grid)"
+  },
+  "analysis": {
+    "readout": "lead-time forensics SC1/SC2/SC3 via analysis_exp1_5_1.py; the runner's phase 4 is disabled for exp1.5.1",
+    "event_definition": "E = first step of the terminal zero-reward-variance run that triggers the safety stop (trigger step - zero_signal_patience + 1)",
+    "sc1_erank_l12_rel_threshold": -0.12,
+    "sc1_min_lead_steps": 10,
+    "sc3_min_lead_margin_over_entropy": 5,
+    "entropy_onset_threshold": 0.1,
+    "healthy_envelope_note": "worst healthy-run erank_L12 dip at <=100 steps: -8.6% (pilot WIN v2 ckpt-50); -7.2% (exp1.5 v3 ckpt-50); -5.3% (pilot CPU ckpt-50). SC1 threshold -12% clears the envelope with margin."
+  }
+}

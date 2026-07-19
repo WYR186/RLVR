@@ -1,0 +1,151 @@
+{
+  "experiment": "eaaj_rlvr_plasticity_exp1_6",
+  "expected_run_name": "exp15_cuda_grpo_gsm8k_caebbcc73461",
+  "based_on": "exp1.5 v3 (lr=1e-6 x 500: no persistent Q displacement, MC1 fail) and exp1.5 v2 (lr=1e-5: policy collapse at update 55). 3e-6 is the pre-registered midpoint probe of the untested dose interval.",
+  "purpose": "Dose-response point 2: can a Stage-A dose move Q persistently WITHOUT collapsing? Endpoint-first gated design: phase 3 initially runs only ckpt 0 and 500 (3 seeds, 6 cells); the full 6-checkpoint grid is unlocked only if an expansion gate passes (exp1_6_gate_eval.py). Registered 2026-07-19; see EXPERIMENT_1_6_PLAN_ZH.md. FORMAL LAUNCH REQUIRES TEAM ACK recorded in the launch commit message.",
+  "model_id": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "dataset_revisions": {
+    "openai/gsm8k": "740312add88f781978c0658806c59bc2815b9866",
+    "ChilleD/SVAMP": "5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef"
+  },
+  "seed": 42,
+  "stage_a": {
+    "task": "GSM8K",
+    "train_questions": 512,
+    "algorithm": "GRPO",
+    "max_steps": 500,
+    "checkpoint_steps": [
+      0,
+      25,
+      50,
+      100,
+      200,
+      300,
+      400,
+      500
+    ],
+    "learning_rate": 3e-06,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "eval_every": 25,
+    "safety": {
+      "completion_clipping_policy": "diagnostic_only",
+      "max_step_seconds": 480.0,
+      "max_rss_gib": 96.0,
+      "timing_patience": 3,
+      "zero_signal_patience": 5
+    }
+  },
+  "measurement": {
+    "probe_questions": 512,
+    "sensitivity_probe_questions": 2048,
+    "sensitivity_checkpoints": [
+      0,
+      500
+    ],
+    "layers": [
+      4,
+      12,
+      22
+    ],
+    "model_dtype": "float32",
+    "batch_size": 16,
+    "max_prompt_length": 512,
+    "dormant_taus": [
+      0.025,
+      0.1
+    ]
+  },
+  "adaptation": {
+    "task": "SVAMP",
+    "algorithm": "GRPO",
+    "train_questions": 256,
+    "eval_questions": 300,
+    "curve_eval_questions": 100,
+    "budget_updates": 50,
+    "eval_every": 10,
+    "learning_rate": 1e-06,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "checkpoints": [
+      0,
+      50,
+      100,
+      200,
+      300,
+      500
+    ],
+    "checkpoint_order": [
+      0,
+      500,
+      200,
+      100,
+      50,
+      300
+    ],
+    "seeds": [
+      42,
+      43,
+      44
+    ]
+  },
+  "analysis": {
+    "primary_q": "erank_L12",
+    "primary_outcome": "svamp_delta_mean3",
+    "n_checkpoints": 6,
+    "manipulation_checks": {
+      "mc1_erank_l12_rel_change_min": 0.1,
+      "mc2_mean_delta_drop_vs_ckpt0_min": 0.05
+    },
+    "expansion_gates": {
+      "ga_late_window_checkpoints": [
+        300,
+        400,
+        500
+      ],
+      "ga_erank_l12_rel_change_min": 0.075,
+      "gb_endpoint_mean_delta_drop_min": 0.05,
+      "rule": "expand phase 3 to the full 6-checkpoint grid (exp1_6_config_fullgrid.json, same run dir) iff G-A (late-window mean erank_L12 displacement >= 7.5% vs ckpt-0) OR G-B (3-seed mean delta at ckpt-0 minus ckpt-500 >= 0.05) passes; otherwise stop after the endpoint probe and report to the team",
+      "ga_threshold_rationale": "exp1.5 v3 (lr=1e-6) late-window mean was -1.2%; healthy single-point run-to-run spread reaches ~9% but the 3-checkpoint late-window mean suppresses single-point noise; 7.5% sits above v3's healthy value by >6x while staying below MC1's 10% so a near-threshold dose still earns outcome data"
+    }
+  },
+  "open_team_questions": [
+    "Base vs Instruct model (cheaper default kept: base)",
+    "GRPO vs SFT adaptation (default kept: GRPO)",
+    "SVAMP transfer-headroom confound confirmed in exp1.5 v3 (delta vs before rho=-0.66); svamp_before is recorded per cell and must be a covariate in any exp1.6 correlation readout",
+    "KL beta>0 arm remains OFF here; single-variable dose change only (lr 1e-6 -> 3e-6)"
+  ],
+  "optional_klreg_arm": {
+    "enabled": false,
+    "note": "Prepared but not run (carried forward from exp1.5 v3 unchanged). Enabling it is a separate team decision.",
+    "beta": 0.04,
+    "max_steps": 200,
+    "checkpoint_steps": [
+      0,
+      100,
+      200
+    ],
+    "adaptation_checkpoints": [
+      200
+    ],
+    "adaptation_seeds": [
+      42,
+      43,
+      44
+    ]
+  },
+  "expansion_of": "exp1_6_config.json \u2014 identical stage_a/seed/execution (same run dir, verified by expected_run_name); differs ONLY in the adaptation grid. Launch ONLY after exp1_6_gate_eval.py prints EXPAND."
+}
