@@ -1,0 +1,239 @@
+python.exe : Exception in thread Thread-2 (_readerthread):
+ËùÔÚÎ»ÖÃ D:\algoverse\experiment 1.5\run_exp15.ps1:98 ×Ö·û: 9
++         & $PythonExe @CliArgs 2>&1 | Tee-Object -LiteralPath $RunLog
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Exception in th..._readerthread)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Traceback (most recent call last):
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\threading.py", line 1044, in _bootstrap_inner
+    self.run()
+    ~~~~~~~~^^
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\threading.py", line 995, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\subprocess.py", line 1615, in _readerthread
+    buffer.append(fh.read())
+                  ~~~~~~~^^
+  File "<frozen codecs>", line 325, in decode
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb2 in position 6: invalid start byte
+W0716 09:49:16.043000 10092 site-packages\torch\utils\flop_counter.py:29] triton not found; flop counting will not 
+work for triton kernels
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:  56%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–Œ    | 161/290 [00:00<00:00, 1592.33it/s]
+Loading weights: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 290/290 [00:00<00:00, 1618.45it/s]
+D:\algoverse\.conda\envs\eaaj-win4070\Lib\site-packages\torch\nn\modules\module.py:1370: UserWarning: 
+expandable_segments not supported on this platform (Triggered internally at 
+C:\actions-runner\_work\pytorch\pytorch\pytorch\c10/cuda/CUDAAllocatorConfig.h:39.)
+  return t.to(
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]
+Writing model shards: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 1/1 [00:01<00:00,  1.28s/it]
+Writing model shards: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 1/1 [00:01<00:00,  1.28s/it]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits 
+and faster downloads.
+[transformers] The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The 
+model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated 
+tokens: {'bos_token_id': None, 'pad_token_id': 151643}.
+  0%|          | 0/500 [00:00<?, ?it/s]
+  0%|          | 1/500 [01:13<10:15:19, 73.99s/it]
+                                                  
+  0%|          | 1/500 [01:13<10:15:19, 73.99s/it]
+  0%|          | 2/500 [02:16<9:18:45, 67.32s/it] 
+                                                 
+  0%|          | 2/500 [02:16<9:18:45, 67.32s/it]
+  1%|          | 3/500 [03:53<11:07:52, 80.63s/it]
+                                                  
+  1%|          | 3/500 [03:53<11:07:52, 80.63s/it]
+  1%|          | 4/500 [05:23<11:37:38, 84.39s/it]
+                                                  
+  1%|          | 4/500 [05:23<11:37:38, 84.39s/it]
+  1%|          | 5/500 [06:53<11:54:39, 86.63s/it]
+                                                  
+  1%|          | 5/500 [06:53<11:54:39, 86.63s/it]
+  1%|          | 6/500 [08:24<12:05:06, 88.07s/it]
+                                                  
+  1%|          | 6/500 [08:24<12:05:06, 88.07s/it]
+  1%|â–?        | 7/500 [09:55<12:12:09, 89.11s/it]
+                                                  
+  1%|â–?        | 7/500 [09:55<12:12:09, 89.11s/it]
+  2%|â–?        | 8/500 [11:26<12:14:52, 89.62s/it]
+                                                  
+  2%|â–?        | 8/500 [11:26<12:14:52, 89.62s/it]
+  2%|â–?        | 9/500 [12:58<12:20:13, 90.45s/it]
+                                                  
+  2%|â–?        | 9/500 [12:58<12:20:13, 90.45s/it]
+  2%|â–?        | 10/500 [14:28<12:16:03, 90.13s/it]
+                                                   
+  2%|â–?        | 10/500 [14:28<12:16:03, 90.13s/it]
+  2%|â–?        | 11/500 [15:57<12:13:11, 89.96s/it]
+                                                   
+  2%|â–?        | 11/500 [15:57<12:13:11, 89.96s/it]
+  2%|â–?        | 12/500 [17:29<12:15:06, 90.38s/it]
+                                                   
+  2%|â–?        | 12/500 [17:29<12:15:06, 90.38s/it]
+  3%|â–?        | 13/500 [18:57<12:07:53, 89.68s/it]
+                                                   
+  3%|â–?        | 13/500 [18:57<12:07:53, 89.68s/it]
+  3%|â–?        | 14/500 [20:30<12:14:03, 90.63s/it]
+                                                   
+  3%|â–?        | 14/500 [20:30<12:14:03, 90.63s/it]
+  3%|â–?        | 15/500 [22:01<12:13:46, 90.78s/it]
+                                                   
+  3%|â–?        | 15/500 [22:01<12:13:46, 90.78s/it]
+  3%|â–?        | 16/500 [23:31<12:10:50, 90.60s/it]
+                                                   
+  3%|â–?        | 16/500 [23:31<12:10:50, 90.60s/it]
+  3%|â–?        | 17/500 [25:03<12:11:47, 90.91s/it]
+                                                   
+  3%|â–?        | 17/500 [25:03<12:11:47, 90.91s/it]
+  4%|â–?        | 18/500 [26:34<12:10:40, 90.95s/it]
+                                                   
+  4%|â–?        | 18/500 [26:34<12:10:40, 90.95s/it]
+  4%|â–?        | 19/500 [28:03<12:06:15, 90.59s/it]
+                                                   
+  4%|â–?        | 19/500 [28:03<12:06:15, 90.59s/it]
+  4%|â–?        | 20/500 [29:45<12:30:40, 93.83s/it]
+                                                   
+  4%|â–?        | 20/500 [29:45<12:30:40, 93.83s/it]
+  4%|â–?        | 21/500 [31:19<12:29:49, 93.92s/it]
+                                                   
+  4%|â–?        | 21/500 [31:19<12:29:49, 93.92s/it]
+  4%|â–?        | 22/500 [32:48<12:17:17, 92.55s/it]
+                                                   
+  4%|â–?        | 22/500 [32:48<12:17:17, 92.55s/it]
+  5%|â–?        | 23/500 [34:17<12:06:10, 91.34s/it]
+                                                   
+  5%|â–?        | 23/500 [34:17<12:06:10, 91.34s/it]
+  5%|â–?        | 24/500 [35:47<12:02:23, 91.06s/it]
+                                                   
+  5%|â–?        | 24/500 [35:47<12:02:23, 91.06s/it]
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s][A
+Writing model shards: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 1/1 [00:01<00:00,  1.14s/it][A
+Writing model shards: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 1/1 [00:01<00:00,  1.15s/it]
+  5%|â–?        | 25/500 [38:39<15:12:16, 115.23s/it]
+                                                    
+  5%|â–?        | 25/500 [38:39<15:12:16, 115.23s/it]
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s][A
+Writing model shards: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 1/1 [00:00<00:00,  1.06it/s][A
+Writing model shards: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 1/1 [00:00<00:00,  1.06it/s]
+  5%|â–?        | 26/500 [40:20<14:37:23, 111.06s/it]
+                                                    
+  5%|â–?        | 26/500 [40:20<14:37:23, 111.06s/it]
+  5%|â–?        | 27/500 [41:51<13:48:29, 105.09s/it]
+                                                    
+  5%|â–?        | 27/500 [41:51<13:48:29, 105.09s/it]
+  6%|â–?        | 28/500 [43:23<13:14:14, 100.96s/it]
+                                                    
+  6%|â–?        | 28/500 [43:23<13:14:14, 100.96s/it]
+  6%|â–?        | 29/500 [44:51<12:42:33, 97.14s/it] 
+                                                   
+  6%|â–?        | 29/500 [44:51<12:42:33, 97.14s/it]
+  6%|â–?        | 30/500 [46:21<12:25:13, 95.13s/it]
+                                                   
+  6%|â–?        | 30/500 [46:21<12:25:13, 95.13s/it]
+  6%|â–?        | 31/500 [47:50<12:08:15, 93.17s/it]
+                                                   
+  6%|â–?        | 31/500 [47:50<12:08:15, 93.17s/it]
+  6%|â–?        | 32/500 [49:20<11:59:45, 92.28s/it]
+                                                   
+  6%|â–?        | 32/500 [49:20<11:59:45, 92.28s/it]
+  7%|â–?        | 33/500 [50:54<12:01:36, 92.71s/it]
+                                                   
+  7%|â–?        | 33/500 [50:54<12:01:36, 92.71s/it]
+  7%|â–?        | 34/500 [52:25<11:56:26, 92.25s/it]
+                                                   
+  7%|â–?        | 34/500 [52:25<11:56:26, 92.25s/it]
+  7%|â–?        | 35/500 [53:57<11:54:01, 92.13s/it]
+                                                   
+  7%|â–?        | 35/500 [53:57<11:54:01, 92.13s/it]
+  7%|â–?        | 36/500 [55:24<11:40:26, 90.57s/it]
+                                                   
+  7%|â–?        | 36/500 [55:24<11:40:26, 90.57s/it]
+  7%|â–?        | 37/500 [56:54<11:38:39, 90.54s/it]
+                                                   
+  7%|â–?        | 37/500 [56:54<11:38:39, 90.54s/it]
+  8%|â–?        | 38/500 [58:23<11:31:56, 89.86s/it]
+                                                   
+  8%|â–?        | 38/500 [58:23<11:31:56, 89.86s/it]
+  8%|â–?        | 39/500 [59:54<11:33:41, 90.28s/it]
+                                                   
+  8%|â–?        | 39/500 [59:54<11:33:41, 90.28s/it]
+  8%|â–?        | 40/500 [1:01:23<11:29:40, 89.96s/it]
+                                                     
+  8%|â–?        | 40/500 [1:01:23<11:29:40, 89.96s/it]
+  8%|â–?        | 41/500 [1:02:53<11:29:20, 90.11s/it]
+                                                     
+  8%|â–?        | 41/500 [1:02:53<11:29:20, 90.11s/it]
+  8%|â–?        | 42/500 [1:04:24<11:28:36, 90.21s/it]
+                                                     
+  8%|â–?        | 42/500 [1:04:24<11:28:36, 90.21s/it]
+  9%|â–?        | 43/500 [1:05:59<11:38:05, 91.65s/it]
+                                                     
+  9%|â–?        | 43/500 [1:05:59<11:38:05, 91.65s/it]
+  9%|â–?        | 44/500 [1:07:28<11:30:11, 90.81s/it]
+                                                     
+  9%|â–?        | 44/500 [1:07:28<11:30:11, 90.81s/it]
+  9%|â–?        | 45/500 [1:08:57<11:24:32, 90.27s/it]
+                                                     
+  9%|â–?        | 45/500 [1:08:57<11:24:32, 90.27s/it]
+  9%|â–?        | 46/500 [1:10:33<11:37:00, 92.12s/it]
+                                                     
+  9%|â–?        | 46/500 [1:10:33<11:37:00, 92.12s/it]
+  9%|â–?        | 47/500 [1:12:09<11:43:52, 93.23s/it]
+                                                     
+  9%|â–?        | 47/500 [1:12:09<11:43:52, 93.23s/it]
+ 10%|â–?        | 48/500 [1:13:39<11:35:48, 92.36s/it]
+                                                     
+ 10%|â–?        | 48/500 [1:13:39<11:35:48, 92.36s/it]
+ 10%|â–?        | 49/500 [1:15:10<11:31:16, 91.97s/it]
+                                                     
+ 10%|â–?        | 49/500 [1:15:10<11:31:16, 91.97s/it]
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s][A
+Writing model shards: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 1/1 [00:01<00:00,  1.70s/it][A
+Writing model shards: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 1/1 [00:01<00:00,  1.70s/it]
+ 10%|â–?        | 50/500 [1:18:00<14:23:32, 115.14s/it]
+                                                      
+ 10%|â–?        | 50/500 [1:18:00<14:23:32, 115.14s/it]
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s][A
+Writing model shards: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 1/1 [00:00<00:00,  1.03it/s][A
+Writing model shards: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 1/1 [00:00<00:00,  1.03it/s]
+ 10%|â–?        | 51/500 [1:19:30<13:24:56, 107.56s/it]
+                                                      
+ 10%|â–?        | 51/500 [1:19:30<13:24:56, 107.56s/it]
+ 10%|â–?        | 52/500 [1:21:03<12:50:34, 103.20s/it]
+                                                      
+ 10%|â–?        | 52/500 [1:21:03<12:50:34, 103.20s/it]
+ 11%|â–?        | 53/500 [1:22:30<12:14:36, 98.60s/it] 
+                                                     
+ 11%|â–?        | 53/500 [1:22:30<12:14:36, 98.60s/it]
+ 11%|â–?        | 54/500 [1:24:00<11:51:54, 95.77s/it]
+                                                     
+ 11%|â–?        | 54/500 [1:24:00<11:51:54, 95.77s/it]
+ 11%|â–?        | 55/500 [1:25:31<11:39:58, 94.38s/it]
+                                                     
+ 11%|â–?        | 55/500 [1:25:31<11:39:58, 94.38s/it]
+                                                     
+ 11%|â–?        | 55/500 [1:25:31<11:39:58, 94.38s/it]
+ 11%|â–?        | 55/500 [1:25:31<11:31:56, 93.30s/it]
+Traceback (most recent call last):
+  File "D:\algoverse\experiment 1.5\run_exp1_5.py", line 431, in <module>
+    main()
+    ~~~~^^
+  File "D:\algoverse\experiment 1.5\run_exp1_5.py", line 415, in main
+    run_dir = phase1(cfg, args.backend, args.smoke, args.config)
+  File "D:\algoverse\experiment 1.5\run_exp1_5.py", line 217, in phase1
+    raise RuntimeError(
+    ...<3 lines>...
+        "pre-registered observable, not something to silently retry)")
+RuntimeError: Phase 1 stopped before required checkpoints: [100, 200, 300, 400, 500] (if safety_stop.json exists, 
+preserve everything and report to the team â€?a reward/entropy collapse at lr 1e-5 is itself a pre-registered 
+observable, not something to silently retry)
+exp1.5 runner exited with code 1 (transcript: D:\algoverse\experiment 
+1.5\logs\run_20260716_094910_exp15_phase1_exp1_5_config_v2.log)
+ËùÔÚÎ»ÖÃ D:\algoverse\experiment 1.5\run_exp15.ps1:103 ×Ö·û: 34
++ ... de -ne 0) { throw "exp1.5 runner exited with code $RunnerExitCode (tr ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (exp1.5 runner e..._config_v2.log):String) [], RuntimeException
+    + FullyQualifiedErrorId : exp1.5 runner exited with code 1 (transcript: D:\algoverse\experiment 1.5\logs\run_20260 
+   716_094910_exp15_phase1_exp1_5_config_v2.log)
+ 

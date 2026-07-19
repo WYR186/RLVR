@@ -17,6 +17,7 @@ param(
     [string]$Phase,
     [int]$AdaptCheckpoint = -1,
     [int]$AdaptSeed = -1,
+    [string]$ConfigPath = "",
     [switch]$KeepTrainerDirs,
     [switch]$Smoke
 )
@@ -64,6 +65,7 @@ $Suffix = "exp15_phase$Phase"
 if ($AdaptCheckpoint -ge 0) { $Suffix += "_ck$AdaptCheckpoint" }
 if ($AdaptSeed -ge 0) { $Suffix += "_s$AdaptSeed" }
 if ($Smoke) { $Suffix += "_smoke" }
+if ($ConfigPath) { $Suffix += "_$([IO.Path]::GetFileNameWithoutExtension($ConfigPath))" }
 $GpuLog = Join-Path $LogDir "gpu_${Stamp}_${Suffix}.csv"
 $RunLog = Join-Path $LogDir "run_${Stamp}_${Suffix}.log"
 $GpuJob = Start-Job -ScriptBlock {
@@ -83,6 +85,7 @@ try {
                  "--phase", $Phase, "--backend", "cuda")
     if ($AdaptCheckpoint -ge 0) { $CliArgs += @("--adapt-checkpoint", "$AdaptCheckpoint") }
     if ($AdaptSeed -ge 0) { $CliArgs += @("--adapt-seed", "$AdaptSeed") }
+    if ($ConfigPath) { $CliArgs += @("--config", $ConfigPath) }
     if ($KeepTrainerDirs) { $CliArgs += "--keep-trainer-dirs" }
     if ($Smoke) { $CliArgs += "--smoke" }
 

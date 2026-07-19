@@ -42,12 +42,13 @@ DATA_DIR = EXP_DIR / "data"
 CONFIG_PATH = EXP_DIR / "exp1_5_config.json"
 V15_SPLITS_PATH = DATA_DIR / "svamp_splits_v15.json"
 
-EXP15_TRACKED_INPUTS = ("exp1_5_config.json", "exp1_5_lib.py",
-                        "run_exp1_5.py", "analysis_exp1_5.py")
+EXP15_CODE_INPUTS = ("exp1_5_lib.py", "run_exp1_5.py",
+                     "analysis_exp1_5.py")
 
 
-def load_config() -> dict:
-    return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+def load_config(config_path=None) -> dict:
+    path = Path(config_path) if config_path is not None else CONFIG_PATH
+    return json.loads(path.resolve().read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -144,12 +145,20 @@ def stage_a_run_dir(cfg: dict, backend: str, execution: dict,
     return root / f"{prefix}_{config_hash(run_cfg)}", run_cfg
 
 
-def exp15_manifest(cfg: dict, run_cfg: dict) -> dict:
+def exp15_manifest(cfg: dict, run_cfg: dict, config_path=None) -> dict:
     manifest = runtime_manifest(PILOT, run_cfg)
     manifest["experiment"] = cfg["experiment"]
     manifest["exp1_5_inputs_sha256"] = {
-        name: sha256_file(EXP_DIR / name) for name in EXP15_TRACKED_INPUTS
+        name: sha256_file(EXP_DIR / name) for name in EXP15_CODE_INPUTS
         if (EXP_DIR / name).exists()}
+    selected_config = (Path(config_path) if config_path is not None
+                       else CONFIG_PATH).resolve()
+    try:
+        config_name = selected_config.relative_to(EXP_DIR).as_posix()
+    except ValueError:
+        config_name = str(selected_config)
+    manifest["exp1_5_inputs_sha256"][config_name] = sha256_file(selected_config)
+    manifest["config_source"] = config_name
     if V15_SPLITS_PATH.exists():
         manifest["exp1_5_inputs_sha256"]["data/svamp_splits_v15.json"] = (
             sha256_file(V15_SPLITS_PATH))

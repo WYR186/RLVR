@@ -1,0 +1,5 @@
+{
+ "acc_before": 0.56,
+ "acc_before_legacy100": 0.56,
+ "n_eval": 300
+}

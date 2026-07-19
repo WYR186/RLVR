@@ -1,0 +1,82 @@
+python.exe : Exception in thread Thread-2 (_readerthread):
+所在位置 D:\algoverse\experiment 1.5\run_exp15.ps1:95 字符: 9
++         & $PythonExe @CliArgs 2>&1 | Tee-Object -LiteralPath $RunLog
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Exception in th..._readerthread)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Traceback (most recent call last):
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\threading.py", line 1044, in _bootstrap_inner
+    self.run()
+    ~~~~~~~~^^
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\threading.py", line 995, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\subprocess.py", line 1615, in _readerthread
+    buffer.append(fh.read())
+                  ~~~~~~~^^
+  File "<frozen codecs>", line 325, in decode
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb2 in position 6: invalid start byte
+W0716 01:58:20.466000 19440 site-packages\torch\utils\flop_counter.py:29] triton not found; flop counting will not 
+work for triton kernels
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:  55%|鈻堚枅鈻堚枅鈻堚枍    | 159/290 [00:00<00:00, 1487.93it/s]
+Loading weights: 100%|鈻堚枅鈻堚枅鈻堚枅鈻堚枅鈻堚枅| 290/290 [00:00<00:00, 1527.79it/s]
+D:\algoverse\.conda\envs\eaaj-win4070\Lib\site-packages\torch\nn\modules\module.py:1370: UserWarning: 
+expandable_segments not supported on this platform (Triggered internally at 
+C:\actions-runner\_work\pytorch\pytorch\pytorch\c10/cuda/CUDAAllocatorConfig.h:39.)
+  return t.to(
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]
+Writing model shards: 100%|鈻堚枅鈻堚枅鈻堚枅鈻堚枅鈻堚枅| 1/1 [00:01<00:00,  1.34s/it]
+Writing model shards: 100%|鈻堚枅鈻堚枅鈻堚枅鈻堚枅鈻堚枅| 1/1 [00:01<00:00,  1.34s/it]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits 
+and faster downloads.
+[transformers] The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The 
+model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated 
+tokens: {'bos_token_id': None, 'pad_token_id': 151643}.
+  0%|          | 0/500 [00:00<?, ?it/s]
+  0%|          | 1/500 [01:08<9:28:07, 68.31s/it]
+                                                 
+  0%|          | 1/500 [01:08<9:28:07, 68.31s/it]
+  0%|          | 2/500 [02:37<11:11:06, 80.86s/it]
+                                                  
+  0%|          | 2/500 [02:37<11:11:06, 80.86s/it]
+  1%|          | 3/500 [04:09<11:49:30, 85.66s/it]
+                                                  
+  1%|          | 3/500 [04:09<11:49:30, 85.66s/it]
+  1%|          | 4/500 [05:37<11:56:49, 86.71s/it]
+                                                  
+  1%|          | 4/500 [05:37<11:56:49, 86.71s/it]
+  1%|          | 5/500 [07:07<12:03:36, 87.71s/it]
+                                                  
+  1%|          | 5/500 [07:07<12:03:36, 87.71s/it]
+  1%|          | 6/500 [08:37<12:10:34, 88.73s/it]
+                                                  
+  1%|          | 6/500 [08:37<12:10:34, 88.73s/it]
+  1%|鈻?        | 7/500 [10:08<12:13:51, 89.31s/it]
+                                                  
+  1%|鈻?        | 7/500 [10:08<12:13:51, 89.31s/it]
+                                                  
+  1%|鈻?        | 7/500 [10:08<12:13:51, 89.31s/it]
+  1%|鈻?        | 7/500 [10:08<11:54:05, 86.91s/it]
+Traceback (most recent call last):
+  File "D:\algoverse\experiment 1.5\run_exp1_5.py", line 416, in <module>
+    main()
+    ~~~~^^
+  File "D:\algoverse\experiment 1.5\run_exp1_5.py", line 400, in main
+    run_dir = phase1(cfg, args.backend, args.smoke)
+  File "D:\algoverse\experiment 1.5\run_exp1_5.py", line 204, in phase1
+    raise RuntimeError(
+    ...<3 lines>...
+        "pre-registered observable, not something to silently retry)")
+RuntimeError: Phase 1 stopped before required checkpoints: [25, 50, 100, 200, 300, 400, 500] (if safety_stop.json 
+exists, preserve everything and report to the team 鈥?a reward/entropy collapse at lr 1e-5 is itself a pre-registered 
+observable, not something to silently retry)
+exp1.5 runner exited with code 1 (transcript: D:\algoverse\experiment 1.5\logs\run_20260716_015814_exp15_phase1.log)
+所在位置 D:\algoverse\experiment 1.5\run_exp15.ps1:100 字符: 34
++ ... de -ne 0) { throw "exp1.5 runner exited with code $RunnerExitCode (tr ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (exp1.5 runner e...p15_phase1.log):String) [], RuntimeException
+    + FullyQualifiedErrorId : exp1.5 runner exited with code 1 (transcript: D:\algoverse\experiment 1.5\logs\run_20260 
+   716_015814_exp15_phase1.log)
+ 

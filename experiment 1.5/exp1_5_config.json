@@ -30,7 +30,7 @@
     "sensitivity_probe_questions": 2048,
     "sensitivity_checkpoints": [0, 500],
     "layers": [4, 12, 22],
-    "model_dtype": "float32",
+    "model_dtype": "float16",
     "batch_size": 16,
     "max_prompt_length": 512,
     "dormant_taus": [0.025, 0.1]

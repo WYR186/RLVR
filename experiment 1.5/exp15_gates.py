@@ -28,12 +28,12 @@ import exp1_5_lib as lib  # noqa: E402
 EXPECTED_RUN_NAME = "exp15_cuda_grpo_gsm8k_e73704296e47"
 PILOT_V2_RUN = (lib.PILOT / "outputs" / "local_cuda_grpo_gsm8k_e9b0b52aab6c")
 
-# lr 1e-5 sentinel bands, derived from pilot references (per 25-update window):
-# healthy fp32 @ lr 1e-6 moved ~5e-7..1e-6; the broken bf16 run moved ~3e-9.
-# At 10x lr we expect roughly 10x movement.
-SENTINEL_STOP_BELOW = 1e-7          # dead-update territory -> Ctrl+C now
-SENTINEL_INVESTIGATE_BELOW = 1e-6   # an order under expectation -> pause, ask
-SENTINEL_EXPECTED_BAND = "1e-6 .. 1e-4"
+# Per-25-update sentinel bands scale with Stage-A learning rate. The completed
+# fp32 pilot at lr=1e-6 moved roughly 5e-7..1e-6; the broken pure-bf16 run moved
+# roughly 3e-9. The original v1.5 lr=1e-5 bands were 10x these base thresholds.
+SENTINEL_BASE_LR = 1e-6
+SENTINEL_BASE_STOP_BELOW = 1e-8
+SENTINEL_BASE_INVESTIGATE_BELOW = 1e-7
 
 CKPT0_ERANK_ATOL = 0.01             # same machine/dtype: pilot matched to 4 dp
 BRIDGE_LEGACY_ATOL = 0.02           # informational band for legacy-100 ckpt-0
@@ -48,21 +48,21 @@ def _read_jsonl(path: Path) -> list[dict]:
             if line.strip()]
 
 
-def gate_rundir(_: Path) -> int:
+def gate_rundir(run_dir: Path, cfg: dict) -> int:
     from scripts.run_local_pipeline import EXECUTION_PROFILES
 
-    cfg = lib.load_config()
-    run_dir, _ = lib.stage_a_run_dir(cfg, "cuda", EXECUTION_PROFILES["cuda"])
-    print(f"computed run dir: {run_dir.name}")
-    if run_dir.name == EXPECTED_RUN_NAME:
+    computed, _ = lib.stage_a_run_dir(cfg, "cuda", EXECUTION_PROFILES["cuda"])
+    expected = cfg.get("expected_run_name", EXPECTED_RUN_NAME)
+    print(f"computed run dir: {computed.name}")
+    if computed.name == expected and run_dir.name == expected:
         print("VERDICT: PASS — matches the pre-registered run dir")
         return 0
-    print(f"VERDICT: STOP — expected {EXPECTED_RUN_NAME}; config or execution "
+    print(f"VERDICT: STOP — expected {expected}; config or execution "
           "profile drifted. Do not train; ask Aaron.")
     return 2
 
 
-def gate_sentinel(run_dir: Path) -> int:
+def gate_sentinel(run_dir: Path, cfg: dict) -> int:
     path = run_dir / "update_sentinel.jsonl"
     if not path.exists():
         print(f"VERDICT: INVESTIGATE — no sentinel file yet at {path} "
@@ -73,18 +73,25 @@ def gate_sentinel(run_dir: Path) -> int:
         print(f"step {row['step']:>4}  rel_change_window={row['rel_change_window']:.3e}  "
               f"effective={row['updates_effective']}")
     last = rows[-1]
+    learning_rate = float(cfg["stage_a"]["learning_rate"])
+    scale = learning_rate / SENTINEL_BASE_LR
+    stop_below = SENTINEL_BASE_STOP_BELOW * scale
+    investigate_below = SENTINEL_BASE_INVESTIGATE_BELOW * scale
+    expected_low = 1e-7 * scale
+    expected_high = 1e-5 * scale
     rel = float(last["rel_change_window"])
-    if not last["updates_effective"] or rel < SENTINEL_STOP_BELOW:
-        print(f"VERDICT: STOP — window {rel:.3e} < {SENTINEL_STOP_BELOW:.0e} "
+    if not last["updates_effective"] or rel < stop_below:
+        print(f"VERDICT: STOP — window {rel:.3e} < {stop_below:.0e} "
               "(v1 no-op territory). Ctrl+C, keep artifacts, report.")
         return 2
-    if rel < SENTINEL_INVESTIGATE_BELOW:
+    if rel < investigate_below:
         print(f"VERDICT: INVESTIGATE — window {rel:.3e} is an order of "
-              f"magnitude under the lr-1e-5 expectation ({SENTINEL_EXPECTED_BAND}). "
+              f"magnitude under the lr={learning_rate:g} expectation "
+              f"({expected_low:.0e} .. {expected_high:.0e}). "
               "Pause after the current window and ask before continuing.")
         return 1
     print(f"VERDICT: PASS — window {rel:.3e} within/above the expected "
-          f"lr-1e-5 band ({SENTINEL_EXPECTED_BAND})")
+          f"lr={learning_rate:g} band ({expected_low:.0e} .. {expected_high:.0e})")
     return 0
 
 
@@ -98,8 +105,20 @@ def gate_ckpt0(run_dir: Path) -> int:
         print(f"VERDICT: INVESTIGATE — pilot reference missing: {ref_path} "
               "(fresh clone without pilot artifacts? git pull)")
         return 1
-    mine = json.loads(mine_path.read_text(encoding="utf-8"))["per_layer"]
-    ref = json.loads(ref_path.read_text(encoding="utf-8"))["per_layer"]
+    mine_payload = json.loads(mine_path.read_text(encoding="utf-8"))
+    ref_payload = json.loads(ref_path.read_text(encoding="utf-8"))
+    mine_contract = mine_payload.get("measurement_contract", {})
+    ref_contract = ref_payload.get("measurement_contract", {})
+    mine_dtype = mine_contract.get("model_dtype")
+    ref_dtype = ref_contract.get("model_dtype")
+    print(f"measurement dtype: exp1.5={mine_dtype}, pilot={ref_dtype}")
+    if mine_dtype != ref_dtype:
+        print("VERDICT: STOP — ckpt-0 measurement dtype differs from the "
+              "pilot reference. Preserve these measurements, rerun Phase 2 "
+              "with the pilot dtype, and do not continue to Phase 3.")
+        return 2
+    mine = mine_payload["per_layer"]
+    ref = ref_payload["per_layer"]
     worst = 0.0
     for layer, ref_vals in ref.items():
         d = abs(mine[layer]["erank"] - ref_vals["erank"])
@@ -153,8 +172,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("gate", choices=sorted(gates))
     parser.add_argument("--run-dir", type=Path, default=None)
+    parser.add_argument("--config", type=Path, default=lib.CONFIG_PATH)
     args = parser.parse_args()
-    run_dir = args.run_dir if args.run_dir is not None else _default_run_dir()
+    cfg = lib.load_config(args.config)
+    if args.run_dir is not None:
+        run_dir = args.run_dir
+    else:
+        from scripts.run_local_pipeline import EXECUTION_PROFILES
+        run_dir, _ = lib.stage_a_run_dir(cfg, "cuda", EXECUTION_PROFILES["cuda"])
+    if args.gate == "rundir":
+        return gate_rundir(run_dir, cfg)
+    if args.gate == "sentinel":
+        return gate_sentinel(run_dir, cfg)
     return gates[args.gate](run_dir)
 
 

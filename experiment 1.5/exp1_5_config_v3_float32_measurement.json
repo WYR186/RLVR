@@ -1,0 +1,103 @@
+{
+  "experiment": "eaaj_rlvr_plasticity_exp1_5_v3",
+  "expected_run_name": "exp15_cuda_grpo_gsm8k_c7cc7a1d02d9",
+  "based_on": "exp15_cuda_grpo_gsm8k_dd5f54a0e2b7 safety-stopped at update 55",
+  "amendment": {
+    "date": "2026-07-16",
+    "reason": "The v2 run developed policy collapse under Stage-A lr=1e-5 and beta=0.0: completion clipping approached 1.0, entropy fell to about 0.05, and updates 51-55 had zero within-group reward variance, zero loss, and zero gradient norm. The same pinned model/data/generation geometry previously completed 200 updates at lr=1e-6 without collapse.",
+    "change": "Reduce the Stage-A learning rate from 1e-5 to the previously validated 1e-6. Keep beta=0.0 and every other scientific, data, generation, resource, checkpoint, safety, adaptation, and analysis setting unchanged.",
+    "supersedes": "execution recipe only; v1/v2 configs, stopped runs, and commits remain immutable evidence"
+  },
+  "measurement_recovery": {
+    "date": "2026-07-17",
+    "reason": "The first v3 Phase-2 run measured ckpt-0 in float16 but compared it to the pilot's committed float32 reference. Weight norms matched exactly, while the measurement contracts differed. The ckpt-0 identity gate therefore tested unlike dtypes.",
+    "change": "Rerun Phase 2 only with measurement.model_dtype=float32, matching the pilot reference. Reuse the completed v3 Stage-A checkpoints and preserve the original float16 measurements as immutable gate-stop evidence.",
+    "scope": "measurement execution correction only; no Stage-A retraining and no change to checkpoints, probes, layers, adaptation, seeds, or analysis"
+  },
+  "model_id": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "dataset_revisions": {
+    "openai/gsm8k": "740312add88f781978c0658806c59bc2815b9866",
+    "ChilleD/SVAMP": "5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef"
+  },
+  "seed": 42,
+  "stage_a": {
+    "task": "GSM8K",
+    "train_questions": 512,
+    "algorithm": "GRPO",
+    "max_steps": 500,
+    "checkpoint_steps": [0, 25, 50, 100, 200, 300, 400, 500],
+    "learning_rate": 1e-6,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "eval_every": 25,
+    "safety": {
+      "completion_clipping_policy": "diagnostic_only",
+      "max_step_seconds": 480.0,
+      "max_rss_gib": 96.0,
+      "timing_patience": 3,
+      "zero_signal_patience": 5
+    }
+  },
+  "measurement": {
+    "probe_questions": 512,
+    "sensitivity_probe_questions": 2048,
+    "sensitivity_checkpoints": [0, 500],
+    "layers": [4, 12, 22],
+    "model_dtype": "float32",
+    "batch_size": 16,
+    "max_prompt_length": 512,
+    "dormant_taus": [0.025, 0.1]
+  },
+  "adaptation": {
+    "task": "SVAMP",
+    "algorithm": "GRPO",
+    "train_questions": 256,
+    "eval_questions": 300,
+    "curve_eval_questions": 100,
+    "budget_updates": 50,
+    "eval_every": 10,
+    "learning_rate": 1e-6,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "checkpoints": [0, 50, 100, 200, 300, 500],
+    "checkpoint_order": [0, 500, 200, 100, 50, 300],
+    "seeds": [42, 43, 44]
+  },
+  "analysis": {
+    "primary_q": "erank_L12",
+    "primary_outcome": "svamp_delta_mean3",
+    "n_checkpoints": 6,
+    "manipulation_checks": {
+      "mc1_erank_l12_rel_change_min": 0.10,
+      "mc2_mean_delta_drop_vs_ckpt0_min": 0.05
+    }
+  },
+  "open_team_questions": [
+    "Base vs Instruct model (cheaper default kept: base)",
+    "GRPO vs SFT adaptation (default kept: GRPO)",
+    "Whether SVAMP is too close to GSM8K (an MC2 failure here would strengthen the concern; ProntoQA proposed for the full experiment)",
+    "KL beta>0 baseline arm remains OFF; v3 first uses the previously validated lower learning rate"
+  ],
+  "optional_klreg_arm": {
+    "enabled": false,
+    "note": "Prepared but not run. v3 changes only the Stage-A learning rate so the stabilization cause remains attributable.",
+    "beta": 0.04,
+    "max_steps": 200,
+    "checkpoint_steps": [0, 100, 200],
+    "adaptation_checkpoints": [200],
+    "adaptation_seeds": [42, 43, 44]
+  }
+}

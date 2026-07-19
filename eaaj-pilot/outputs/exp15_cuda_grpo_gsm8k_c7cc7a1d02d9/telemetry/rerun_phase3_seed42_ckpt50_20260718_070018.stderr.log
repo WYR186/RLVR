@@ -1,0 +1,20 @@
+W0718 07:00:25.302000 43388 site-packages\torch\utils\flop_counter.py:29] triton not found; flop counting will not work for triton kernels
+Traceback (most recent call last):
+  File "D:\algoverse\experiment 1.5\run_exp1_5.py", line 431, in <module>
+    main()
+    ~~~~^^
+  File "D:\algoverse\experiment 1.5\run_exp1_5.py", line 406, in main
+    cfg = lib.load_config(args.config)
+  File "D:\algoverse\experiment 1.5\exp1_5_lib.py", line 51, in load_config
+    return json.loads(path.resolve().read_text(encoding="utf-8"))
+                      ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\pathlib\_local.py", line 546, in read_text
+    return PathBase.read_text(self, encoding, errors, newline)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\pathlib\_abc.py", line 632, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\pathlib\_local.py", line 537, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'D:\\algoverse\\experiment 1.5\\exp15_v3_float32_measurement.json'
