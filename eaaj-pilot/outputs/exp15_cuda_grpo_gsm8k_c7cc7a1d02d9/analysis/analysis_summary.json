@@ -1,17 +1,17 @@
 {
  "experiment": "eaaj_rlvr_plasticity_exp1_5_v3",
- "run_dir": "/Users/ipanda/Documents/algoverse/eaaj-pilot/outputs/exp15_cuda_grpo_gsm8k_c7cc7a1d02d9",
+ "run_dir": "D:\\algoverse\\eaaj-pilot\\outputs\\exp15_cuda_grpo_gsm8k_c7cc7a1d02d9",
  "n_checkpoints_measured": 8,
  "n_checkpoints_adapted": 6,
  "n_seeds": 3,
  "primary_q": "erank_L12",
  "primary_outcome": "svamp_delta_mean3",
  "spearman_rho": 0.6,
- "spearman_p": 0.20799999999999982,
+ "spearman_p": 0.20799999999999985,
  "per_seed_rho": {
   "42": {
    "rho": 0.4285714285714286,
-   "p": 0.3965014577259474
+   "p": 0.39650145772594736
   },
   "43": {
    "rho": 0.7142857142857143,
