@@ -1,0 +1,3 @@
+{"step": 25, "window_start_step": 0, "rel_change_window": 6.468769707678864e-05, "rel_change_since_start": 6.468769707678864e-05, "warn_threshold": 1e-08, "updates_effective": true, "wall_time": 1784496219.7687044}
+{"step": 50, "window_start_step": 25, "rel_change_window": 4.298359013770791e-05, "rel_change_since_start": 8.453771143008942e-05, "warn_threshold": 1e-08, "updates_effective": true, "wall_time": 1784498887.1485772}
+{"step": 75, "window_start_step": 50, "rel_change_window": 3.7350355064538196e-05, "rel_change_since_start": 9.687951516625566e-05, "warn_threshold": 1e-08, "updates_effective": true, "wall_time": 1784501572.2197783}

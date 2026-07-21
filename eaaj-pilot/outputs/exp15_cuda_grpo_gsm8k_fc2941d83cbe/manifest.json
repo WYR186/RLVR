@@ -1,0 +1,52 @@
+{
+ "created_utc": "2026-07-19T20:39:09.051759+00:00",
+ "config_hash": "fc2941d83cbe",
+ "python": "3.13.14 | packaged by conda-forge | (main, Jun 12 2026, 09:44:26) [MSC v.1944 64 bit (AMD64)]",
+ "platform": "Windows-11-10.0.22621-SP0",
+ "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU, 596.49",
+ "git_sha": "a1b0fef571875086dd1f4b09ac9f0fc571e75f89",
+ "versions": {
+  "torch": "2.11.0+cu128",
+  "trl": "1.6.0",
+  "transformers": "5.13.0",
+  "datasets": "5.0.0",
+  "accelerate": "1.14.0",
+  "bitsandbytes": "0.49.2",
+  "numpy": "2.3.5",
+  "scipy": "1.16.3",
+  "pandas": "2.3.3",
+  "matplotlib": "3.10.6"
+ },
+ "tracked_input_sha256": {
+  "pilot_config.json": "eda32653522817ac699882ded417a82ec44120d78a34644248840279c7d10668",
+  "requirements.txt": "33b5603723696f5197daed8e117bf27e52d4d01c1c89f23187adee6e672f84b6",
+  "LOCAL_EXPERIMENT_PLAN.md": "5b3c78720f2ba1156bb811f074877c4d67862c673a7748135ea3223644322d0a",
+  "01_grpo_gsm8k.ipynb": "e304571dd1f4488bb76a72d5080a4c1223472d91f6d555b8f1774853d35b7789",
+  "02_measure_Q.ipynb": "eb93e58a5401b47a3ec7f45df39e8164fdb6a04c36ca344c4373b2da7e84a15c",
+  "03_svamp_adaptation.ipynb": "5316737186ff518061f760346e034308b3727a1a80321774632783670adc58ab",
+  "04_analysis.ipynb": "3d4d4eb6bfb0e997ea85cb3a49ba2d6770f8291f751d5eedcccd05677f1ee7d2",
+  "src/metrics.py": "ba037f1cf1e8e6b9f2e61cac5058eccdd78c9aa47119acc3ab1b7db8615d1986",
+  "src/reward.py": "bfe54c29582bf01159da3aaec291d37cf29c70d5e33366be7c6a5fa7f38f8e18",
+  "src/data.py": "924e5108155e7f664f5b2bc658e873c336caba3f31da720697caa9a65861f7fb",
+  "src/callbacks.py": "b40073589b5bfa0b5bf5c6b0a12806dc44fa0811a77764b97036f7365d5c08bb",
+  "src/evaluate.py": "6b113cc4ef0e53402f5d35013afc2d67fbde64ce98b7bf76c736b03bc5b98be5",
+  "src/adaptation.py": "3bffafe2a1990a2b0d058a1203d4b444c0ef57a0926ad7fb57af7bcc5b4cd082",
+  "src/analysis.py": "5d10f2a3a0a4b7a62e0e4ed8334a8d035bed92aeff3f21ee9bca5f636020fb18",
+  "src/mps_compat.py": "0c71a746e844076ff22476012e69b62c5d7da47e340c74c63e9ea7ef316a11be",
+  "src/preflight.py": "1c68121a9771c64f0a1e1db1bcb66334ef570201580f61457511787c85d68387",
+  "src/repro.py": "425451feb0493e737f3bb96e4136078a4a21a5a7afa34e02c18460c5f056457b",
+  "scripts/run_local_pipeline.py": "c6ae63c3241bca840d3b67c5ff235eafc31232ef385f9218a3418e3f03d200f8",
+  "data/gsm8k_splits.json": "fb78857d9207d71a64ed1ebbeeee54f86dc12f2cbe2f4dc07d09ee028babf59c",
+  "data/svamp_splits.json": "70b1b0945aa2203385c45f93bf77b4dc3e52fdc8abf3b93c0aa09201352df11a",
+  "data/probe_set_ids.json": "b5b0196463d95aa270d6b7ec55dad0b6bdb2c93b9b73ad8b0696b16b95f4a4ff"
+ },
+ "experiment": "eaaj_rlvr_plasticity_exp1_5_1",
+ "exp1_5_inputs_sha256": {
+  "exp1_5_lib.py": "fc1cb981da225502590c3abb26ab1ad0c656d46c9d3923824813d4052f30548e",
+  "run_exp1_5.py": "9cce63406d6cb8be85b065cf79c86e0619071658281834ee623d8cab89982bf6",
+  "analysis_exp1_5.py": "e3e9fa5a1ad9895e3c306149db9c3ed5f6f70e8fc6ec0432809b3244d0255d07",
+  "exp1_5_1_config_seed42.json": "e80bab4c1da07e11648374b647c7149a3dccfe6573bbada77c18523a907dfbe2",
+  "data/svamp_splits_v15.json": "bd0d1b3f0d9808e896d0bf5665254b899c4346edc5d823c610d1a22c80c0613b"
+ },
+ "config_source": "exp1_5_1_config_seed42.json"
+}

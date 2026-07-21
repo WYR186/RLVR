@@ -88,3 +88,12 @@ Notes:
 | v3 float32 recovery validator audit | RTX 4070 Laptop | partial | project validator confirmed 13/18 expected Phase 3 cells complete; five summaries were still missing: seed43/ckpt100, seed44/ckpt100, and ckpt300 for seeds 42, 43, and 44. The preserved OOM directory is excluded from the expected matrix. |
 | v3 float32 recovery Phase 3 completion | RTX 4070 Laptop (CUDA) | completed 2026-07-18 16:59 | all 18 pre-registered cells (`ckpt 0,50,100,200,300,500 × seeds 42,43,44`) passed the project validator; no cell has `safety_stop.json`; final seed44/ckpt300 completed 50/50. Five missing cells were completed as isolated fresh-process reruns with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` after the original loop hit CUDA OOM at seed42/ckpt100. OOM and launcher-correction directories/logs remain preserved. `phase3_complete.json` written. Phase 4 not run. |
 | v3 float32 Phase 4 analysis | RTX 4070 Laptop (CPU analysis) | 1.3 min, completed 2026-07-20 00:10 | formal Phase 4 ran against the completed v3 float32 run; generated `analysis/analysis_summary.json`, result tables, Spearman tables, and three figures. MC1 failed (`erank_L12` relative change -0.00976 vs 0.10 threshold); MC2 passed (maximum mean-delta drop 0.08556 vs 0.05 threshold); primary Spearman rho=0.6, p=0.208; `rq1_primary_interpretable=true`. GPU telemetry and transcript copied under the run `telemetry/` directory. |
+
+## 2026-07-19--21 Experiment 1.5.1 Windows RTX 4070
+
+Run dir: `outputs/exp15_cuda_grpo_gsm8k_fc2941d83cbe` (replicate A, seed 42).
+
+| Phase | Hardware | Wall time | Notes |
+|-------|----------|-----------|-------|
+| Replicate A Phase 1 | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast, paged_adamw_8bit) | 2.4 h | completed the pre-registered terminal state at update 80 via `hard_cap_stop`; sentinel windows at steps 25/50/75 were effective (`6.469e-05`, `4.298e-05`, `3.735e-05`); telemetry `telemetry/gpu_20260719_153902_exp15_phase1_exp1_5_1_config_seed42.csv` |
+| Replicate A Phase 2 + ckpt-0 gate | RTX 4070 Laptop (CUDA float32 measurement) | 6.0 min | measured all 17 checkpoints (0 through 80 every 5 updates); ckpt-0 identity gate PASS with max absolute effective-rank delta 0.0000; telemetry `telemetry/gpu_20260721_084945_exp15_phase2_exp1_5_1_config_seed42.csv` |
