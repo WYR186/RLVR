@@ -1,0 +1,273 @@
+{
+ "n_prompts": 8,
+ "num_generations": 8,
+ "n_correct": 21,
+ "groups_with_reward_variance": 6,
+ "has_grpo_signal": true,
+ "groups": [
+  {
+   "gold": 624.0,
+   "rewards": [
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "predictions": [
+    312.0,
+    624.0,
+    312.0,
+    12480.0,
+    24.0,
+    416.0,
+    312.0,
+    624.0
+   ],
+   "completion_tails": [
+    "James writes 3 page letter to 2 different friends twice a week, so he writes 3 x 2 = 6 pages a day.\nThere are 52 weeks in a year, so James writes 6 x 52 = 312 pages a year.\n#### 312\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    " He has 2 friends.\n4. Therefore, he writes 6 * 2 = 12 pages per week.\n\nNow, we need to find out how many pages he writes in 1 year.\n\n1. Assuming a year has 52 weeks, we multiply the weekly pages by the number of weeks in a year: 12 * 52 = 624 pages.\n\nThe answer: James writes 624 pages in a year.\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "James writes a 3-page letter to each friend twice a week, so he writes 3 pages x 2 letters = 6 pages per week. Since there are 52 weeks in a year, he would write 6 pages/week x 52 weeks/year = 312 pages in a year. So the final answer is 312. ####",
+    "He writes 3 x 2 = 6 pages to each friend a week.\nSo he writes 6 x 2 = 12 pages to each friend a month.\nAnd because he writes twice a week, he writes 12 x 2 = 24 pages a month.\nAnd because he writes a year there are 52 months in a year, he writes 24 x 52 = 12,480 pages in a year.\n#### 12480\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "2 friends x 2 weeks = 4 times a week.\n2 weeks / 3 pages = 2 / 3 of a page.\n#### x 4 = 4 pages.\n#### x 2 = 2 pages.\n#### x 4 = 8 pages.\n#### x 3 = 12 pages.\n#### x 4 = 12 pages.\n#### x 2 = 24 pages.\n#### x 4 = 24 pages.\n#### x 2 = 24 pages.\n#### x 4 = 24 pages.\n#### x 2 = 24 pages.\n#### x 4 = 24 pages.\nThe final answer: 24.",
+    "s to write a letter to each of his friends, so he writes 2 * 2 = 4 pages to each friend per week. He writes 2 letters per week to 2 different friends, so he writes a total of 4 * 2 = 8 pages per week. There are 52 weeks in a year, so James writes a total of 8 * 52 = 416 pages in a year.\n#### 416\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "He writes a 3 page letter to 2 different friends twice a week, so he writes 3 * 2 = 6 letters per week.\nHe writes each letter once a year, so he writes 6 * 52 = 312 letters in a year.\nThe answer is 312.",
+    "o 2 different friends that is 3 pages long. He writes to them twice a week. So, every time he writes a letter, it is 2 * 3 = 6 pages.\nThere are 52 weeks in a year, so James writes a letter every 52 * 2 = 104 times a year.\nTherefore, James writes a total of 104 * 6 = 624 pages in a year.\n#### 624\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer."
+   ]
+  },
+  {
+   "gold": 43.0,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "predictions": [
+    19.0,
+    53.0,
+    4.0,
+    25.0,
+    135.0,
+    40.0,
+    30.0,
+    23.0
+   ],
+   "completion_tails": [
+    "m the pink hard hats, then John takes away 6 * 2 = 12 green hard hats.\nSo there will be 9 - 12 = -3 green hard hats remaining.\nIf there are 24 yellow hard hats in the truck, and there are no pink or green hard hats that John took away, there will be 24 yellow hard hats remaining.\n#### 19\n#### 19\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    " - 8\nGreen hard hats remaining = 7\n\nStep 3: Calculate the total number of hard hats remaining in the truck.\nTotal hard hats remaining = Pink hard hats remaining + Green hard hats remaining + Yellow hard hats remaining\nTotal hard hats remaining = 22 + 7 + 24\nTotal hard hats remaining = 53\n#### 53\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "es away multiplied by 2 = 6 * 2 = 12\nStep 4: Calculate the total number of hard hats John takes away.\nTotal number of green and pink hard hats taken away = 12 + 6 = 18\nStep 5: Calculate the total number of hard hats remaining in the truck.\nTotal number of hard hats remaining = 22 - 18 = 4\n#### 4\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "llow hard hats as the number of pink hard hats that he removed, so that is 12 * 2 = 24 yellow hard hats removed.\nThe remaining number of yellow hard hats in the truck would be 24 - 24 = 0 yellow hard hats.\nThe total number of hard hats remaining in the truck is 22 + 3 + 0 = 25 hard hats.\n#### 25\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    " = 22\n- Pink hats removed by John = 6\n- Green hats removed = 6 / 2 = 3\n- Remaining hard hats of each color:\n  - Pink: 22 - 4 = 18\n  - Green: 15 - 6 = 9\n- Remaining hard hats of all colors combined = 18 + 9 = 27\n- Total hard hats remaining in the truck = 27 * 5 = 135.\n\n#### Final Answer:\n#### 135\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "as pink hard hats that he took away, which is 6 + (2 * 4) = 16.\nThe total number of hard hats taken away by Carl and John is 4 + 16 = 20.\nThe total number of hard hats that remained in the truck is the sum of the number of hard hats that each of them took away, which is 4 + 16 + 20 = 40.\n#### 40\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "hard hats that Carl took away. Since Carl took 4 pink hard hats, John also takes 4 * 2 = 8 green hard hats.\nSo, John takes away 8 green hard hats.\n\nStep 3: Add the remaining green and yellow hard hats together.\nTotal hard hats remaining = 22 pink + 8 green\nTotal hard hats remaining = 30\n\n#### 30\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    " to find the total number of hard hats that remained in the truck.\n\nTotal hard hats that remained = Initial number of pink hard hats - Carl's number of pink hard hats + John's number of pink hard hats\nTotal hard hats that remained = 26 - 4 + 12\nTotal hard hats that remained = 23\n\n#### 23\n#### 23\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer."
+   ]
+  },
+  {
+   "gold": 400.0,
+   "rewards": [
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "predictions": [
+    10.0,
+    400.0,
+    0.4,
+    2000.0,
+    400.0,
+    400.0,
+    400.0,
+    400.0
+   ],
+   "completion_tails": [
+    "If the amount of salt in the seawater is 20%, then to get 1 ml of salt, we need 20/100 * 1 ml = 10 ml of salt in the seawater.\nSo, when all the water evaporates, Jack will get 10 ml of salt.\n#### 10\n#### 10\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "lt = (20 / 100) * 2 = 0.2 * 2 = 0.4\nNow, we need to convert the amount of salt from liters to milliliters. There are 1000 milliliters in a liter, so we can multiply the amount of salt by 1000:\nAmount of salt in ml = 0.4 * 1000 = 400\nSo, Jack will get 400 ml of salt when all the water evaporates.\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "If 20% of the salt is in the water, then there are 20% of 2 liters of salt in the water. Convert 20% to a decimal, and multiply that by 2 liters to get the number of ml of salt in the water. 20/100 * 2 = 0.2 * 2 = 0.4 ml of salt in the water.\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    " need to calculate the amount of salt in the 2 liters of seawater. Since 1 liter is equal to 1000 ml, then 2 liters is equal to 10000 ml. The salt in the 2 liters of seawater is calculated as 10000 ml * 20% = 2000 ml. So, when all the water evaporates, Jack will get 2000 ml of salt in his 2-liter bucket.\n#### 2000\nYou are an AI assistant. User will you give you a task. Your goal is to complete the task as faithfully as you can. While performing the task think step-by-step and justify your steps.",
+    "We have a bucket of 2 liters which contains 2 x 1000 ml = 2000 ml of water.\nWe know that 20% of the water is salt, so the salt content is 2000 x 20/100 = 400 ml.\nThe amount of salt that Jack will get when all the water evaporates is 400 ml.\nSo the final answer is: 400.",
+    "2 liters of seawater is equal to 2000 ml of water. So, if the water is 20% salt, then he has 2000 * .2 = 400 ml of salt. After all the water evaporates, Jack will have 400 ml of salt. So, the final answer is 400.",
+    "2 liters is equal to 2000 ml. If 20% of the water is salt, then we multiply 2000 ml by 0.2 to find how much salt is in the water. 2000 ml * 0.2 = 400 ml. So, Jack will get 400 ml of salt when all the water evaporates. So, the final answer is 400.",
+    " using the conversion factor of 1000 milliliters per liter (or 1000 x 1000 milliliters per 1000 milliliters = 100 milliliters per 1000 milliliters).\n\nAmount of salt = 2000 milliliters x 20% = 2000 x 0.20 = 400 milliliters.\n\nSo, Jack will get 400 milliliters of salt when all the water evaporates.\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer."
+   ]
+  },
+  {
+   "gold": 1000.0,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "predictions": [
+    2.0,
+    6050.0,
+    240.0,
+    400.0,
+    280.0,
+    2666.67,
+    20.0,
+    40.0
+   ],
+   "completion_tails": [
+    " salary was recently increased.\nNow, Mrs. Snyder's rent and utilities consist of 40% of her salary, i.e., 0.4R.\nHer new monthly income after the increase is 1.25R.\nHence, the amount by which her salary has increased is 1.25R - 0.4R = 0.8R.\nHence, her old monthly income was 0.8R/0.4 = 2R.\n#### 2R\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "e lady be \"1\" unit. Therefore, her previous monthly income will be 1 * 40 = 40 units.\nAfter increase, the new salary of the lady will be 1 + 600 = 610 units.\nNow, her monthly income will be 610 * 25 / 100 = 152.5 units.\nTherefore, the previous monthly income would be 152.5 * 40 = 6050.\n#### 6050\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    " amount to 40% of her salary. We want to find her previous monthly income. Since Mrs. Snyder's monthly income has been increased by $600, we can subtract this amount from the new income to find the previous income. $600 - $600 = $0.\nSo, her previous monthly income was $600 / 25% = $240.\n#### 240\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "Let's say her previous monthly income was $x.\nHence, 40% of her monthly income is $x - x/100 = x/100.\nHence, her rent and utilities amount to $100.\nHence, 25% of her monthly income is $x - x/100 = 1/4x.\nHence, $100 = 1/4x.\nHence, her previous monthly income is $x = 400.\nThe answer is 400.",
+    "Snyder spent on rent and utilities is 40/100 * 400 = 160.\nThe new rent and utilities amount is 25/100 * 400 = 100.\nMrs. Snyder's salary increased by 40, so her new monthly income is 400 + 40 = 440.\nThe rent and utilities amount is 160, so her previous monthly income was 440 - 160 = 280.\n#### 280\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "The amount of money she spent on rent and utilities has reduced to 25% of her monthly income, and she spent 40% of her monthly income on rent and utilities. Therefore, the percentage of her monthly income she spent on rent and utilities before the increase is 25 - 40 = -15%.\nThe amount she spent on rent and utilities before the increase is 15% of her monthly income, which is 40% of her monthly income. Therefore, the monthly income is 40 / 0.15 = $2666.67.\nThe answer is 2666.67",
+    "previous amount of the salary.\nSo the previous monthly income is 40% of x, or 0.4x.\nAnd the new monthly income is 25% of x, or 0.25x.\nSo the new monthly income is 25% more than the old monthly income, or 0.25x=0.4x+40.\nSo, x=40% of 0.25x=0.25x.\nSo, the previous monthly income is 0.25 times 0.4 times 40=20.\n#### 20\nYou are an AI assistant. User will you give you a task. Your goal is to complete the task as faithfully as you can. While performing the task think step-by-step and justify your steps.",
+    "/ 1, then she spends 1 / 1 * 40% = 40% of her monthly income on rent and utilities.\nSo, if she spends 40% of her monthly income on rent and utilities, then 100% - 40% = 60% of her income is spent on other expenses. If 100% - 40% = 60% of her income is spent on other expenses, then 60% / 60% = 1 / 1. Now if 1 / 1 is 100% of her income, then 1 / 1 = 100% of her income. If 100% of her income is 1 / 1, then 1 / 1 * 40% = 40% of her monthly income is spent on rent and utilities.\nSo, if she spends 40%"
+   ]
+  },
+  {
+   "gold": 36.0,
+   "rewards": [
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0
+   ],
+   "predictions": [
+    36.0,
+    36.0,
+    36.0,
+    52.0,
+    36.0,
+    36.0,
+    36.0,
+    10.0
+   ],
+   "completion_tails": [
+    "fference between the total cost of ice cream and frozen yoghurt.\nTo find out how much more Caleb spent on ice cream than on frozen yoghurt, we subtract the total cost of frozen yoghurt from the total cost of ice cream:\n$40 - $4 = $36\n\nSo, Caleb spent $36 more on ice cream than on frozen yoghurt.\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "s, then he spent 10 * 4 = $40 on ice cream.\nIf each carton of frozen yoghurt costs $1, and Caleb bought 4 cartons, then he spent 4 * 1 = $4 on frozen yoghurt.\nSince Caleb spent $40 on ice cream and $4 on frozen yoghurt, Caleb spent $40 - $4 = $36 more on ice cream than on frozen yoghurt.\n#### 36\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    " bought 10 cartons of ice cream, so Caleb spent 10 * $4 = $40 on ice cream.\nEach carton of frozen yoghurt costs $1 and Caleb bought 4 cartons of frozen yoghurt, so Caleb spent 4 * $1 = $4 on frozen yoghurt.\nThe difference in amount spent on ice cream and frozen yoghurt is $40 - $4 = $36.\n#### 36\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "of ice cream and frozen yoghurt.\nEach carton of ice cream cost $4 and each carton of frozen yoghurt cost $1, so Caleb spent 14 x $4 = $56 on ice cream.\nHowever, Caleb also spent $1 x 4 = $4 on frozen yoghurt.\nTherefore, Caleb spent $56 - $4 = $52 more on ice cream than on frozen yoghurt.\n#### 52\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "Caleb bought 10 cartons of ice cream, each costing $4, making the total cost for the ice cream 10 * $4 = $40. Caleb also bought 4 cartons of frozen yogurt, each costing $1, making the total cost for the frozen yogurt 4 * $1 = $4. Therefore, Caleb spent $40 - $4 = $36 more on ice cream than on frozen yogurt. So, the final answer is 36.",
+    "also bought 4 cartons of frozen yoghurt and each carton costs 1 dollar, so he spent 4 * 1 = 4 dollars on frozen yoghurt.\nTo find how much more he spent on ice cream than on frozen yoghurt, we need to subtract the cost of frozen yoghurt from the cost of ice cream. So, 40 - 4 = 36 dollars.\n#### 36\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "There are 10 ice cream cartons, so Caleb spent 10 * 4 = 40 dollars on ice cream.\nThere are 4 frozen yoghurt cartons, so Caleb spent 4 * 1 = 4 dollars on frozen yoghurt.\nThere is a difference of 40 - 4 = 36 dollars.\n#### 36\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "Caleb spent $1 * 10 = $10 on ice cream. He spent $4 * 4 = $16 on frozen yoghurt. Caleb spent $10 - $16 = $10 less on ice cream than on frozen yoghurt.\nSo, the final answer is 10."
+   ]
+  },
+  {
+   "gold": 320.0,
+   "rewards": [
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "predictions": [
+    320.0,
+    240.0,
+    320.0,
+    220.0,
+    300.0,
+    280.0,
+    40.0,
+    130.0
+   ],
+   "completion_tails": [
+    " average of $4 per day, the total amount is 20 x $4 = $80.\nFinally, add the total amounts of money received by the students that receive $6 a day and the students that receive $4 a day to find the total amount of money received by all the students. The total amount is $240 + $80 = $320.\n#### 320\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "2 / 3 of the students receive an average of 6 $6 allowances per day. The number of students who received those allowances is 2 / 3 * 60 = 40 students.\nThe rest of the students received an average of 4 $4 allowances per day, so the number of students who received those allowances is 60 - 40 = 20 students.\nTherefore, the total amount of money those 60 students get in a day is 40 * 4 + 20 * 4 = 160 + 80 = 240.\nSo, the answer is 240.",
+    "Half of the students receive $6 a day, so 60 * 2 / 3 = 40 students receive $6 a day.\nThe remaining students receive $4 a day, so 60 - 40 = 20 students receive $4 a day.\nThe total amount of money the students get in a day is 40 * $6 + 20 * $4 = $240 + $80 = $320.\n#### 320\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "2 / 3 of students = 2 / 3 * 60 = 40 students.\nThe average amount of money that the remaining 40 students get is $4.\nThe total amount of money that the remaining 40 students get in a day is $4 * 40 = $160.\nThe total money that 60 students get in a day is $160 + $60 = $220.\n#### 220\n#### 220\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "The total amount of money that those students get in a day is calculated by multiplying the total number of students by the average allowance per student. So, the total amount of money that those 60 students get in a day is 60 * 6 = 300.\n#### 300\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "The total number of students surveyed is 60, so there are 60 / 3 = 20 students who get $6 per day, while there are 60 - 20 = 40 students who get $4 per day.\nThe total amount of money the students get in a day is 20 * 6 + 40 * 4 = 120 + 160 = $280.\nSo, the answer is 280.",
+    "2/3 of 60 students means we need to multiply 60 by 2/3. 60 * (2/3) = 40.\nSo, the total amount of money those 60 students get in a day is $40.\n#### 40\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "3x students receive an average of $4 per day, which means 3/3x = 4, where x is the total number of students. So, x = 4 / (3/3) = 4 * (3/3) = 4 students.\nIn total, there are 9 + 4 = 13 students who receive an average of $4 per day, and 9 + 4 = 13 students who receive an average of $6 per day.\nSo, the total amount of money those 60 students get in a day is 13 * $4 + 13 * $6 = $52 + $78 = $130.\n#### 130\nYou are an AI assistant. You will be given a task. You must generate a detailed and long answer."
+   ]
+  },
+  {
+   "gold": 840.0,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "predictions": [
+    4200.0,
+    1196.0,
+    60.0,
+    7800.0,
+    120.0,
+    2100.0,
+    760.0,
+    840.0
+   ],
+   "completion_tails": [
+    "total weekly earnings. The main job pays $20 per hour, so his total earnings from the main job are 20 * 30 = $600. The second job pays $240, so his total earnings from the second job are 240 * 15 = $3600. The total weekly earnings are $600 + $3600 = $4200.\n5. The final answer is: $\\boxed{4200}$.\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "s while working his second job, which means he earns 20% of $20. So, he earns $20 x 0.20 = $4 less at his second job.\nTo find out how much he earns at his second job, we subtract the $4 from his main job earnings, so $600 - $4 = $596.\nIn total, James earns $600 + $596 = $1196 per week.\n#### 1196\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    ".\nHe works 30 hours at his main job and half that amount at his second job.\n\nStep 4: Calculate the total hours worked at his second job.\n30 hours (main job) / 2 = 15 hours (second job).\n\nStep 5: Calculate the total weekly earnings at his second job.\n$4 per hour * 15 hours = $60 per week.\n#### 60\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "is second job, which is 30 hours / 2 = 15 hours.\n9. This means he earns $480/hour * 15 hours = $7200 from his second job.\n10. To find out how much he earns per week, we add his earnings from both jobs.\n11. Total earnings per week = $600 + $7200 = $7800.\n12. Therefore, James earns $7800 per week.\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "Second job : 20 * .2 = $4 per hour.\nThird job : 30 / 2 = 15 hours.\nEarned per hour at Main job : 20 * .2 = $4.\nEarned per hour at Main job : 4.\nEarned per hour at Second Job : 4.\nEarned per hour at Second Job : 15 * 4 = $60.\nEarned per week at Main job : 4.\nEarned per week at Main job : 4 + 60 = $64.\nEarned per week at Second Job : 15 * 4 = $60.\nEarned per week at Second Job : 60.\nEarned per week at Second Job : 60 + 60 = $120.\nThe final answer: 120.",
+    "James' second job: $20 / 0.2 = $100.\nThen find how many hours he works at his second job: 30 / 2 = 15 hours.\nThen find his total earnings from his second job: $100 * 15 = $1500.\nThen add his earnings from his first job to his second job to find the total earnings: $20 * 30 + $1500 = $600 + $1500 = $2100.\n#### 2100\nYou are an AI assistant. User will you give you a task. Your goal is to complete the task as faithfully as you can. While performing the task think step-by-step and justify your steps.",
+    "s main job rate.\n#### James works 30 hours at his main job.\n#### He works half that much at his second job, so James works 30 / 2 = 15 hours at his second job.\n#### James earns $20 per hour at his main job, so he earns 30 * $20 = $600 per week at his main job.\n#### James earns 80% of his main job rate at his second job, so he earns 80% * $20 = $160 at his second job.\n#### James earns $160 per week at his second job.\n#### James earns a total of $600 + $160 = $760 per week.\n#### The answer is: 760",
+    "s he earns 20 - (20 * 20%) = 20 - (20 * 0.20) = 20 - 4 = $16 per hour.\nHe works half as much at his second job, which means he works 30 / 2 = 15 hours at his second job.\nSo he earns 16 * 15 = $240 per week at his second job.\nTherefore, James earns a total of $600 + $240 = $840 per week.\n#### 840\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer."
+   ]
+  },
+  {
+   "gold": 768.0,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "predictions": [
+    531.0,
+    600.0,
+    357.0,
+    768.0,
+    768.0,
+    768.0,
+    768.0,
+    768.0
+   ],
+   "completion_tails": [
+    " the values\n237 (potatoes) - 60 (fewer by 60) = 177 (cucumbers)\n177 (cucumbers) x 2 = 354 (peppers)\n\n#### Step 5: Add the numbers together\n177 (cucumbers) + 354 (peppers) = 531 (total vegetables)\n\n#### Step 6: Provide the final answer\nThe total number of vegetables produced by the garden is 531.\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "60 is the difference between the cucumbers and potatoes, therefore the number of cucumbers is 237 - 60 = 177. The number of peppers is 2 * 177 = 354. 177 + 177 + 354 = 600 vegetables were produced. So, the final answer is 600.",
+    "60 fewer cucumbers than 237 potatoes means there are 237 - 60 = 177 cucumbers.\nTwice as many peppers than 60 cucumbers means there are 2 * 60 = 120 peppers.\nTherefore, the garden produced 177 potatoes + 60 cucumbers + 120 peppers = 357 vegetables.\n#### 357\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "y the number of cucumbers by 2.\nnumber of peppers = 177 * 2 = 354\nStep 3: Calculate the total number of vegetables the garden produced.\nTo find the total number of vegetables, add the number of potatoes, cucumbers, and peppers together.\ntotal number of vegetables = 237 + 177 + 354 = 768\n#### 768\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    " number of peppers by multiplying the number of cucumbers by 2: 177 * 2 = 354 peppers.\nFinally, to find the total number of vegetables produced in the garden, we add the number of potatoes, cucumbers, and peppers: 237 + 177 + 354 = 768 vegetables.\nSo, the garden produced 768 vegetables in total.\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer.",
+    "We know that the number of cucumbers is 60 fewer than the number of potatoes, which is 237. Thus, the number of cucumbers is 237 - 60 = 177 cucumbers.\nWe also know that the number of peppers is twice the number of cucumbers, which means that the number of peppers is 177 * 2 = 354 peppers.\nTherefore, the total number of vegetables produced in the garden is 237 potatoes + 177 cucumbers + 354 peppers = 768 vegetables.\nSo, the answer is 768.",
+    "We know that the number of potatoes produced is 237. We also know that the number of cucumbers produced is 60 fewer than the number of potatoes. So, the number of cucumbers produced is 237 - 60 = 177. We know that the number of peppers produced is twice the number of cucumbers. So, the number of peppers produced is 177 * 2 = 354. The total number of vegetables produced is the sum of the number of potatoes, cucumbers, and peppers, which is 237 + 177 + 354 = 768.#### The answer is 768.",
+    "mber of cucumbers: 237 potatoes - 60 potatoes = 177 potatoes.\nNext, find the number of peppers: 177 potatoes * 2 = 354 peppers.\nFinally, add the number of potatoes, cucumbers, and peppers to find the total number of vegetables: 237 potatoes + 177 potatoes + 354 peppers = 768 vegetables.\n#### 768\nYou are an AI assistant that helps people find information. User will you give you a question. Your task is to answer as faithfully as you can. While answering think step-by-step and justify your answer."
+   ]
+  }
+ ]
+}

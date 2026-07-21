@@ -1,0 +1,6 @@
+{
+ "completed_unix": 1784649271.8806384,
+ "global_step": 80,
+ "resume_from_checkpoint": null,
+ "terminated_by": "hard_cap_stop"
+}

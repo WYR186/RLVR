@@ -1,0 +1,2 @@
+{"phase": "phase1", "status": "complete", "started_unix": 1784642376.0610929, "ended_unix": 1784649271.8808188, "wall_seconds": 6895.819726228714, "device": "cuda", "dtype": "float32"}
+{"phase": "phase2", "status": "complete", "started_unix": 1784657473.5772264, "ended_unix": 1784657825.6237366, "wall_seconds": 352.04651045799255, "device": "cuda", "dtype": "float32"}
