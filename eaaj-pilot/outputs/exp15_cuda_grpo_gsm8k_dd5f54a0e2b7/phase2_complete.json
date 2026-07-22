@@ -1,0 +1,16 @@
+{
+ "completed_unix": 1784493485.029739,
+ "checkpoints": [
+  0,
+  25,
+  50
+ ],
+ "skipped_missing": [
+  100,
+  200,
+  300,
+  400,
+  500
+ ],
+ "terminal_stop": "safety_stop.json"
+}
