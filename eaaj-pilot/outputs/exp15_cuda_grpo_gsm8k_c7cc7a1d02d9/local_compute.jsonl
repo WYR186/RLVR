@@ -11,3 +11,4 @@
 {"phase": "phase3:300:seed42", "status": "partial", "started_unix": 1784399424.6114447, "ended_unix": 1784403383.7504573, "wall_seconds": 3959.139012813568, "device": "cuda", "dtype": "float32"}
 {"phase": "phase3:300:seed43", "status": "partial", "started_unix": 1784404866.5426047, "ended_unix": 1784408076.8609922, "wall_seconds": 3210.318387746811, "device": "cuda", "dtype": "float32"}
 {"phase": "phase3:300:seed44", "status": "complete", "started_unix": 1784408420.0725904, "ended_unix": 1784411163.9550707, "wall_seconds": 2743.8824803829193, "device": "cuda", "dtype": "float32"}
+{"phase": "phase4", "status": "complete", "started_unix": 1784524214.0412567, "ended_unix": 1784524218.7871313, "wall_seconds": 4.745874881744385, "device": "cuda", "dtype": "float32"}
