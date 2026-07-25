@@ -1,0 +1,7 @@
+﻿timestamp,name,utilization.gpu [%],memory.used [MiB],memory.total [MiB],temperature.gpu,power.draw [W],clocks.sm [MHz]
+2026/07/24 08:49:26.819, NVIDIA GeForce RTX 4070 Laptop GPU, 0, 10, 8188, 44, 6.03, 210
+2026/07/24 08:50:26.898, NVIDIA GeForce RTX 4070 Laptop GPU, 95, 7743, 8188, 63, 54.03, 1305
+2026/07/24 08:51:26.982, NVIDIA GeForce RTX 4070 Laptop GPU, 100, 7699, 8188, 66, 54.87, 1380
+2026/07/24 08:52:27.044, NVIDIA GeForce RTX 4070 Laptop GPU, 18, 7767, 8188, 59, 18.91, 855
+2026/07/24 08:53:27.100, NVIDIA GeForce RTX 4070 Laptop GPU, 100, 7891, 8188, 62, 52.16, 1290
+2026/07/24 08:54:27.141, NVIDIA GeForce RTX 4070 Laptop GPU, 100, 7891, 8188, 64, 54.76, 1290

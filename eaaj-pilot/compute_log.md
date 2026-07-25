@@ -103,3 +103,14 @@ Run dir: `outputs/exp15_cuda_grpo_gsm8k_fc2941d83cbe` (replicate A, seed 42).
 | Replicate C Phase 1 | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast, paged_adamw_8bit) | 2.0 h | completed the pre-registered terminal state at update 80 via `hard_cap_stop`; no safety stop; sentinel windows at steps 25/50/75 were effective (`6.412e-05`, `4.418e-05`, `3.855e-05`); endpoint completion clipping was 0.9844; telemetry `telemetry/gpu_20260721_131855_exp15_phase1_exp1_5_1_config_seed44.csv` |
 | Replicate C Phase 2 + ckpt-0 gate | RTX 4070 Laptop (CUDA float32 measurement) | 6.6 min | measured all 17 checkpoints (0 through 80 every 5 updates); ckpt-0 identity gate PASS with max absolute effective-rank delta 0.0000; telemetry `telemetry/gpu_20260721_203706_exp15_phase2_exp1_5_1_config_seed44.csv` |
 | Three-replicate forensics analysis | RTX 4070 Laptop (CPU analysis) | 1.2 sec | all three replicates reached the step-80 hard cap without the pre-registered collapse event and are right-censored; `n_collapsed=0`, so SC1-SC3 are not evaluable; dormant fraction remained zero at all measured layers/thresholds; the >=2-censored decision branch indicates collapse-hazard dependence on trajectory randomness |
+
+## 2026-07-22--24 Experiment 1.6 Windows RTX 4070
+
+Run dir: `outputs/exp15_cuda_grpo_gsm8k_caebbcc73461`.
+
+| Phase | Hardware | Wall time | Notes |
+|-------|----------|-----------|-------|
+| Phase 1 | RTX 4070 Laptop (CUDA fp32-master/bf16-autocast, paged_adamw_8bit) | 11.76 h | completed 500/500 GSM8K GRPO updates at lr=3e-6; all eight checkpoints saved; every sentinel window effective; no safety stop |
+| Phase 2 + ckpt-0 gate | RTX 4070 Laptop (CUDA float32 measurement) | 4.6 min | measured checkpoints 0/25/50/100/200/300/400/500; ckpt-0 reproduced the pilot effective ranks exactly; identity gate PASS |
+| Phase 3 endpoint probe | RTX 4070 Laptop (CUDA) | 7.74 h | completed ckpt {0,500} × seed {42,43,44}, six cells total, all 50/50 updates; no OOM or safety stop |
+| Expansion gate | CPU analysis | <1 min | G-A failed (+4.06% late-window erank_L12 displacement vs 7.5% threshold); G-B failed (-0.0089 endpoint mean-delta drop vs +0.05 threshold); verdict STOP, so full grid and Phase 4 were not run |

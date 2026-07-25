@@ -1,0 +1,42 @@
+python.exe : Exception in thread Thread-2 (_readerthread):
+����λ�� D:\algoverse\experiment 1.5\run_exp15.ps1:98 �ַ�: 9
++         & $PythonExe @CliArgs 2>&1 | Tee-Object -LiteralPath $RunLog
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Exception in th..._readerthread)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Traceback (most recent call last):
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\threading.py", line 1044, in _bootstrap_inner
+    self.run()
+    ~~~~~~~~^^
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\threading.py", line 995, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\algoverse\.conda\envs\eaaj-win4070\Lib\subprocess.py", line 1615, in _readerthread
+    buffer.append(fh.read())
+                  ~~~~~~~^^
+  File "<frozen codecs>", line 325, in decode
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb2 in position 6: invalid start byte
+W0724 08:50:15.428000 52960 site-packages\torch\utils\flop_counter.py:29] triton not found; flop counting will not 
+work for triton kernels
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 5664.97it/s]
+D:\algoverse\.conda\envs\eaaj-win4070\Lib\site-packages\torch\nn\modules\module.py:1370: UserWarning: 
+expandable_segments not supported on this platform (Triggered internally at 
+C:\actions-runner\_work\pytorch\pytorch\pytorch\c10/cuda/CUDAAllocatorConfig.h:39.)
+  return t.to(
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 4014.69it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 4553.72it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 4996.01it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 3300.82it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 3767.39it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:  71%|██████�?  | 205/290 [00:00<00:00, 2046.96it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2634.98it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 3191.98it/s]

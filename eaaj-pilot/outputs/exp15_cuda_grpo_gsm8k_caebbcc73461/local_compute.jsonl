@@ -1,1 +1,8 @@
 {"phase": "phase1", "status": "complete", "started_unix": 1784728202.6628406, "ended_unix": 1784770545.5763023, "wall_seconds": 42342.9134619236, "device": "cuda", "dtype": "float32"}
+{"phase": "phase2", "status": "complete", "started_unix": 1784901016.7142909, "ended_unix": 1784901294.541227, "wall_seconds": 277.82693672180176, "device": "cuda", "dtype": "float32"}
+{"phase": "phase3:0:seed42", "status": "partial", "started_unix": 1784901508.2303553, "ended_unix": 1784906197.761771, "wall_seconds": 4689.53141617775, "device": "cuda", "dtype": "float32"}
+{"phase": "phase3:0:seed43", "status": "partial", "started_unix": 1784906240.755715, "ended_unix": 1784910797.0613441, "wall_seconds": 4556.305629730225, "device": "cuda", "dtype": "float32"}
+{"phase": "phase3:0:seed44", "status": "partial", "started_unix": 1784910805.4644523, "ended_unix": 1784914874.8731062, "wall_seconds": 4069.4086542129517, "device": "cuda", "dtype": "float32"}
+{"phase": "phase3:500:seed42", "status": "partial", "started_unix": 1784914883.2557824, "ended_unix": 1784920200.126112, "wall_seconds": 5316.870329856873, "device": "cuda", "dtype": "float32"}
+{"phase": "phase3:500:seed43", "status": "partial", "started_unix": 1784920208.6815574, "ended_unix": 1784924630.2664475, "wall_seconds": 4421.584890365601, "device": "cuda", "dtype": "float32"}
+{"phase": "phase3:500:seed44", "status": "complete", "started_unix": 1784924638.482615, "ended_unix": 1784929433.931589, "wall_seconds": 4795.448974132538, "device": "cuda", "dtype": "float32"}

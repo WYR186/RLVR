@@ -1,0 +1,21 @@
+{
+ "evaluated_unix": 1784929442.0218098,
+ "config": "D:\\algoverse\\experiment 1.5\\exp1_6_config.json",
+ "ga_late_window_rel_change": 0.040595326416039024,
+ "ga_threshold": 0.075,
+ "ga_pass": false,
+ "gb_endpoint_mean_delta_drop": -0.008888888888888911,
+ "gb_threshold": 0.05,
+ "gb_pass": false,
+ "seed_deltas_ckpt0": [
+  0.020000000000000018,
+  0.026666666666666616,
+  0.013333333333333308
+ ],
+ "seed_deltas_ckpt500": [
+  0.030000000000000027,
+  0.033333333333333326,
+  0.023333333333333317
+ ],
+ "verdict": "STOP"
+}

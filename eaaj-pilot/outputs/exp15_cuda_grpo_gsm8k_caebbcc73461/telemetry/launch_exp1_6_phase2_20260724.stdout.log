@@ -1,0 +1,15 @@
+Phase 2 checkpoint 0 complete
+Phase 2 checkpoint 25 complete
+Phase 2 checkpoint 50 complete
+Phase 2 checkpoint 100 complete
+Phase 2 checkpoint 200 complete
+Phase 2 checkpoint 300 complete
+Phase 2 checkpoint 400 complete
+Phase 2 checkpoint 500 complete
+
+exp1.5 phase 2 wall time: 5.5 min
+GPU telemetry: D:\algoverse\experiment 1.5\logs\gpu_20260724_084926_exp15_phase2_exp1_6_config.csv
+Transcript:    D:\algoverse\experiment 1.5\logs\run_20260724_084926_exp15_phase2_exp1_6_config.log
+Next: copy the telemetry CSV into the run dir's telemetry\ folder,
+append a row to eaaj-pilot/compute_log.md, and commit artifacts
+(see WIN4070_EXP15_GUIDE.md sections 9-10).
