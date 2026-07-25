@@ -1,0 +1,81 @@
+{
+  "experiment": "eaaj_rlvr_plasticity_exp1_7",
+  "expected_run_name": "exp15_cuda_grpo_gsm8k_039e5182c8a2",
+  "based_on": "exp1.5 v3: lr=1e-6 stable/no Q displacement; exp1.6: lr=3e-6 stable/+4.06% late Q shift/no endpoint drop; exp1.5 v2/1.5.1: one non-replicated collapse at lr=1e-5. This is one of three independent Stage-A replicates at the log-midpoint dose.",
+  "purpose": "Replicated dose-window test at lr=5.5e-6. Stage-B seed42 endpoints screen first; seeds43/44 are locked until exp1_7_gate_eval.py prints EXPAND. See EXPERIMENT_1_7_PLAN_ZH.md.",
+  "model_id": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "dataset_revisions": {
+    "openai/gsm8k": "740312add88f781978c0658806c59bc2815b9866",
+    "ChilleD/SVAMP": "5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef"
+  },
+  "seed": 44,
+  "stage_a": {
+    "task": "GSM8K",
+    "train_questions": 512,
+    "algorithm": "GRPO",
+    "max_steps": 500,
+    "checkpoint_steps": [0, 25, 50, 75, 100, 200, 300, 400, 500],
+    "learning_rate": 5.5e-06,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "eval_every": 25,
+    "safety": {
+      "completion_clipping_policy": "diagnostic_only",
+      "max_step_seconds": 480.0,
+      "max_rss_gib": 96.0,
+      "timing_patience": 3,
+      "zero_signal_patience": 5
+    }
+  },
+  "measurement": {
+    "probe_questions": 512,
+    "sensitivity_probe_questions": 2048,
+    "sensitivity_checkpoints": [0, 500],
+    "layers": [4, 12, 22],
+    "model_dtype": "float32",
+    "batch_size": 16,
+    "max_prompt_length": 512,
+    "dormant_taus": [0.025, 0.1]
+  },
+  "adaptation": {
+    "task": "SVAMP",
+    "algorithm": "GRPO",
+    "train_questions": 256,
+    "eval_questions": 300,
+    "curve_eval_questions": 100,
+    "budget_updates": 50,
+    "eval_every": 10,
+    "learning_rate": 1e-06,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "checkpoints": [0, 500],
+    "checkpoint_order": [0, 500],
+    "seeds": [42, 43, 44]
+  },
+  "analysis": {
+    "primary_q": "replicated_late_window_erank_L12",
+    "primary_outcome": "replicated_endpoint_delta_drop",
+    "exp1_7_gates": {
+      "late_window_checkpoints": [300, 400, 500],
+      "q_median_abs_rel_change_min": 0.075,
+      "endpoint_median_delta_drop_min": 0.05,
+      "screen_adaptation_seed": 42,
+      "min_complete_stage_a_replicates": 2,
+      "collapse_stop_replicates": 2,
+      "rule": "EXPAND Stage-B seeds43/44 iff replicated Q gate OR seed42 endpoint gate passes; STOP_COLLAPSE if >=2 Stage-A trajectories safety-stop before ckpt500."
+    }
+  }
+}
