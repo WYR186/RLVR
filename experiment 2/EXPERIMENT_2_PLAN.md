@@ -46,6 +46,12 @@ hold a different stage 1.
 Every row is a choice Tommy's spec left open. Each gets one line of justification and is
 mirrored to the Research Doc (project rule: deviations are logged, not silent).
 
+**This is the full version, and it is a strict superset of Tommy's spec.** Everything he
+asked for is produced; the additions are more checkpoints (a time series instead of three
+points), three stage-2 seeds (so a correlation can actually be reported), and the
+activation metrics that are this owner's assigned role. Nothing he asked for is dropped or
+weakened, so the deliverable answers his request without a second run.
+
 | Parameter | Value | Why |
 |---|---|---|
 | Stage 1 domain | **Math** (OR1/DAPO/DeepScaler) | 8 GB VRAM. Table (HiTab/MultiHierTT) requires serialising hierarchical tables into the prompt, which breaks the 512-token prompt geometry validated on this machine. Math prompts are short and the existing numeric exact-answer reward parser applies. |
@@ -53,12 +59,12 @@ mirrored to the Research Doc (project rule: deviations are logged, not silent).
 | Model | `Qwen/Qwen2.5-0.5B` @ pinned revision | 8 GB constraint, and comparability with every run the team has done. |
 | Precision | fp32 master weights + bf16 autocast, `paged_adamw_8bit` | Loading params in bf16 makes small-LR updates round to zero. Non-negotiable on this machine. |
 | Stage-1 length | **200 updates** | ≈4.7 h at the measured 85 s/update *if* the prompt geometry matches GSM8K. Phase 0 replaces this estimate with a measured one. |
-| Stage-1 checkpoints saved | **0, 50, 100, 150, 200** | Saving a 0.5B checkpoint costs seconds. Saving 5 but only *adapting from* 3 means extending the grid later needs no retraining. |
-| Stage-1 checkpoints adapted from | **0, 100, 200** | Tommy in the meeting: "start with 3 checkpoints — zero, middle, last", for compute. ckpt-0 **is** the "stage 2 alone" baseline; it is not a separate run. |
+| Stage-1 checkpoints saved | **0, 25, 50, 100, 150, 200** | Saving a 0.5B checkpoint costs seconds. The extra ckpt-25 buys resolution in the early window where every prior run has shown its largest transient. |
+| Stage-1 checkpoints adapted from | **0, 50, 100, 150, 200** (all five) | Tommy's compute concession was "start with three — zero, middle, last". This run does all five: the whole point of the PI's suggestion is a *time series* of the plasticity metric across stage 1, and three points cannot show a shape. ckpt-0 **is** the "stage 2 alone" baseline; it is not a separate run. |
 | Stage-1 learning rate | **5.5e-6** | The one parameter Tommy's spec omits, and the one that decides whether exp2 finds anything. See §1.1 — 3e-6 was tested and returned a STOP verdict, so using it here would guarantee a null. 5.5e-6 matches the already-frozen exp1.7 dose, which makes exp2 and exp1.7 a same-dose / different-task-pair comparison. Flagged to the team as an open question, not decided unilaterally. |
 | Stage-2 budget | **50 updates**, eval at 0/10/20/30/40/50 | Gives both the endpoint ("reward achievable") and the curve for AUC. |
 | Stage-2 eval set | **300 held-out Simulation questions**, frozen, committed | 100 was measured to be noise-dominated for this outcome. |
-| Seeds | **1 (seed 42) pre-registered.** Seeds 43/44 only as a stretch, and only if the primary shows separation. | 3 seeds triples Phase 3 (≈12–19 h). Does not fit before 23 Aug on one 4070. Logged as a known limitation. |
+| Stage-2 seeds | **3 (42/43/44)**, run in two passes — see §3 Phase 3 | Single-seed checkpoint rankings have been measured to be noise-dominated on this outcome (seed-to-seed Δ rank correlation was negative in the pilot). With one seed there is no defensible correlation to report at all, so the seeds are not optional for a full run. |
 | KL β | **0.0** | Unchanged from every prior run. A β>0 arm is a separate, still-open team question. |
 
 ### 1.1 Why 5.5e-6 and not 3e-6
@@ -85,10 +91,13 @@ from "wrong dose".
 
 **Known risk, stated up front:** exp1.5.1 ran three controlled replicates at 1e-5 and none
 reproduced the collapse seen once at ~step 55. Collapse hazard on this model depends on
-trajectory randomness, not on a clean learning-rate threshold. With a single stage-A seed,
-exp2 cannot distinguish "5.5e-6 is safe" from "this trajectory happened to survive". The
-safety-stop machinery in Phase 1 is what keeps that from destroying the run, and the
-single-seed limitation goes in the write-up rather than being papered over.
+trajectory randomness, not on a clean learning-rate threshold. exp2 runs **one stage-A
+trajectory**, so it cannot distinguish "5.5e-6 is safe" from "this trajectory happened to
+survive" — the stage-2 seed replication in Phase 3 controls adaptation noise, not stage-A
+trajectory noise. The Phase-1 safety stops are what keep that from destroying the run, and
+the single-stage-A-trajectory limitation goes in the write-up rather than being papered
+over. Replicating stage A is exactly what exp1.7 is designed to do; exp2 does not
+duplicate it.
 
 ---
 
@@ -186,31 +195,51 @@ failure to be retried at a different learning rate.
 
 ### Phase 2 — `T_t`, zero-shot (cheap, runs before Phase 3)
 
-For each of ckpt 0/50/100/150/200: evaluate on the frozen 300-question stage-B eval set,
+For each of ckpt 0/25/50/100/150/200: evaluate on the frozen 300-question stage-B eval set,
 **no training**. Write `analysis/transfer_T.json` with `Score_B(M_{A,t})` and `T_t`.
 
 Report `T_t` to the channel before Phase 3 starts. It costs minutes and it determines how
 Phase 3's result can be read.
 
-### Phase 2b — activation metrics (OPTIONAL, beyond Tommy's spec)
+### Phase 2b — activation metrics
 
-Effective rank + dormant fraction at layers 4/12/22 on the frozen probe set, float32,
-eval mode, for each saved checkpoint. Measured cost on this machine: ~6 min for the whole
-grid.
+Effective rank + dormant fraction at layers 4/12/22 on the frozen probe set, **float32,
+eval mode, fixed layers**, for every saved checkpoint. Measured cost on this machine:
+~5 min for the whole grid.
 
-**This is not part of Tommy's spec.** It gates nothing and blocks nothing. It exists
-because it is this owner's assigned role in the project and because re-measuring later
-would require reloading every checkpoint. If it costs more than 15 minutes or throws,
-skip it and continue to Phase 3.
+**ckpt-0 identity gate:** ckpt-0's effective rank must reproduce the committed pilot
+reference. A mismatch means the measurement contract drifted (this gate has caught a
+float16/float32 mismatch before) — archive the result, fix the dtype, re-measure. Do not
+continue with values that are not comparable to the rest of the project.
 
-Note in the report, do not bury: dormant fraction has been identically 0.0 in every prior
-run on this model. It must be reported as *a metric with no resolution in this setting*,
-never as evidence that plasticity is preserved.
+This is beyond Tommy's spec but it is this owner's assigned role, it costs five minutes,
+and re-measuring later would require reloading every checkpoint. It gates nothing in
+Phase 3 — a failure here does not stop the reward-side pipeline Tommy asked for.
+
+Report honestly, do not bury: dormant fraction has been identically 0.0 in every prior run
+on this model, for structural reasons (SiLU-gated MLP). It must be reported as *a metric
+with no resolution in this setting*, never as evidence that plasticity is preserved.
+
+**Probe size:** use 2048 prompts, not 512. The hidden dimension is 896, so a 512-prompt
+probe makes the activation matrix rank-truncated by sampling and the effective-rank
+*magnitudes* n-dependent. Directions were confirmed stable at 2048; magnitudes measured at
+512 must not be quoted or compared to literature.
 
 ### Phase 3 — stage 2 GRPO from each checkpoint
 
-Cells: ckpt-0 (**= the "stage 2 alone" baseline**), ckpt-100, ckpt-200. Seed 42.
-50 updates each, eval on the frozen 300 at updates 0/10/20/30/40/50.
+**Grid: 5 checkpoints × 3 seeds = 15 cells.** ckpt-0 is the "stage 2 alone" baseline; it is
+not a separate run. 50 updates per cell, eval on the frozen 300 at updates 0/10/20/30/40/50.
+
+Run in **two passes**, so there is a readable result after the first night:
+
+- **Pass A — all 5 checkpoints × seed 42** (5 cells, ≈6.5 h). This alone gives the shape of
+  the time series and satisfies everything Tommy asked for. Commit and report it before
+  starting Pass B.
+- **Pass B — seeds 43 and 44** (10 cells, ≈13 h). This is what turns the shape into a
+  result with error bars, and it is the only thing that makes a reported correlation
+  defensible.
+
+Execution rules for every cell:
 
 - **One fresh OS process per cell.** The long-loop allocator failure is known on this
   machine; a single process running all cells hit CUDA OOM in backward.
@@ -219,14 +248,21 @@ Cells: ckpt-0 (**= the "stage 2 alone" baseline**), ckpt-100, ckpt-200. Seed 42.
   overwrite, rerun that cell alone in a fresh process.
 - Every cell must pass the completion validator (50/50 updates, summary written, no
   safety stop) before Phase 4.
+- Commit after each pass, not after each cell.
 
 ### Phase 4 — analysis
 
 Runs on CPU. Emits `analysis/analysis_summary.json` plus:
 
-- `ΔR_t` and `ΔAUC_t` table
+- `ΔR_t` and `ΔAUC_t` table, with the 3-seed mean and SD per checkpoint
 - `T_t` table
 - the reading-rule verdict per checkpoint (§2)
+- variance decomposition: between-checkpoint vs within-checkpoint (seed) variance. If
+  within ≥ between, the outcome is noise-dominated and **no ranking or correlation may be
+  reported** — say that plainly instead of quoting a ρ.
+- Spearman ρ(erank_L12, Δ) over the 5 checkpoints, per seed and pooled, **reported with
+  the pre-adaptation stage-B accuracy as a stated covariate**. With n=5 this is
+  descriptive, and it must be labelled descriptive.
 - **the figure in Tommy's shape**: stage-B reward curve, one line per stage-1 checkpoint,
   with the ckpt-0 baseline drawn as the reference line
 
@@ -242,11 +278,16 @@ adaptation cell** (6 cells in 7.74 h); float32 Q measurement over 8 checkpoints 
 |---|---|---|
 | 0 | 30–60 min | no training; dominated by download + tokenisation |
 | 1 | **4.7 h** | 200 updates × 85 s — *only if* Phase 0 confirms GSM8K-like geometry |
-| 2 | ~25 min | 5 checkpoints × 300 questions, generation-bound |
-| 2b | ~6 min | optional |
-| 3 | **3.9 h** | 3 cells × 1.3 h |
+| 2 | ~30 min | 6 checkpoints × 300 questions, generation-bound |
+| 2b | ~5 min | 6 checkpoints, float32, 2048-prompt probe |
+| 3 pass A | **6.5 h** | 5 cells × 1.3 h — seed 42 |
+| 3 pass B | **13 h** | 10 cells × 1.3 h — seeds 43/44 |
 | 4 | ~2 min | CPU |
-| **Total** | **≈ 9–10 h** | one overnight plus a morning |
+| **Total** | **≈ 25 h** | night 1 → Phase 0–3A (≈12 h, complete reportable result); night 2–3 → Phase 3B |
+
+Night 1 alone (≈12 h) produces everything Tommy asked for. Pass B is what makes it
+publishable rather than suggestive. With 19 days to the abstract, both fit — but the
+ordering means a machine failure on night 2 still leaves a deliverable.
 
 **This fits the 4070.** The three things that break the estimate:
 
@@ -325,5 +366,10 @@ budget, and baseline are all defined above; keep them attached to every number r
 2. **Stage-1 claim collision.** Math is claimed here. Needs confirmation in-channel.
 3. **Base vs Instruct**, **GRPO vs SFT for stage 2**, **KL β>0 arm** — all still open, all
    carried forward at the cheaper default.
-4. **Seeds.** 1 seed is a real limitation of this run, forced by the 4070 and 23 Aug.
-   Say so in the write-up rather than presenting a single-seed ranking as stable.
+4. **Stage-A replication.** Stage 2 is replicated across 3 seeds, but stage A is a single
+   trajectory. Given that collapse hazard has been shown to be trajectory-dependent, no
+   claim about the *dose* may be made from this run alone — only about this task pair at
+   this dose. exp1.7 is the run that replicates stage A.
+5. **Scope.** This is the full version rather than Tommy's three-checkpoint minimum. It is
+   a superset — everything he asked for is produced — but the extra cost is real (≈25 h vs
+   ≈10 h) and the decision to spend it was the owner's, not the team's. Say so.

@@ -28,8 +28,8 @@
     "train_questions": null,
     "algorithm": "GRPO",
     "max_steps": 200,
-    "checkpoint_steps": [0, 50, 100, 150, 200],
-    "adapt_from_checkpoints": [0, 100, 200],
+    "checkpoint_steps": [0, 25, 50, 100, 150, 200],
+    "adapt_from_checkpoints": [0, 50, 100, 150, 200],
     "learning_rate": 5.5e-6,
     "learning_rate_rationale": "log-midpoint of the last confirmed-stable dose (3e-6, exp1.6 STOP) and the observed-collapse dose (1e-5); matches the frozen exp1.7 dose so exp2 is a same-dose/different-task-pair comparison. See plan 1.1.",
     "per_device_train_batch_size": 8,
@@ -61,8 +61,9 @@
     "top_p": 1.0,
     "max_prompt_length": 512,
     "max_completion_length": 512,
-    "seeds": [42],
-    "stretch_seeds": [43, 44]
+    "seeds": [42, 43, 44],
+    "pass_a_seeds": [42],
+    "pass_b_seeds": [43, 44]
   },
 
   "execution": {
@@ -92,13 +93,15 @@
     "reading_rule": "delta_R is interpreted conditional on T_t; T_t far from 0 means delta_R is transfer-confounded and must be reported as such"
   },
 
-  "measurement_optional": {
-    "note": "beyond Tommy's spec; gates nothing; skip if it exceeds 15 min or throws",
-    "probe_questions": 512,
+  "measurement": {
+    "note": "beyond Tommy's spec but in scope for this owner; gates nothing in phase 3",
+    "probe_questions": 2048,
+    "probe_rationale": "hidden dim is 896; a 512-prompt probe makes effective-rank magnitudes sample-truncated and n-dependent",
     "layers": [4, 12, 22],
     "model_dtype": "float32",
     "batch_size": 16,
-    "dormant_taus": [0.025, 0.1]
+    "dormant_taus": [0.025, 0.1],
+    "ckpt0_identity_gate": "erank at ckpt-0 must reproduce the committed pilot reference; mismatch means the measurement contract drifted"
   },
 
   "open_team_questions": [
@@ -107,6 +110,7 @@
     "Base vs Instruct model",
     "GRPO vs SFT for stage 2",
     "KL beta>0 arm",
-    "Single seed is a forced limitation of the 4070 + 23 Aug deadline"
+    "Stage A is a single trajectory: no dose claim may be made from this run alone; exp1.7 is the stage-A replication",
+    "This is the full version, a superset of Tommy's three-checkpoint minimum; the extra ~15 h was the owner's call"
   ]
 }
