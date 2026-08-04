@@ -1,0 +1,112 @@
+{
+  "experiment": "eaaj_exp2_guru_math_to_simulation",
+  "spec_source": "Tommy Slack 12:15 (edited version) + 2026-08-03 meeting",
+  "plan": "experiment 2/EXPERIMENT_2_PLAN.md",
+  "status": "pre-registered, phase 0 not started",
+
+  "model_id": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "seed": 42,
+
+  "dataset": {
+    "source": "LLM360/guru-RL-92k",
+    "revision": null,
+    "__phase0_fills": [
+      "revision",
+      "domain_field",
+      "prompt_field",
+      "answer_field",
+      "stage_a.subset_filter",
+      "stage_b.subset_filter"
+    ]
+  },
+
+  "stage_a": {
+    "domain": "Math",
+    "subsets": ["OR1", "DAPO", "DeepScaler"],
+    "subset_filter": null,
+    "train_questions": null,
+    "algorithm": "GRPO",
+    "max_steps": 200,
+    "checkpoint_steps": [0, 50, 100, 150, 200],
+    "adapt_from_checkpoints": [0, 100, 200],
+    "learning_rate": 5.5e-6,
+    "learning_rate_rationale": "log-midpoint of the last confirmed-stable dose (3e-6, exp1.6 STOP) and the observed-collapse dose (1e-5); matches the frozen exp1.7 dose so exp2 is a same-dose/different-task-pair comparison. See plan 1.1.",
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "eval_every": 25
+  },
+
+  "stage_b": {
+    "domain": "Simulation",
+    "subsets": ["CodeI/O"],
+    "subset_filter": null,
+    "algorithm": "GRPO",
+    "train_questions": null,
+    "eval_questions": 300,
+    "budget_updates": 50,
+    "eval_at_updates": [0, 10, 20, 30, 40, 50],
+    "learning_rate": 1e-6,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 512,
+    "max_completion_length": 512,
+    "seeds": [42],
+    "stretch_seeds": [43, 44]
+  },
+
+  "execution": {
+    "backend": "cuda",
+    "device": "RTX 4070 Laptop 8GB",
+    "param_dtype": "float32",
+    "autocast_dtype": "bfloat16",
+    "optimizer": "paged_adamw_8bit",
+    "one_process_per_phase3_cell": true,
+    "env": {
+      "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"
+    }
+  },
+
+  "gates": {
+    "phase0a_stage_b_p95_prompt_tokens_max": 1024,
+    "phase0b_sparse_reward_preflight": "STOP if every sampled group has constant reward",
+    "phase1_update_sentinel_step": 25,
+    "phase1_zero_variance_streak_stop": 5,
+    "phase1_clipping_over_10pct_streak_stop": 5
+  },
+
+  "outcomes": {
+    "P1_delta_R": "R_end(ckpt0) - R_end(ckpt_t), R_end = mean stage-B eval reward at update 50",
+    "P2_delta_AUC": "AUC(ckpt0) - AUC(ckpt_t) over eval_at_updates",
+    "P3_transfer_T": "T_t = Score_B(M_{A,t}) - Score_B(M_0), zero-shot, no stage-2 training",
+    "reading_rule": "delta_R is interpreted conditional on T_t; T_t far from 0 means delta_R is transfer-confounded and must be reported as such"
+  },
+
+  "measurement_optional": {
+    "note": "beyond Tommy's spec; gates nothing; skip if it exceeds 15 min or throws",
+    "probe_questions": 512,
+    "layers": [4, 12, 22],
+    "model_dtype": "float32",
+    "batch_size": 16,
+    "dormant_taus": [0.025, 0.1]
+  },
+
+  "open_team_questions": [
+    "Stage-1 learning rate: 5.5e-6 matching exp1.7; 1e-6 and 3e-6 are confirmed nulls, 1e-5 collapsed once in four attempts; not decided unilaterally",
+    "Stage-1 domain claim (Math) needs in-channel confirmation - Tommy requires distinct stage 1 per member",
+    "Base vs Instruct model",
+    "GRPO vs SFT for stage 2",
+    "KL beta>0 arm",
+    "Single seed is a forced limitation of the 4070 + 23 Aug deadline"
+  ]
+}
