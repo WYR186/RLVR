@@ -1,0 +1,18 @@
+{
+  "stage_a": {
+    "stage": "a",
+    "status": "complete",
+    "global_step": 2,
+    "checkpoint": "D:\\algoverse\\experiment 2\\smoke_outputs_4070_instruct_v2\\stage_a\\trainer\\checkpoint-2",
+    "dashboard": "D:\\algoverse\\experiment 2\\smoke_outputs_4070_instruct_v2\\stage_a\\dashboard.jsonl",
+    "completed_unix": 1785854458.0730345
+  },
+  "stage_b": {
+    "stage": "b",
+    "status": "complete",
+    "global_step": 2,
+    "checkpoint": "D:\\algoverse\\experiment 2\\smoke_outputs_4070_instruct_v2\\stage_b\\trainer\\checkpoint-2",
+    "dashboard": "D:\\algoverse\\experiment 2\\smoke_outputs_4070_instruct_v2\\stage_b\\dashboard.jsonl",
+    "completed_unix": 1785854939.6389499
+  }
+}

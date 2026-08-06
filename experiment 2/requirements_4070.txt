@@ -1,0 +1,3 @@
+# Additional dependencies for the pinned Reasoning360 Math verifier.
+pylatexenc==2.10
+antlr4-python3-runtime==4.11.1

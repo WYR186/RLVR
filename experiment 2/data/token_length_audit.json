@@ -1,0 +1,36 @@
+{
+  "contract": {
+    "model_id": "Qwen/Qwen2.5-0.5B",
+    "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+    "chat_template_applied": true,
+    "add_generation_prompt": true,
+    "add_special_tokens": false,
+    "truncation": false
+  },
+  "stage_a_math": {
+    "n": 54404,
+    "p50": 110,
+    "p95": 217,
+    "p99": 333,
+    "max": 3325,
+    "over_512": 147,
+    "over_1024": 12,
+    "tokenization_seconds": 1.735
+  },
+  "stage_b_simulation": {
+    "n": 3730,
+    "p50": 700,
+    "p95": 1407,
+    "p99": 1747,
+    "max": 1949,
+    "over_512": 3086,
+    "over_1024": 680,
+    "tokenization_seconds": 0.705
+  },
+  "gate_0a": {
+    "threshold_stage_b_p95_tokens_max": 1024,
+    "observed_stage_b_p95_tokens": 1407,
+    "status": "STOP",
+    "required_action": "preserve diagnostics and request the L4 24 GB stratum; do not shrink batch, truncate prompts, or start training on the RTX 4070"
+  }
+}

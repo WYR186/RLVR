@@ -1,0 +1,33 @@
+{
+  "experiment": "eaaj_exp2_4070_instruct_v5_group3_long_math_to_short_context_simulation",
+  "variant_tag": "4070_instruct_v5",
+  "status": "pre-registered 4070 Instruct v5 candidate; no parameter update started",
+  "parent_plan": "experiment 2/EXPERIMENT_2_PLAN.md",
+  "amendment": "experiment 2/EXPERIMENT_2_4070_INSTRUCT_V5_AMENDMENT.md",
+  "model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+  "model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "seed": 42,
+  "dataset": {"source": "LLM360/guru-RL-92k", "revision": "2e2790a962a3c099bfb5ea61389cbf98a5ea439b", "domain_field": "data_source", "prompt_field": "prompt", "answer_field": "reward_model.ground_truth"},
+  "stage_a": {
+    "domain": "Math", "subset_filter": ["math__deepscaler_preview", "math__merged_deduped_dapo_or1_dataset"],
+    "token_filter_max": 512, "expected_eligible_questions": 54251,
+    "algorithm": "GRPO", "max_steps": 200,
+    "checkpoint_steps": [0, 25, 50, 100, 150, 200], "adapt_from_checkpoints": [0, 50, 100, 150, 200],
+    "learning_rate": 5.5e-6, "per_device_train_batch_size": 3, "gradient_accumulation_steps": 8,
+    "num_generations": 3, "beta": 0.0, "temperature": 0.7, "top_p": 1.0,
+    "max_prompt_length": 512, "max_completion_length": 1280, "eval_every": 25
+  },
+  "stage_b": {
+    "domain": "Simulation-short-context", "subset_filter": ["simulation__codeio"],
+    "token_filter_max": 640, "expected_eligible_questions": 1432, "train_questions": 1132, "eval_questions": 300,
+    "algorithm": "GRPO", "budget_updates": 50, "eval_at_updates": [0, 10, 20, 30, 40, 50],
+    "learning_rate": 1e-6, "per_device_train_batch_size": 8, "gradient_accumulation_steps": 8,
+    "num_generations": 8, "beta": 0.0, "temperature": 0.7, "top_p": 1.0,
+    "max_prompt_length": 640, "max_completion_length": 384,
+    "seeds": [42, 43, 44], "pass_a_seeds": [42], "pass_b_seeds": [43, 44]
+  },
+  "execution": {"backend": "cuda", "device": "RTX 4070 Laptop 8GB", "param_dtype": "float32", "autocast_dtype": "bfloat16", "optimizer": "paged_adamw_8bit", "gradient_checkpointing": true, "one_process_per_phase3_cell": true, "env": {"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}},
+  "gates": {"phase0_stage_a_max_prompt_tokens": 512, "phase0_stage_b_max_prompt_tokens": 640, "phase0_exact_eligible_counts": true, "phase0_sparse_reward_preflight": "STOP if every sampled group has constant reward on either stage", "phase0_cuda_smoke_updates_each_stage": 2, "phase0_stage_a_smoke_max_clip_ratio_each_update": 0.10, "phase1_update_sentinel_step": 25, "zero_variance_streak_stop": 5, "clipping_over_10pct_streak_stop": 5},
+  "measurement": {"probe_questions": 2048, "layers": [4, 12, 22], "model_dtype": "float32", "batch_size": 16, "dormant_taus": [0.025, 0.1]},
+  "variant_limits": {"not_equivalent_to_original_exp2": true, "stage_b_population": "CodeIO examples whose complete rendered prompt is <=640 Qwen2.5-0.5B-Instruct tokens", "prompt_truncation": false, "stage_b_completion_cap_changed_from": 512, "stage_b_completion_cap_changed_to": 384, "stage_a_total_sequence_budget_tokens": 1792, "stage_a_group_size_changed_from": 8, "stage_a_group_size_changed_to": 3, "stage_a_unique_prompts_per_update": 8, "model_variant_changed": "Base to same-size Instruct after the Base sparse-reward gate returned 0/64 correct", "claim_boundary": "4070-feasible GRPO with three-sample Math groups and frozen short-context CodeIO only"}
+}

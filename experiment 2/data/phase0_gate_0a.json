@@ -1,0 +1,15 @@
+{
+  "phase": "0",
+  "gate": "0a",
+  "status": "STOP",
+  "training_started": false,
+  "observed": {
+    "threshold_stage_b_p95_tokens_max": 1024,
+    "observed_stage_b_p95_tokens": 1407,
+    "status": "STOP",
+    "required_action": "preserve diagnostics and request the L4 24 GB stratum; do not shrink batch, truncate prompts, or start training on the RTX 4070"
+  },
+  "split_freeze_skipped": true,
+  "smoke_training_skipped": true,
+  "reason": "Gate 0a fired before split freeze and smoke training."
+}
