@@ -1,0 +1,82 @@
+{
+  "experiment": "eaaj_exp2_4070_instruct_v8_poststop_truncated",
+  "status": "pre-registered after Stage-A safety stop and before downstream compute",
+  "amendment": "experiment 2/EXPERIMENT_2_4070_INSTRUCT_V8_POSTSTOP_AMENDMENT.md",
+  "source": {
+    "run_name": "exp2_4070_cuda_guru_math_c4a279960232",
+    "config_hash": "c4a279960232",
+    "safety_stop_step": 110,
+    "safety_stop_reason": "five consecutive updates had zero group reward variance",
+    "required_checkpoints": [0, 25, 50, 100],
+    "stage_b_checkpoints": [0, 50, 100],
+    "forbidden_as_complete": [150, 200],
+    "sha256": {
+      "safety_stop.json": "71dc7b7903c890add3356124c40eb200bbc983f0d49f85a831fa24522382cc26",
+      "config.json": "831723e012fcdd6bad5ddd052f862a5f62e7043421700d8ea455c5a9db42bb04",
+      "manifest.json": "46ee6d0735e6be80698a9cc6238f1f6d7bf2242cf0ca89d2ec937052329a7275",
+      "ckpt-0/model.safetensors": "ff208332ee07c8e0538cc753e9b4a0ee6c42b191f878aa21bae2e667fa9c725b",
+      "ckpt-25/model.safetensors": "3c14d7b70225f9edf8bae3bdb7ff9dcb32427b9f5e4880bc3d2b2871a86366d3",
+      "ckpt-50/model.safetensors": "195ae6cb0fcb63f26ea64208f78b67519c50c799583b604710a34fa6014cd14b",
+      "ckpt-100/model.safetensors": "edffdcbd62ebe9a904ffe3694a8885841dbfb322b52fbcae49a70b0422764b62"
+    }
+  },
+  "phase2_zero_shot": {
+    "checkpoints": [0, 25, 50, 100],
+    "task": "Simulation-short-context",
+    "split": "frozen_300_eval",
+    "reward": "exact_GURU_CodeIO",
+    "decode": "greedy",
+    "max_prompt_length": 640,
+    "max_new_tokens": 384,
+    "batch_size": 8
+  },
+  "phase2b": {
+    "checkpoints": [0, 25, 50, 100],
+    "probe_file": "eaaj-pilot/data/probe_set_ids.json",
+    "probe_key": "probe_big_prompts",
+    "probe_sha256": "b5b0196463d95aa270d6b7ec55dad0b6bdb2c93b9b73ad8b0696b16b95f4a4ff",
+    "probe_questions": 2048,
+    "layers": [4, 12, 22],
+    "model_dtype": "float32",
+    "batch_size": 16,
+    "max_prompt_length": 512,
+    "dormant_taus": [0.025, 0.1],
+    "identity_gate": "source checkpoint hashes plus fixed probe/dtype/layers/pooling; ckpt-0 is the within-v8 baseline"
+  },
+  "stage_b": {
+    "checkpoints": [0, 50, 100],
+    "seeds": [42, 43, 44],
+    "algorithm": "GRPO",
+    "reward_mode": "exact",
+    "train_questions": 1132,
+    "eval_questions": 300,
+    "budget_updates": 50,
+    "eval_at_updates": [0, 10, 20, 30, 40, 50],
+    "learning_rate": 1e-6,
+    "per_device_train_batch_size": 8,
+    "gradient_accumulation_steps": 8,
+    "num_generations": 8,
+    "beta": 0.0,
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_prompt_length": 640,
+    "max_completion_length": 384,
+    "eval_batch_size": 8,
+    "save_steps": 10
+  },
+  "execution": {
+    "device": "cuda",
+    "gpu": "RTX 4070 Laptop 8GB",
+    "param_dtype": "float32",
+    "autocast_dtype": "bfloat16",
+    "optimizer": "paged_adamw_8bit",
+    "gradient_checkpointing": true,
+    "one_process_per_stage_b_cell": true
+  },
+  "claim_boundary": {
+    "trajectory": "partial Stage-A trajectory terminated by a pre-registered safety gate at step 110",
+    "stage_b": "three-checkpoint post-stop grid, not the registered five-checkpoint experiment",
+    "correlation": "n=3 rank correlations are exploratory descriptions only",
+    "reading_rule": "fixed-budget Stage-B outcomes are interpreted conditional on zero-shot transfer T_t"
+  }
+}

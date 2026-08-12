@@ -1,0 +1,36 @@
+{
+  "stage_a": {
+    "stage": "a",
+    "status": "complete",
+    "global_step": 2,
+    "checkpoint": "D:\\algoverse\\experiment 2\\smoke_outputs_4070_instruct_v8\\stage_a\\trainer\\checkpoint-2",
+    "dashboard": "D:\\algoverse\\experiment 2\\smoke_outputs_4070_instruct_v8\\stage_a\\dashboard.jsonl",
+    "clip_ratios": [
+      0.0416666679084301,
+      0.0833333358168602
+    ],
+    "step_times": [
+      146.41155970050022,
+      172.01393939973786
+    ],
+    "nonzero_reward_updates": 2,
+    "completed_unix": 1785858619.0425174
+  },
+  "stage_b": {
+    "stage": "b",
+    "status": "complete",
+    "global_step": 2,
+    "checkpoint": "D:\\algoverse\\experiment 2\\smoke_outputs_4070_instruct_v8\\stage_b\\trainer\\checkpoint-2",
+    "dashboard": "D:\\algoverse\\experiment 2\\smoke_outputs_4070_instruct_v8\\stage_b\\dashboard.jsonl",
+    "clip_ratios": [
+      0.0,
+      0.0
+    ],
+    "step_times": [
+      50.52160310000181,
+      121.68192479992285
+    ],
+    "nonzero_reward_updates": 2,
+    "completed_unix": 1785858854.1848981
+  }
+}

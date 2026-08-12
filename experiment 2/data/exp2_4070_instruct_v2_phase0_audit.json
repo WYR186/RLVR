@@ -1,0 +1,18 @@
+{
+  "experiment": "eaaj_exp2_4070_instruct_v2_math256_to_short_context_simulation",
+  "status": "geometry_and_split_gate_pass",
+  "training_started": false,
+  "stage_a": {
+    "eligible": 52755,
+    "max_prompt_tokens": 256
+  },
+  "stage_b": {
+    "eligible": 1432,
+    "train": 1132,
+    "eval": 300,
+    "max_prompt_tokens": 640,
+    "max_completion_tokens": 384,
+    "total_sequence_budget": 1024
+  },
+  "next_gate": "real sparse-reward preflight on both stages"
+}

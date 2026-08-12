@@ -1,0 +1,258 @@
+{
+  "dataset": {
+    "id": "LLM360/guru-RL-92k",
+    "revision": "2e2790a962a3c099bfb5ea61389cbf98a5ea439b",
+    "config": "default",
+    "splits": [
+      "train"
+    ],
+    "loader_note": "The repository contains heterogeneous parquet schemas under train/*.parquet. datasets==5.0.0 cannot cast them into one unified Dataset, so target domain files are audited and loaded independently."
+  },
+  "field_contract": {
+    "domain_field": "data_source",
+    "prompt_field": "prompt (list of role/content messages)",
+    "answer_field": "reward_model.ground_truth",
+    "stage_a_filter": [
+      "math__deepscaler_preview",
+      "math__merged_deduped_dapo_or1_dataset"
+    ],
+    "stage_b_filter": [
+      "simulation__codeio"
+    ],
+    "stage_a_count": 54404,
+    "stage_b_count": 3730,
+    "source_limitation": "The released math parquet merges DAPO and OR1 into one data_source value; the released fields do not permit a defensible per-origin DAPO-vs-OR1 split."
+  },
+  "answer_and_verifier_contract": {
+    "official_repository": "https://github.com/LLM360/Reasoning360",
+    "official_revision": "13158341d2a0dfe5f3bb80e7126ff21de0d16676",
+    "router": "verl/utils/reward_score/__init__.py::default_compute_score",
+    "math": {
+      "format": "final answer inside the last \\boxed{...}",
+      "implementation": "verl/utils/reward_score/naive_dapo.py",
+      "comparison": "normalized string and mathematical equivalence; 1.0 correct, 0.0 otherwise"
+    },
+    "simulation": {
+      "format": "JSON in a ```json``` code block, normally with input or output wrapper",
+      "implementation": "verl/utils/reward_score/codeio.py",
+      "comparison": "extract final complete JSON, recursively normalize, then exact structured equality"
+    }
+  },
+  "files": {
+    "stage_a_math": {
+      "relative_path": "train/math__combined_54.4k.parquet",
+      "bytes": 20586907,
+      "sha256": "6bac13997a749ef27c913eaf5b35f8703f0709438d42ae6ac5093701151e28d7",
+      "rows": 54404,
+      "row_groups": 1,
+      "schema": [
+        {
+          "name": "source",
+          "dtype": "null",
+          "nullable": true
+        },
+        {
+          "name": "domain",
+          "dtype": "null",
+          "nullable": true
+        },
+        {
+          "name": "llama8b_solve_rate",
+          "dtype": "double",
+          "nullable": true
+        },
+        {
+          "name": "data_source",
+          "dtype": "string",
+          "nullable": true
+        },
+        {
+          "name": "prompt",
+          "dtype": "list<element: struct<content: string, role: string>>",
+          "nullable": true
+        },
+        {
+          "name": "ability",
+          "dtype": "string",
+          "nullable": true
+        },
+        {
+          "name": "apply_chat_template",
+          "dtype": "bool",
+          "nullable": true
+        },
+        {
+          "name": "reward_model",
+          "dtype": "struct<ground_truth: string, style: string>",
+          "nullable": true
+        },
+        {
+          "name": "extra_info",
+          "dtype": "struct<index: int64, original_question: string, reward_metric: string, split: string>",
+          "nullable": true
+        },
+        {
+          "name": "is_unique",
+          "dtype": "bool",
+          "nullable": true
+        },
+        {
+          "name": "solution",
+          "dtype": "string",
+          "nullable": true
+        },
+        {
+          "name": "qwen2.5_7b_pass_rate",
+          "dtype": "double",
+          "nullable": true
+        },
+        {
+          "name": "qwen3_30b_pass_rate",
+          "dtype": "double",
+          "nullable": true
+        }
+      ],
+      "data_source_counts": {
+        "math__deepscaler_preview": 17801,
+        "math__merged_deduped_dapo_or1_dataset": 36603
+      },
+      "full_examples_by_data_source": {
+        "math__deepscaler_preview": {
+          "data_source": "math__deepscaler_preview",
+          "prompt": [
+            {
+              "content": "Doug constructs a square window using $8$ equal-size panes of glass. The ratio of the height to width for each pane is $5 : 2$, and the borders around and between the panes are $2$ inches wide. In inches, what is the side length of the square window? Please output the final answer within \\boxed{}.",
+              "role": "user"
+            }
+          ],
+          "ability": "math",
+          "apply_chat_template": true,
+          "reward_model": {
+            "ground_truth": "26",
+            "style": "rule"
+          },
+          "extra_info": {
+            "index": 1,
+            "original_question": "Doug constructs a square window using $8$ equal-size panes of glass. The ratio of the height to width for each pane is $5 : 2$, and the borders around and between the panes are $2$ inches wide. In inches, what is the side length of the square window?",
+            "reward_metric": null,
+            "split": "train"
+          }
+        },
+        "math__merged_deduped_dapo_or1_dataset": {
+          "data_source": "math__merged_deduped_dapo_or1_dataset",
+          "prompt": [
+            {
+              "content": "In triangle $ABC$, $\\sin \\angle A = \\frac{4}{5}$ and $\\angle A < 90^\\circ$. Let $D$ be a point outside triangle $ABC$ such that $\\angle BAD = \\angle DAC$ and $\\angle BDC = 90^\\circ$. Suppose that $AD = 1$ and that $\\frac{BD}{CD} = \\frac{3}{2}$. If $AB + AC$ can be expressed in the form $\\frac{a\\sqrt{b}}{c}$ where $a, b, c$ are pairwise relatively prime integers, find $a + b + c$. Please output the final answer within \\boxed{}.",
+              "role": "user"
+            }
+          ],
+          "ability": "math",
+          "apply_chat_template": true,
+          "reward_model": {
+            "ground_truth": "34",
+            "style": "rule"
+          },
+          "extra_info": {
+            "index": 0,
+            "original_question": "In triangle $ABC$, $\\sin \\angle A = \\frac{4}{5}$ and $\\angle A < 90^\\circ$. Let $D$ be a point outside triangle $ABC$ such that $\\angle BAD = \\angle DAC$ and $\\angle BDC = 90^\\circ$. Suppose that $AD = 1$ and that $\\frac{BD}{CD} = \\frac{3}{2}$. If $AB + AC$ can be expressed in the form $\\frac{a\\sqrt{b}}{c}$ where $a, b, c$ are pairwise relatively prime integers, find $a + b + c$.",
+            "reward_metric": "default",
+            "split": "train"
+          }
+        }
+      }
+    },
+    "stage_b_simulation": {
+      "relative_path": "train/simulation__codeio_3.7k.parquet",
+      "bytes": 4100900,
+      "sha256": "35b05714eb6ec67f503d6e31eafcb160b3459fb247809e3132e6b994406954cf",
+      "rows": 3730,
+      "row_groups": 1,
+      "schema": [
+        {
+          "name": "funcname",
+          "dtype": "string",
+          "nullable": true
+        },
+        {
+          "name": "source",
+          "dtype": "string",
+          "nullable": true
+        },
+        {
+          "name": "category",
+          "dtype": "string",
+          "nullable": true
+        },
+        {
+          "name": "meta",
+          "dtype": "struct<msgidx: int64, path: string, repo_name: string>",
+          "nullable": true
+        },
+        {
+          "name": "data_source",
+          "dtype": "string",
+          "nullable": true
+        },
+        {
+          "name": "prompt",
+          "dtype": "list<element: struct<content: string, role: string>>",
+          "nullable": true
+        },
+        {
+          "name": "ability",
+          "dtype": "string",
+          "nullable": true
+        },
+        {
+          "name": "apply_chat_template",
+          "dtype": "bool",
+          "nullable": true
+        },
+        {
+          "name": "reward_model",
+          "dtype": "struct<ground_truth: string, style: string>",
+          "nullable": true
+        },
+        {
+          "name": "extra_info",
+          "dtype": "struct<index: int64, split: string>",
+          "nullable": true
+        },
+        {
+          "name": "qwen2.5_7b_pass_rate",
+          "dtype": "double",
+          "nullable": true
+        },
+        {
+          "name": "qwen3_30b_pass_rate",
+          "dtype": "double",
+          "nullable": true
+        }
+      ],
+      "data_source_counts": {
+        "simulation__codeio": 3730
+      },
+      "full_examples_by_data_source": {
+        "simulation__codeio": {
+          "data_source": "simulation__codeio",
+          "prompt": [
+            {
+              "content": "You are given a question that requires some input and output variables as follows:\nGiven a positive integer, what is the sequence of numbers generated by the Collatz conjecture starting from that integer?\nThe input and output requirements are as follows:\nInput:\n  `start_value` (int): The starting integer for the Collatz sequence. Must be a positive integer.\n\nOutput:\n  `return` (str): A string representing the Collatz sequence, where each number in the sequence is separated by a comma.\nGiven the following output: \n\"808,404,202,101,304,152,76,38,19,58,29,88,44,22,11,34,17,52,26,13,40,20,10,5,16,8,4,2,1\"\nCan you predict a feasible input without writing any code? Please reason and put your final answer in the following json format:\n```json\n{\n    \"input\": <your input>\n}\n```\nwhere <your input> should be a dictionary, even if the there is only one input variable, with keys strictly match the input variables' names as specified. Put your final answer in the ```json``` tags. \nTip: Here is a reference code snippet for this question. You can refer to this code tov guide your reasoning but not copy spans of code directly.\n# import necessary packages\n\n# all class and function definitions in the code file, if any\ndef collatz_step(n):\n    \"\"\"Returns the result of the Collatz function.\n\n    The Collatz function C : N -> N is used in `collatz` to generate collatz\n    sequences. Raises an error if n < 1.\n\n    Parameters\n    ----------\n    n : int\n        to be passed through the collatz map.\n\n    Returns\n    -------\n    C(n) : int\n           The result of C(n), the first iteration of the collatz sequence of n.\n\n    \"\"\"\n    if n <= 0:\n        raise ValueError('Value not accepted, please enter a positive value')\n    elif type(n) != int:\n        raise TypeError('Type entered not accepted, please enter an integer')\n    elif n % 2 == 0:\n        return n // 2\n    elif n == 1:\n        return 1\n    else:\n        return 3 * n + 1\n\ndef collatz(n):\n    \"\"\"Returns the Collatz sequence beginning with `n`.\n\n    It is conjectured that Collatz sequences all end with `1`. Calls\n    `collatz_step` at each iteration.\n\n    Parameters\n    ----------\n    n : int\n        to be passed through the collatz_step\n\n    Returns\n    -------\n    sequence : list\n               The Collatz sequence for starting point n\n\n    \"\"\" \n    sequence = [n]\n    currentValue = n\n    # while the next value in sequence is not 1\n    # retrieve next collatz map iteration\n    # append to sequence array    \n    while (currentValue != 1):\n        nextValue = collatz_step(currentValue)\n        sequence.append(nextValue)\n        currentValue = nextValue\n    return sequence\n\n# main function\ndef main_solution(start_value):\n    # all input arguments of the main_solution function should be json serializable (no self-defined objects, functions, np.array, set, tuple, etc.)\n    # convert the input to the required format for the collatz function\n    start_value = int(start_value)\n    \n    # call the collatz function\n    sequence = collatz(start_value)\n    \n    # convert the output to a json serializable format\n    sequence_str = ','.join(map(str, sequence))\n    \n    # return, the returned value must be json serializable (no self-defined objects, functions, np.array, set, tuple, etc.)\n    return sequence_str\n\n",
+              "role": "user"
+            }
+          ],
+          "ability": "coding-inference",
+          "apply_chat_template": true,
+          "reward_model": {
+            "ground_truth": "\"input\": {\"start_value\": 808}",
+            "style": "rule"
+          },
+          "extra_info": {
+            "index": 5147,
+            "split": "train"
+          }
+        }
+      }
+    }
+  }
+}

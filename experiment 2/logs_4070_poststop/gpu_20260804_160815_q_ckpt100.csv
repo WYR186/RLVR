@@ -1,0 +1,3 @@
+﻿timestamp,name,utilization.gpu [%],memory.used [MiB],memory.total [MiB],temperature.gpu,power.draw [W]
+2026/08/04 16:08:15.351, NVIDIA GeForce RTX 4070 Laptop GPU, 0, 0, 8188, 57, 15.75
+2026/08/04 16:08:45.389, NVIDIA GeForce RTX 4070 Laptop GPU, 100, 7921, 8188, 65, 54.97
