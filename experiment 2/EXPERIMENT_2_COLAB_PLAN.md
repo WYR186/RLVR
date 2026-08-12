@@ -27,6 +27,21 @@ Two things changed, both from the 2026-08-12 conversation that produced this doc
    document still pins 7B as the committed number and treats "even larger" as a stretch goal,
    not the default.
 
+**A third thing merged in later the same day, discovered while pushing this document's first
+draft.** The WIN4070 track (same owner, a parallel session) had — unknown to this document until
+the git merge that surfaced it — already run real Phase 0 work on this exact task pair and found
+that GRPO group size 3 leaves the large majority of Math prompt groups with zero within-group
+reward variance (dead gradient): `FINDING_GROUP_SIZE_REWARD_VARIANCE.md`, corroborated by a
+completed v8 Stage-A run that was 47% zero-gradient updates before its safety stop. The v9
+candidate (group 3 → 8) needs ≥24 GB and does not fit the 8 GB 4070 — an independent reason to
+want a bigger GPU, unrelated to model size. Rather than run two separate Colab attempts for two
+separate ≥24 GB needs, this document **merges both**: §1.4 explains why, and every group-size
+number below (checkpoints, gates, config) now matches the confirmed real data/reward contract and
+the v9 geometry instead of the earlier heuristic-discovery placeholders this document originally
+shipped with. See `data/guru_schema_audit.json`, `exp2_config_4070_instruct_v9.json`, and
+`EXPERIMENT_2_4070_INSTRUCT_V9_AMENDMENT.md` for the source evidence — this section does not
+re-derive it.
+
 **Everything downstream of those two changes is different**, because a 7B model does not fit
 an 8 GB card at all, and does not fit a 24-40 GB Colab GPU under **full-parameter** fine-tuning
 either (bf16 weights alone are ~14 GB; the fp32-master-weights trick the 4070 plan required to
@@ -53,11 +68,15 @@ not move.
 |---|---|---|
 | Stage 1 domain | **Math** (OR1/DAPO/DeepScaler) | Unchanged — same claim as the 4070 plan, same team-facing collision constraint (§7). |
 | Stage 2 domain | **Simulation** (CodeI/O) | Fixed by Tommy for everyone. |
-| Model | `Qwen/Qwen2.5-7B` **base** (not Instruct), pinned revision **discovered in Phase 0**, not guessed | 7B is Tommy's stated floor. Base, not Instruct, because (a) every prior run in this project is base, and mixing chat-template formatting into the numeric-reward pipeline is a new failure surface with 11 days on the clock, (b) "expect low accuracy" reads as expecting base-model-style struggle, not instruction-following. **Still an open team question** (carried at the cheaper default, same as the 4070 plan logged it) — flagged again in §8. |
+| Model | `Qwen/Qwen2.5-7B` **base** (not Instruct), pinned revision **discovered in Phase 0**, not guessed | 7B is Tommy's stated floor. Kept Base over Instruct even though the WIN4070 track already switched to Instruct (v1-v9) with real supporting evidence — the working hypothesis is that 7B's much larger capacity makes the format-following problem that pushed the 0.5B track to Instruct far less likely to bite here. **Explicitly unverified** — Phase 0's sparse-reward preflight (tightened, §1.4) is the first real check; if it shows persistent boxed-format failure on the base model, switch to `Qwen2.5-7B-Instruct` and log the deviation, don't push through. |
+| Dataset loading & fields | **Confirmed contract, not discovered**: `data_source` domain field, `prompt` is a chat-message list rendered via `tokenizer.apply_chat_template`, `reward_model.ground_truth` is the (nested) answer field; loaded per-domain-file (`train/math__combined_54.4k.parquet`, `train/simulation__codeio_3.7k.parquet`) because the release has heterogeneous parquet schemas `datasets==5.0.0` can't unify | An earlier draft of this document planned a heuristic schema-discovery Phase 0 (candidate field names, substring matching) because nothing about the real schema was known yet. It is now known — the WIN4070 track completed real Phase 0 discovery and committed the results (`data/guru_schema_audit.json`). Re-verifying a known contract (Phase 0 still re-runs the token-length audit and gates on this model's own tokenizer) is not the same task as discovering an unknown one, and this document now does the former. |
+| Reward | Vendored `reasoning360_reward_score` verifier (`vendor/`, upstream LLM360/Reasoning360, pinned by the WIN4070 track), not a hand-rolled regex extractor | Same reasoning as the dataset-loading row: an earlier draft guessed at boxed/JSON-output parsing because no verifier was known to exist. One does, and it's presumably what every other team member's Simulation score is graded with — using anything else breaks cross-run comparability on top of being strictly worse-informed. Stage A uses `exact_plus_boxed_format_0.1` (exact score + 0.1 boxed-format bonus); Stage B uses `exact` — see §1.4. |
+| GRPO group size (`num_generations`) | **8**, both stages | Merged decision, §1.4 — matches the WIN4070 v9 fix for the zero-variance problem found on this exact Math population. Superseded an earlier group-4 default chosen only for 7B memory headroom, before the v9 finding was known to this document. |
+| Stage-A completion length | **1280 tokens** (up from 512) | Matches v9 — avoids truncating multi-step Math reasoning before a boxed answer is emitted. Stage-B stays at 384 (CodeIO's structured-JSON answers are short). |
 | Fine-tuning method | **LoRA** (PEFT), base frozen in bf16 | Full-parameter fine-tuning of a 7B model does not fit a single Colab GPU under this project's own precision constraint (fp32 master weights, required because bf16-param updates at the LRs this project uses round to zero — proven on the 0.5B run, see `WIN4070_RUN_ANALYSIS.md`). fp32 master weights alone would be ~28 GB before anything else. LoRA sidesteps the rounding problem structurally: the frozen base's dtype no longer matters because it is never updated, and the trainable LoRA matrices are a few tens of millions of parameters, cheap to keep at fp32 precision regardless of GPU tier. |
 | LoRA adapter dtype | **float32**, base in **bfloat16** | Same rounding-hazard discipline as the 4070 plan, applied to the part that actually receives gradient updates (the base doesn't). Verified empirically anyway — via a LoRA-aware subclass of `eaaj-pilot`'s `UpdateEffectivenessSentinel` that samples **only trainable (LoRA) parameters**: the parent samples every parameter, which under LoRA dilutes the relative-change measurement with 7B frozen weights that never move by construction, and could make the step-25 kill-gate misread a healthy run (or mask a dead adapter). The parent's healthy/broken reference scales were measured on full-parameter 0.5B runs and do NOT transfer; Phase 0's smoke test records the first healthy-LoRA reference value. |
 | LoRA config | rank **16**, alpha **32**, dropout **0.05**, target modules `q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj` | Standard full-attention+MLP LoRA target set for the Qwen2 architecture family. **First-pass default, not validated by any run yet** — Phase 0's smoke test is the first time this project will have trained a LoRA adapter at all, so this is stated as a starting point subject to revision, not a measured choice like the 0.5B dose map was. |
-| GPU tier | **L4 (24 GB) first, escalate to A100 (40 GB) if Gate C0 fails** | Same escalate-don't-shrink philosophy as the 4070 plan's GATE 0a, applied to GPU tier instead of batch size — L4 is the cheaper compute-unit draw, so it is the default, not the ceiling. |
+| GPU tier | **L4 (24 GB) tried first, but A100 (40 GB) is the realistic default expectation** | Same escalate-don't-shrink philosophy as the 4070 plan's GATE 0a, applied to GPU tier instead of batch size — L4 is the cheaper compute-unit draw, so it is tried first. But after the group-size merge (§1.4) this now stacks TWO independent memory-pressure increases (7B params instead of 0.5B, AND group 8 instead of group 4) — the group-8-alone arm already needed ≥24 GB at 0.5B scale, so do not be surprised when Gate C0 escalates; budget Colab time assuming A100 from the start. |
 | Quantization | **None** (plain bf16 base) by default; NF4 4-bit (bitsandbytes, already pinned in `requirements.txt`) as an explicit fallback if Gate C0 fails even on A100 | Keeps the numerics simple under time pressure — quantization is a second failure surface (calibration, dequantization error interacting with the effective-rank/dormant-fraction metrics) that this project has never exercised. Escalate to it only if plain bf16 genuinely does not fit, and if so, re-run the ckpt-0 Q measurement sanity check (§3, Phase 2b) since quantization can distort activation statistics. |
 | Stage-1 length | **200 updates** (unchanged target), checkpoints at **0, 100, 200** (three-checkpoint minimum) | Tommy's original compute concession — "start with three: zero, middle, last" — which the 4070 plan exceeded because it was free to. It is not free here (§0, §1.3). Phase 0's measured s/update replaces this estimate before Phase 1 starts, exactly as in the 4070 plan, and if it implies the schedule will not fit before 2026-08-23, cut in the priority order given in §8. |
 | Stage-1 checkpoints adapted from | **0, 100, 200** (all three saved checkpoints) | ckpt-0 **is** the stage-2-alone baseline, not a separate run — same convention as the 4070 plan. |
@@ -67,7 +86,7 @@ not move.
 | Stage-2 seeds | **1 (seed 42) committed; seeds 43/44 are a stretch goal**, not a default | Inverts the 4070 plan's stance (§0, §1.3). A single seed cannot support a defensible correlation claim — this is stated as a known limitation of the committed scope, not smoothed over. If Phase 0 timing leaves headroom before the deadline, add seeds in the same two-pass structure the 4070 plan used. |
 | Activation-metric probe layers | **[5, 14, 26]** (of 28 decoder blocks) | Rescaled from the 0.5B plan's `[4, 12, 22]` (of 24 blocks) to the same relative depths (~18%/50%/93%) rather than reusing the literal indices, which would sit at different relative depths in a deeper network. |
 | Activation-metric probe size | **4096 prompts**, not 2048 | Qwen2.5-7B's hidden dimension is **3584**, not 896. The 0.5B plan's own reasoning (§1, "hidden dim is 896, so a 512-prompt probe makes effective-rank magnitudes n-dependent") applies again one level up: a 2048-prompt probe would itself sample-truncate a 3584-dimensional activation matrix, which is exactly the failure mode that reasoning warned against. 4096 keeps `n_probe > hidden_dim` with margin. |
-| Activation-metric probe source | Frozen at Phase 0 in `exp2_splits.json`: stage-B pool rows disjoint from stage-B train AND eval, topped up from held-out stage-A rows if the CodeI/O pool is too small (per-source counts recorded) | The 300-question eval set is far too small to substitute (n < hidden dim), and probe membership must be committed before any training so every checkpoint is measured on identical prompts. The cross-domain top-up, if triggered, is a logged property of the probe — same pattern as eaaj-pilot's probe superset topping up from held-out GSM8K train. |
+| Activation-metric probe source | Frozen at Phase 0 in `data/exp2_colab_splits.json`: stage-B pool rows disjoint from stage-B train AND eval, topped up from held-out stage-A rows if the CodeI/O pool is too small (per-source counts recorded) | The 300-question eval set is far too small to substitute (n < hidden dim), and probe membership must be committed before any training so every checkpoint is measured on identical prompts. The cross-domain top-up, if triggered, is a logged property of the probe — same pattern as eaaj-pilot's probe superset topping up from held-out GSM8K train. |
 | ckpt-0 identity gate | **Dropped as a cross-run check; kept as a within-run sanity check** | The 4070 plan's ckpt-0 gate compares against a *committed pilot reference value* from the 0.5B model — that value is not comparable to a 7B model's effective rank (different hidden dim, different architecture instance) and reusing it would be a category error. Here the gate instead re-measures ckpt-0 twice (once right after Phase 1 starts, once during Phase 2b) and requires the two measurements to match — catches a measurement-contract drift (e.g. a stray dtype or layer-indexing bug) without pretending cross-model comparability that doesn't exist. |
 | KL β | **0.0** | Unchanged from every prior run in this project. |
 
@@ -113,6 +132,37 @@ checkpoints, presumably one seed) is the floor that was always sufficient to ans
 question; this document keeps that floor as the default and makes expansion conditional and
 explicit rather than assumed.
 
+### 1.4 Merging the group-size fix into this run
+
+`FINDING_GROUP_SIZE_REWARD_VARIANCE.md` (WIN4070 track, 2026-08-05) measured, on 8 frozen Math
+prompts at group size 3 vs 8: only 1/8 groups had any within-group reward variance at group 3,
+vs 4/8 at group 8 — but only 1/8 → 2/8 of that improvement was genuine exact-correctness signal;
+the rest was the 0.1 boxed-format shaping term catching formatting failures that appear more
+often as a pure sampling side effect of drawing more completions. The completed v8 Stage-A run
+(group 3) corroborates this directly: 52 of 110 updates (47%) had zero within-group reward
+variance in every sampled prompt group, and on every one of those updates `grad_norm` was
+exactly 0.0 — nearly half the run did no optimization at all. Group 8 needs ≥24 GB and OOMs on
+the 8 GB 4070 (confirmed, not projected — the group-8 smoke test's backward pass failed there).
+
+This document's original (pre-merge) default was `num_generations=4`, chosen only to keep 7B's
+memory footprint down on Colab — before this document's own author knew about the v9 finding
+above. Once merged, staying at group 4 would mean deliberately reintroducing a failure mode
+already measured and documented on this exact Math population, for a reason (memory
+conservatism) that Colab's larger GPUs make unnecessary. **This document therefore adopts
+`num_generations=8` for both stages**, matching v9's geometry exactly (`per_device_train_batch_
+size=8`, `gradient_accumulation_steps=8`, `max_completion_length=1280` for Stage A) rather than
+re-deriving new numbers, since v9's choices are the best available prior on this exact question.
+
+**What does NOT carry over from v9 unchanged:** v9 is full-parameter fine-tuning on a 0.5B
+model; this run is LoRA on a 7B model (§1.2, §8 item 2) — group size is a GRPO-signal property
+of the *data and reward*, which is shared, but the memory/throughput consequences of group 8
+are not the same across the two runs, hence Gate C0 re-measuring from scratch rather than
+assuming v9's OOM boundary transfers. **The sparse-reward preflight gate is also tightened to
+match v9's**, not the original (weaker) 4070 plan's — see Phase 0 step 8 below and
+`FINDING_GROUP_SIZE_REWARD_VARIANCE.md` §9's note that v8's gate ("STOP iff every group is
+dead") was satisfied by a single variable group out of eight, three minutes before a run that
+burned 3h38m mostly doing nothing.
+
 ---
 
 ## 2. Pre-registered outcomes (fixed before any run)
@@ -149,25 +199,34 @@ Run in order. **A gate that says STOP means stop and report — do not tune arou
 Nothing here trains anything beyond a 2-update smoke test. Everything here is a discovery step
 whose output is committed.
 
-1. **Schema audit.** Identical to the 4070 plan's Phase 0 step 1 — download
-   `LLM360/guru-RL-92k`, do not assume column names, write `data/guru_schema_audit.json`.
-   Model choice does not change the dataset, so this step and its output are reusable verbatim
-   if the 4070 run's Phase 0 has already produced it — check before re-downloading.
-2. **Subset filtering** into stage 1 (Math: OR1/DAPO/DeepScaler) and stage 2 (Simulation:
-   CodeI/O), counts recorded in the audit file. Same as the 4070 plan.
-3. **Answer-format determination**, written into the audit file. The reward function
-   (`experiment 2/src/guru_reward.py`) ships with a best-effort implementation for both the
-   boxed-numeric convention typical of curated math RL sets and a normalized-string/structured
-   match for CodeI/O-style input/output prediction, **selected and parameterized by what this
-   step actually finds** — not assumed. If the discovered format doesn't match either shipped
-   extractor, extend `guru_reward.py`; do not force a mismatch through the existing regex.
+1. **Schema/reward contract — re-verify, not re-discover.** `data/guru_schema_audit.json`
+   (WIN4070 track, committed) already confirms the domain field (`data_source`), the prompt
+   field (chat-message list), the nested answer field (`reward_model.ground_truth`), the two
+   data files (`train/math__combined_54.4k.parquet`, `train/simulation__codeio_3.7k.parquet`),
+   and the answer/verifier contract for both domains. `src/guru_data.py` and `src/guru_reward.py`
+   are built directly against this confirmed contract (§1, "Dataset loading & fields" /
+   "Reward" rows) — this step re-runs the loader and spot-checks a handful of decoded rows
+   against the committed audit rather than rediscovering the schema from a heuristic guess.
+2. **Subset filtering** into stage 1 (Math: `math__deepscaler_preview` +
+   `math__merged_deduped_dapo_or1_dataset`) and stage 2 (Simulation: `simulation__codeio`),
+   counts recorded and compared against the confirmed audit's counts.
+3. **Reward wiring check.** Confirm `guru_reward.select_reward_fn("exact_plus_boxed_format_0.1")`
+   (Stage A) and `select_reward_fn("exact")` (Stage B) score a handful of real decoded rows as
+   expected — this is a sanity check on the vendored-verifier wrapper (`src/guru_reward.py`),
+   not a discovery step; the verifier itself is pinned, tested code (`vendor/
+   reasoning360_reward_score`, upstream revision in `data/guru_schema_audit.json`).
 4. **Token-length audit**, under the **Qwen2.5-7B tokenizer** (not 0.5B's — different
-   vocabulary/merges can shift token counts). Same **GATE 0a — STOP if stage-2 p95 prompt
-   length > 1024 tokens**, same consequence (escalate `max_prompt_length` / GPU tier rather
-   than shrinking until it fits).
+   vocabulary/merges can shift token counts, though Qwen2.5 sizes typically share one tokenizer,
+   so this is expected to reproduce the confirmed `data/token_length_audit.json` numbers almost
+   exactly, not discover new ones). Same **GATE 0a — STOP if stage-2 p95 prompt length > 1024
+   tokens**; the confirmed audit already found stage-B max_prompt_tokens=640, comfortably under
+   the gate, so this is expected to PASS, not a live risk the way it was in the original 4070
+   plan before that audit existed.
 5. **Gate C0 — GPU memory calibration (new in this document).** Load the base model in bf16 +
-   LoRA on the default tier (L4), run the 2-update smoke test at the provisional batch/
-   generation-count defaults in `exp2_colab_config.json`, and record peak allocated memory.
+   LoRA on the default tier (L4), run the 2-update smoke test at the **real** training geometry
+   (`num_generations=8`, `per_device_train_batch_size=8`, `gradient_accumulation_steps=8`,
+   `max_completion_length=1280` for Stage A — §1.4, not a cheaper stand-in), and record peak
+   allocated memory.
    - **PASS** if peak memory leaves ≥15% headroom on L4 → continue on L4.
    - **ESCALATE to A100** if L4 OOMs or leaves <15% headroom — do not shrink
      `num_generations`/batch below the config defaults to force an L4 fit; a smaller effective
@@ -176,23 +235,37 @@ whose output is committed.
    - **STOP and flag** if it does not fit on A100 either at the config defaults — this is the
      trigger for the NF4-quantization fallback (§1, Quantization row), which needs a one-line
      deviation note before use, not a silent switch.
-6. **Freeze splits.** Same as the 4070 plan: `data/exp2_splits.json`, seeded, committed.
-7. **Smoke.** 2 updates on stage 1 and 2 updates on stage 2, in a throwaway dir. Verify:
-   LoRA adapter checkpoint written (not full model — confirm `save_pretrained` on the PEFT
-   wrapper only serializes the adapter), dashboard row written, `UpdateEffectivenessSentinel`
-   fires and shows nonzero relative change (this is the first real check that 2e-5 on a LoRA
-   adapter is not itself rounding to zero — do not skip it), GPU telemetry captured, loss and
-   grad norm finite.
-8. **Sparse-reward preflight** on both stages — same **GATE 0b — STOP** condition as the 4070
-   plan (constant reward across every sampled group). Do not add shaping reward, do not switch
-   models; this reuses `eaaj-pilot/src/preflight.py` unmodified.
+6. **Freeze splits.** `data/exp2_colab_splits.json` (deliberately a distinct filename from the
+   4070 track's `exp2_4070_splits.json`/`exp2_4070_instruct_v9_splits.json` — this run's
+   tokenizer, model, and group size all differ, so a fresh, separately-named freeze is correct,
+   not an accidental duplicate), seeded, committed.
+7. **Smoke.** 2 updates on stage 1 and 2 updates on stage 2, in a throwaway dir, **at the real
+   group-8 geometry** (§1.4 — this is also the first time group 8 will actually run to
+   completion anywhere in this project; the 4070 track's group-8 attempt OOM'd before finishing
+   even the smoke). Verify: LoRA adapter checkpoint written (not full model — confirm
+   `save_pretrained` on the PEFT wrapper only serializes the adapter), dashboard row written,
+   `UpdateEffectivenessSentinel` fires and shows nonzero relative change (this is the first real
+   check that 2e-5 on a LoRA adapter is not itself rounding to zero — do not skip it), GPU
+   telemetry captured, loss and grad norm finite.
+8. **Sparse-reward preflight** on both stages — **tightened GATE 0b**, matching v9's fix rather
+   than the original 4070 plan's weaker version (§1.4): 16 frozen Stage-A prompts × 8
+   generations (8 frozen Stage-B prompts × 8 generations), **STOP unless ≥2 of the sampled
+   groups have variable COMBINED registered reward**, with exact-channel variance recorded and
+   reported *separately* from the combined (format-shaped) channel — `guru_sparse_reward_
+   preflight` in `src/pipeline.py` implements this directly; it does not reuse `eaaj-pilot/src/
+   preflight.py` (that module's ≥1-variable-group threshold and hardcoded numeric reward are
+   both wrong for this run — `FINDING_GROUP_SIZE_REWARD_VARIANCE.md` is the reason the
+   threshold changed). Do not add shaping reward beyond the registered `exact_plus_boxed_format_
+   0.1` mode if this fires, do not switch models pre-emptively — switch to Instruct (§1, Model
+   row) only if the failure mode is specifically format non-compliance, and log it either way.
 
 Phase 0 also produces the **real** per-update timing and peak-memory numbers, which replace
 every estimate in §4 and directly decide the de-scope question in §8.
 
 ### Phase 1 — stage 1 GRPO (Math), LoRA
 
-- 200 updates, LoRA lr 2e-5, β=0, checkpoints (adapter-only) at 0/100/200.
+- 200 updates, LoRA lr 2e-5, β=0, **group size 8** (§1.4), reward `exact_plus_boxed_format_0.1`,
+  checkpoints (adapter-only) at 0/100/200.
 - Same dashboard row and same safety stops (5 consecutive zero-variance updates; 5 consecutive
   >10% clipping) as the 4070 plan, reused unmodified from `eaaj-pilot/src/callbacks.py`. The
   update-25 kill-gate uses the **LoRA-aware sentinel subclass** (trainable-parameters-only
@@ -253,7 +326,7 @@ reward curve per stage-1 checkpoint, ckpt-0 as reference line).
 
 | Phase | Notebook | Backing code |
 |---|---|---|
-| 0 (audit, GATE 0a/0b, Gate C0, smoke) | `colab/00_setup_schema_audit.ipynb` | `src/guru_data.py` (`audit_schema`, `token_length_audit`, `build_exp2_splits`), `src/pipeline.py` (`gate_c0_memory_probe`, `guru_sparse_reward_preflight`) |
+| 0 (audit, GATE 0a/0b, Gate C0, smoke) | `colab/00_setup_schema_audit.ipynb` | `src/guru_data.py` (`load_all_records`, `build_exp2_splits`, `dataset_rows_for`), `src/pipeline.py` (`gate_c0_memory_probe`, `guru_sparse_reward_preflight`) |
 | 1 (stage-A GRPO) | `colab/01_stage_a_math_grpo.ipynb` | `src/pipeline.py` (`run_stage_a_grpo`, `build_peft_model`) |
 | 2 (`T_t`) + 2b (Q metrics) | `colab/02_transfer_T_and_qmetrics.ipynb` | `src/pipeline.py` (`run_transfer_T`, `measure_checkpoint_q`) |
 | 3 (stage-B grid) | `colab/03_stage_b_simulation_adaptation.ipynb` | `src/pipeline.py` (`run_stage_b_adaptation`) |
@@ -347,9 +420,10 @@ budget, and baseline all defined above and kept attached to every number reporte
 ## 6. Commit protocol
 
 - Run artifacts saved to **Google Drive** under
-  `eaaj-pilot/outputs/exp2_colab_guru_math7b_<hash>/` (mirrors the 4070 plan's naming so the
-  two runs are visually distinguishable by the `_cuda_` vs `_colab_` and `math_` vs
-  `math7b_` infixes, not just by reading the config).
+  `eaaj-pilot/outputs/exp2_colab_guru_math7b_group8_<hash>/` (matches
+  `exp2_colab_config.json`'s `experiment` field; mirrors the 4070 plan's naming so all three
+  runs — 4070 group-3, 4070/Colab group-8-only, and this merged 7B+group-8 run — stay
+  distinguishable by directory name alone, not just by reading each config).
 - LoRA checkpoints saved as PEFT adapters (`save_pretrained` on the wrapped model), **not**
   merged into the base — keeps checkpoints small and keeps the frozen base identical and
   reloadable across cells.
@@ -402,8 +476,10 @@ budget, and baseline all defined above and kept attached to every number reporte
    an actual measured dose map. If Phase 1 nulls or collapses uninformatively, the first
    question is whether 2e-5 was simply the wrong order of magnitude, not whether the task pair
    is wrong.
-4. **Base vs Instruct**, again — carried forward at the cheaper default (Base), same open
-   status as the 4070 plan.
+4. **Base vs Instruct.** Kept Base for this run (§1, Model row) even though the WIN4070 track
+   already moved to Instruct (v1-v9) with real supporting evidence at 0.5B scale — the working
+   assumption is that 7B's capacity makes format-following far less of a bottleneck, but that is
+   a hypothesis, not a measured fact yet. Phase 0's preflight is the first real check.
 5. **Committed scope reduction (3 checkpoints, 1 seed) vs the 4070 run's superset (5
    checkpoints, 3 seeds).** This is the owner's call, made for time/budget reasons stated in
    §1.3, not a claim that three points and one seed are sufficient evidence — they are the
@@ -411,9 +487,17 @@ budget, and baseline all defined above and kept attached to every number reporte
    the sibling 4070 run's.
 6. **Compute-unit budget ownership for this specific run.** `CLAUDE.md`'s ~300-unit figure
    covers the primary GSM8K/SVAMP pilot (`eaaj-pilot/`); this exp2-on-Colab run was not part of
-   that allocation. Before burning A100 hours on a 7B model, confirm whether this draws from
-   the same pool, a separate one, or needs explicit sign-off — this is a real risk of blocking
-   the primary pilot's remaining Colab work if unresolved.
+   that allocation, and now overlaps in purpose with the WIN4070 track's own group-8 Colab/L4
+   ask (§0, §1.4) — confirm whether the two draw from the same budget pool before burning A100
+   hours; this is a real risk of blocking the primary pilot's remaining Colab work if unresolved.
 7. **This run is not a same-dose comparison to exp1.6/exp1.7 or to `EXPERIMENT_2_PLAN.md`'s
    4070 run** (§1, §7) — worth surfacing early so nobody in the team's later synthesis
    accidentally plots this run's numbers on the same dose axis as those.
+8. **The tightened GATE 0b threshold (≥2/16 groups with variable COMBINED reward) is looser
+   than the exact-channel-only gate `FINDING_GROUP_SIZE_REWARD_VARIANCE.md` §9 argues is the
+   stronger instrument** ("a gate defined on the exact channel would be the stronger
+   instrument" — that finding's own group-8 arm passes the combined gate at 7/16 but only 3/16
+   on the exact channel). This document uses the combined-channel gate to match v9's precedent,
+   not because it has been shown sufficient — both channels are recorded and reported either way
+   (§1.4, Phase 0 step 8), so this is a reporting choice now, not a blind spot, but the team
+   should decide whether the stricter exact-channel gate should become the standard.

@@ -1,170 +1,128 @@
-"""Unit tests for exp2's domain-dispatched reward/extraction (Phase 0 step 3
-"the reward function is written from the discovered format, not a guess" —
-these tests fix the behavior of the *current* best-effort extractors so a
-future edit against real GURU examples has a regression baseline to edit
-against, not a claim that the format is already verified)."""
-from src.guru_reward import (answers_match_numeric, code_output_exact_reward,
-                             extract_boxed, extract_gold_numeric,
-                             extract_pred_numeric, extract_predicted_output,
-                             normalize_code_output, numeric_exact_reward,
-                             select_eval_fns, select_reward_fn)
+"""Unit tests for the thin GURU reward wrapper (src/guru_reward.py).
+
+These exercise the REAL vendored verifier (vendor/reasoning360_reward_score),
+not a hand-rolled approximation — the point of switching to the vendored
+code was to stop guessing at the answer format, so these tests should fail
+loudly if the wrapper's plumbing (dict-vs-float unwrapping, exception
+fallback, data_source routing) is wrong, not re-implement the verifier's own
+correctness (that's Reasoning360's test surface, not ours).
+"""
+from src.guru_reward import (boxed_format_score, exact_correct, guru_reward,
+                             guru_reward_boxed_01, score_completion,
+                             select_reward_fn)
+
+MATH_SOURCE = "math__deepscaler_preview"
+SIM_SOURCE = "simulation__codeio"
 
 
-class TestBoxedExtraction:
-    def test_simple_boxed(self):
-        assert extract_boxed(r"work work \boxed{42}") == "42"
+class TestMathScoring:
+    def test_correct_boxed_answer(self):
+        assert score_completion(r"work work \boxed{42}", "42", MATH_SOURCE) == 1.0
+
+    def test_incorrect_boxed_answer(self):
+        assert score_completion(r"work work \boxed{7}", "42", MATH_SOURCE) == 0.0
 
     def test_last_boxed_wins(self):
-        assert extract_boxed(r"\boxed{41} correction \boxed{42}") == "42"
+        assert score_completion(r"\boxed{41} correction \boxed{42}", "42", MATH_SOURCE) == 1.0
 
-    def test_nested_braces(self):
-        assert extract_boxed(r"\boxed{\frac{1}{2}}") == r"\frac{1}{2}"
-
-    def test_no_boxed(self):
-        assert extract_boxed("no box here") is None
-
-    def test_unbalanced_boxed(self):
-        assert extract_boxed(r"\boxed{42") is None
+    def test_no_boxed_answer_scores_zero(self):
+        assert score_completion("I cannot solve this.", "42", MATH_SOURCE) == 0.0
 
 
-class TestPredNumeric:
-    def test_boxed_wins_over_trailing_text(self):
-        assert extract_pred_numeric(r"so \boxed{42} is my answer, see step 3") == 42.0
+class TestSimulationScoring:
+    def test_matching_json_output(self):
+        completion = '```json\n{"output": {"result": 42}}\n```'
+        gold = '"output": {"result": 42}'
+        assert score_completion(completion, gold, SIM_SOURCE) == 1.0
 
-    def test_boxed_with_embedded_number_fallback(self):
-        # non-numeric boxed content falls back to the last number inside the box
-        assert extract_pred_numeric(r"\boxed{x=42}") == 42.0
+    def test_mismatched_json_output(self):
+        completion = '```json\n{"output": {"result": 43}}\n```'
+        gold = '"output": {"result": 42}'
+        assert score_completion(completion, gold, SIM_SOURCE) == 0.0
 
-    def test_hash_convention_when_no_boxed(self):
-        assert extract_pred_numeric("She has 7 apples.\n#### 7") == 7.0
-
-    def test_last_number_fallback(self):
-        assert extract_pred_numeric("3 + 4 = 7. The answer is 7.") == 7.0
-
-    def test_no_number(self):
-        assert extract_pred_numeric("I cannot solve this.") is None
+    def test_malformed_json_scores_zero_not_crash(self):
+        assert score_completion("not json at all {{{", "42", SIM_SOURCE) == 0.0
 
 
-class TestGoldNumeric:
-    def test_bare_float(self):
-        assert extract_gold_numeric(42.0) == 42.0
-
-    def test_bare_int(self):
-        assert extract_gold_numeric(42) == 42.0
-
-    def test_boxed_string(self):
-        assert extract_gold_numeric(r"\boxed{-5}") == -5.0
-
-    def test_plain_numeric_string(self):
-        assert extract_gold_numeric("17") == 17.0
+class TestUnsupportedDataSource:
+    def test_unknown_source_scores_zero(self):
+        # score_completion catches the ValueError and returns 0.0 — a
+        # malformed completion/config must never crash GRPO mid-training.
+        assert score_completion("anything", "42", "table__hitab") == 0.0
 
 
-class TestNumericMatch:
-    def test_exact(self):
-        assert answers_match_numeric(7.0, 7.0)
+class TestBoxedFormatBonus:
+    def test_well_formed_boxed_on_math(self):
+        assert boxed_format_score(r"\boxed{42}", MATH_SOURCE) == 1.0
 
-    def test_int_float_equivalence(self):
-        assert answers_match_numeric(7.0, 7)
+    def test_empty_boxed_scores_zero(self):
+        assert boxed_format_score(r"\boxed{}", MATH_SOURCE) == 0.0
 
-    def test_mismatch(self):
-        assert not answers_match_numeric(7.0, 8.0)
+    def test_no_boxed_scores_zero(self):
+        assert boxed_format_score("42", MATH_SOURCE) == 0.0
 
-    def test_none_never_matches(self):
-        assert not answers_match_numeric(None, 7.0)
-        assert not answers_match_numeric(7.0, None)
-
-    def test_no_relative_slack_on_large_answers(self):
-        assert not answers_match_numeric(10000.5, 10000.0)
+    def test_never_applies_to_non_math(self):
+        assert boxed_format_score(r"\boxed{42}", SIM_SOURCE) == 0.0
 
 
-class TestNumericReward:
-    def test_reward_contract(self):
-        completions = [r"\boxed{42}", "the answer is 43"]
-        answer = [42.0, 42.0]
-        assert numeric_exact_reward(completions=completions, answer=answer) == [1.0, 0.0]
+class TestRewardFunctionContracts:
+    def test_guru_reward_math_batch(self):
+        completions = [r"\boxed{42}", r"\boxed{7}"]
+        r = guru_reward(completions=completions, ground_truth=["42", "42"],
+                        data_source=[MATH_SOURCE, MATH_SOURCE])
+        assert r == [1.0, 0.0]
+
+    def test_guru_reward_no_shaping_on_math(self):
+        # plain guru_reward must NOT add the boxed bonus — that's
+        # guru_reward_boxed_01's job (Stage A only, per reward_mode dispatch)
+        completions = [r"\boxed{7}"]
+        r = guru_reward(completions=completions, ground_truth=["42"], data_source=[MATH_SOURCE])
+        assert r == [0.0]
+
+    def test_guru_reward_boxed_01_adds_bonus_on_wrong_but_formatted(self):
+        completions = [r"\boxed{7}"]
+        r = guru_reward_boxed_01(completions=completions, ground_truth=["42"], data_source=[MATH_SOURCE])
+        assert r == [0.1]  # 0.0 exact + 0.1 format bonus
+
+    def test_guru_reward_boxed_01_on_correct_answer(self):
+        completions = [r"\boxed{42}"]
+        r = guru_reward_boxed_01(completions=completions, ground_truth=["42"], data_source=[MATH_SOURCE])
+        assert r == [1.1]
 
     def test_chat_format_completion(self):
         completions = [[{"role": "assistant", "content": r"\boxed{5}"}]]
-        assert numeric_exact_reward(completions=completions, answer=[5.0]) == [1.0]
+        r = guru_reward(completions=completions, ground_truth=["5"], data_source=[MATH_SOURCE])
+        assert r == [1.0]
+
+    def test_extra_info_defaults_to_empty_dicts(self):
+        # extra_info=None must not crash the zip(..., strict=True)
+        r = guru_reward(completions=[r"\boxed{1}"], ground_truth=["1"], data_source=[MATH_SOURCE])
+        assert r == [1.0]
 
 
-class TestCodeOutputNormalization:
-    def test_strips_whitespace(self):
-        assert normalize_code_output("  42  ") == "42"
+class TestExactCorrect:
+    def test_math_correct(self):
+        assert exact_correct(r"\boxed{9}", "9", MATH_SOURCE) is True
 
-    def test_strips_matching_quotes(self):
-        assert normalize_code_output('"hello"') == "hello"
+    def test_math_incorrect(self):
+        assert exact_correct(r"\boxed{8}", "9", MATH_SOURCE) is False
 
-    def test_case_sensitive(self):
-        assert normalize_code_output("True") != normalize_code_output("true")
-
-    def test_list_literal_canonicalization(self):
-        assert normalize_code_output("[1, 2, 3]") == normalize_code_output("[1,2,3]")
-
-    def test_dict_literal_spacing_canonicalized(self):
-        assert normalize_code_output('{"a": 1}') == normalize_code_output("{'a':1}")
-
-    def test_dict_key_order_not_canonicalized(self):
-        # documented limitation: repr() preserves insertion order, so two
-        # dicts that are equal as objects but differ in key order do NOT
-        # normalize to the same string. Revisit in Phase 0 if the real
-        # CodeI/O verifier needs order-independent dict comparison.
-        a = normalize_code_output('{"a": 1, "b": 2}')
-        b = normalize_code_output('{"b": 2, "a": 1}')
-        assert a != b
-
-    def test_non_literal_passthrough(self):
-        assert normalize_code_output("hello   world") == "hello world"
-
-
-class TestPredictedOutputExtraction:
-    def test_output_marker(self):
-        text = "reasoning here\nOutput: 42"
-        assert extract_predicted_output(text) == "42"
-
-    def test_last_output_marker_wins(self):
-        text = "Output: 41\nwait, recompute\nOutput: 42"
-        assert extract_predicted_output(text) == "42"
-
-    def test_code_fence_fallback(self):
-        text = "```\n[1, 2, 3]\n```"
-        assert extract_predicted_output(text) == "[1, 2, 3]"
-
-    def test_whole_text_fallback(self):
-        assert extract_predicted_output("just 42") == "just 42"
-
-
-class TestCodeOutputReward:
-    def test_exact_match_after_normalization(self):
-        completions = ["Output: [1, 2, 3]"]
-        answer = ["[1,2,3]"]
-        assert code_output_exact_reward(completions=completions, answer=answer) == [1.0]
-
-    def test_mismatch(self):
-        completions = ["Output: 42"]
-        answer = ["43"]
-        assert code_output_exact_reward(completions=completions, answer=answer) == [0.0]
+    def test_simulation_correct(self):
+        completion = '```json\n{"a": 1}\n```'
+        assert exact_correct(completion, '{"a": 1}', SIM_SOURCE) is True
 
 
 class TestDispatch:
-    def test_select_reward_fn_math(self):
-        assert select_reward_fn("Math") is numeric_exact_reward
+    def test_select_reward_fn_exact(self):
+        assert select_reward_fn("exact") is guru_reward
 
-    def test_select_reward_fn_simulation(self):
-        assert select_reward_fn("Simulation") is code_output_exact_reward
+    def test_select_reward_fn_boxed(self):
+        assert select_reward_fn("exact_plus_boxed_format_0.1") is guru_reward_boxed_01
 
     def test_select_reward_fn_unknown_raises(self):
         try:
-            select_reward_fn("Table")
+            select_reward_fn("nonexistent_mode")
         except ValueError:
             pass
         else:
-            raise AssertionError("expected ValueError for an unconfigured domain")
-
-    def test_select_eval_fns_math_roundtrip(self):
-        extract_pred, extract_gold, matches = select_eval_fns("Math")
-        assert matches(extract_pred(r"\boxed{9}"), extract_gold(9.0))
-
-    def test_select_eval_fns_simulation_roundtrip(self):
-        extract_pred, extract_gold, matches = select_eval_fns("Simulation")
-        assert matches(extract_pred("Output: 9"), extract_gold("9"))
+            raise AssertionError("expected ValueError for an unconfigured reward_mode")

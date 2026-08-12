@@ -5,13 +5,20 @@
 # version already recorded in eaaj-pilot's WIN4070 run manifests. peft has
 # NOT been exercised by this project before — its pin is a reasonable recent
 # release, not a validated-by-a-completed-run number like the others; Phase 0
-# smoke test is what validates it.
+# smoke test is what validates it. pyarrow, pylatexenc, antlr4-python3-runtime,
+# and sympy are pinned to load the real GURU parquet files and run the vendored
+# Reasoning360 verifier (src/guru_data.py, src/guru_reward.py) — the first two
+# match experiment 2/requirements_4070.txt exactly (already validated there).
 trl==1.6.0
 transformers==5.13.0
 datasets==5.0.0
 accelerate==1.14.0
 peft==0.15.2
 bitsandbytes==0.49.2
+pyarrow>=21.0.0
+pylatexenc==2.10
+antlr4-python3-runtime==4.11.1
+sympy>=1.13
 pytest==8.4.2
 numpy==2.3.5
 scipy==1.16.3

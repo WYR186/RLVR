@@ -1,11 +1,17 @@
 """Stage-1 (Math) / stage-2 (Simulation) LoRA GRPO pipeline for exp2's Colab
 variant (EXPERIMENT_2_COLAB_PLAN.md).
 
-**Status: reviewed, not yet run against a live GPU or the real GURU
-dataset.** Phase 0's smoke test (2 stage-A updates + 2 stage-B updates, plan
-§3 Phase 0 step 7) is the first real exercise of this code path and exists
-specifically to catch what a read-through cannot — treat every function here
-accordingly until that smoke test passes and is committed.
+**Status: reviewed, not yet run against a live GPU.** Phase 0's smoke test
+(2 stage-A updates + 2 stage-B updates, plan §3 Phase 0 step 7) is the first
+real exercise of this code path and exists specifically to catch what a
+read-through cannot — treat every function here accordingly until that smoke
+test passes and is committed.
+
+Operates on GURU row dicts (`prompt`, `ground_truth`, `data_source`,
+`extra_info` — see `guru_data.py`), matching the confirmed real contract and
+the WIN4070 track's `exp2_4070_data.py`/`exp2_4070_reward.py`, NOT the
+`answer`/`domain` columns an earlier heuristic-discovery version of this
+module assumed.
 
 Reuses two modules from `eaaj-pilot/src` that are dataset-agnostic and have
 no import-time relative-import dependencies: `metrics.py` (activation Q
@@ -21,8 +27,8 @@ about which `src` wins. `ExactAnswerEvalCallback` and everything in
 `preflight.py`/`evaluate.py`/`adaptation.py`'s task-specific glue are NOT
 reused, because they hardcode the GSM8K/SVAMP numeric reward and file names
 (e.g. `svamp_eval_curve.jsonl`) — this module reimplements the small amount
-of generic logic they contain, parameterized by `domain` via
-`guru_reward.select_reward_fn`/`select_eval_fns` instead.
+of generic logic they contain against `guru_reward.py`'s vendored-verifier
+wrapper instead.
 """
 from __future__ import annotations
 
@@ -38,7 +44,7 @@ ALGOVERSE_ROOT = EXP2_ROOT.parent
 EAAJ_PILOT_ROOT = ALGOVERSE_ROOT / "eaaj-pilot"
 DATA_DIR = EXP2_ROOT / "data"
 
-from .guru_reward import select_eval_fns, select_reward_fn  # noqa: E402
+from .guru_reward import exact_correct, select_reward_fn  # noqa: E402
 
 
 def _load_pilot_module(synthetic_name: str, filename: str):
@@ -169,18 +175,27 @@ def unwrap_for_hooks(model):
 
 
 # ---------------------------------------------------------------------------
-# Generic (domain-dispatched) preflight / eval — exp2's analog of
-# eaaj-pilot's preflight.py / evaluate.py, parameterized instead of hardcoded
+# Generic preflight / eval, operating on GURU row dicts
 # ---------------------------------------------------------------------------
 
-def guru_sparse_reward_preflight(model, tokenizer, prompts, golds, domain: str, *,
-                                 num_generations: int = 4, temperature: float = 0.7,
-                                 top_p: float = 1.0, max_new_tokens: int = 512) -> dict:
-    """Same check as eaaj-pilot/src/preflight.py's sparse_reward_preflight,
-    domain-dispatched instead of hardcoded to the numeric GSM8K reward."""
+def guru_sparse_reward_preflight(model, tokenizer, rows: list[dict], reward_mode: str, *,
+                                 num_generations: int, temperature: float = 0.7,
+                                 top_p: float = 1.0, max_new_tokens: int = 512,
+                                 min_variable_groups: int = 2) -> dict:
+    """Sparse-reward preflight, tightened per the v9 finding
+    (`FINDING_GROUP_SIZE_REWARD_VARIANCE.md`): the naive gate ("STOP iff
+    EVERY group has zero variance") let a run through that was 47%
+    zero-gradient updates. This version (a) defaults to requiring
+    `min_variable_groups >= 2` combined-reward-variable groups, not just 1,
+    matching v9's tightened threshold, and (b) tracks the EXACT-correctness
+    channel separately from the combined (possibly format-shaped) reward —
+    the finding's central point is that combined variance can come almost
+    entirely from a shaping term, not from reasoning signal, so reporting
+    only the combined count hides that.
+    """
     import torch
 
-    reward_fn = select_reward_fn(domain)
+    reward_fn = select_reward_fn(reward_mode)
     device = next(model.parameters()).device
     old_padding_side = tokenizer.padding_side
     tokenizer.padding_side = "left"
@@ -188,9 +203,9 @@ def guru_sparse_reward_preflight(model, tokenizer, prompts, golds, domain: str, 
     groups = []
     try:
         with torch.no_grad():
-            for prompt, gold in zip(prompts, golds):
-                enc = tokenizer(prompt, return_tensors="pt", truncation=True,
-                                max_length=512).to(device)
+            for row in rows:
+                enc = tokenizer(row["prompt"], return_tensors="pt", truncation=True,
+                                max_length=2048).to(device)
                 out = model.generate(
                     **enc, do_sample=True, num_return_sequences=num_generations,
                     temperature=temperature, top_p=top_p,
@@ -198,33 +213,45 @@ def guru_sparse_reward_preflight(model, tokenizer, prompts, golds, domain: str, 
                     pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id)
                 gen = out[:, enc["input_ids"].shape[1]:]
                 completions = tokenizer.batch_decode(gen, skip_special_tokens=True)
-                rewards = reward_fn(completions=completions, answer=[gold] * len(completions))
+                gt = [row["ground_truth"]] * len(completions)
+                ds = [row["data_source"]] * len(completions)
+                info = [row.get("extra_info", {})] * len(completions)
+                combined = reward_fn(completions=completions, ground_truth=gt,
+                                     data_source=ds, extra_info=info)
+                exact = [float(exact_correct(c, row["ground_truth"], row["data_source"],
+                                             row.get("extra_info")))
+                        for c in completions]
                 groups.append({
-                    "gold": gold, "rewards": rewards,
-                    "completion_tails": [x[-500:] for x in completions],
+                    "id": row.get("id"), "ground_truth": row["ground_truth"],
+                    "combined_rewards": combined, "exact_rewards": exact,
+                    "combined_variable": len(set(combined)) > 1,
+                    "exact_variable": len(set(exact)) > 1,
+                    "completion_tails": [c[-500:] for c in completions],
                 })
     finally:
         tokenizer.padding_side = old_padding_side
 
-    variable = sum(len(set(g["rewards"])) > 1 for g in groups)
+    n_combined_variable = sum(g["combined_variable"] for g in groups)
+    n_exact_variable = sum(g["exact_variable"] for g in groups)
     return {
-        "domain": domain, "n_prompts": len(groups), "num_generations": num_generations,
-        "n_correct": int(sum(sum(g["rewards"]) for g in groups)),
-        "groups_with_reward_variance": variable,
-        "has_grpo_signal": variable > 0,
+        "reward_mode": reward_mode, "n_prompts": len(groups), "num_generations": num_generations,
+        "n_exact_correct": int(sum(sum(g["exact_rewards"]) for g in groups)),
+        "groups_with_combined_variance": n_combined_variable,
+        "groups_with_exact_variance": n_exact_variable,
+        "min_variable_groups_required": min_variable_groups,
+        "has_grpo_signal": n_combined_variable >= min_variable_groups,
         "groups": groups,
     }
 
 
-def guru_greedy_accuracy(model, tokenizer, prompts, golds, domain: str, *,
+def guru_greedy_accuracy(model, tokenizer, rows: list[dict], *,
                          batch_size: int = 8, max_new_tokens: int = 512,
-                         max_prompt_length: int = 512, return_details: bool = False):
-    """Same shape as eaaj-pilot/src/evaluate.py's exact_answer_accuracy,
-    domain-dispatched. Greedy decode (deterministic eval, independent of the
-    sampling temperature used for GRPO rollouts)."""
+                         max_prompt_length: int = 2048, return_details: bool = False):
+    """Greedy exact-correctness accuracy over `rows` (deterministic eval,
+    independent of the sampling temperature used for GRPO rollouts) using
+    the vendored verifier via `guru_reward.exact_correct`."""
     import torch
 
-    extract_pred, extract_gold, matches = select_eval_fns(domain)
     model.eval()
     device = next(model.parameters()).device
     hits, details = [], []
@@ -232,22 +259,21 @@ def guru_greedy_accuracy(model, tokenizer, prompts, golds, domain: str, *,
     tokenizer.padding_side = "left"
     try:
         with torch.no_grad():
-            for i in range(0, len(prompts), batch_size):
-                batch = prompts[i:i + batch_size]
-                enc = tokenizer(batch, return_tensors="pt", padding=True,
+            for i in range(0, len(rows), batch_size):
+                batch = rows[i:i + batch_size]
+                prompts = [r["prompt"] for r in batch]
+                enc = tokenizer(prompts, return_tensors="pt", padding=True,
                                 truncation=True, max_length=max_prompt_length).to(device)
                 out = model.generate(**enc, max_new_tokens=max_new_tokens, do_sample=False,
                                      pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id)
                 gen = out[:, enc["input_ids"].shape[1]:]
                 texts = tokenizer.batch_decode(gen, skip_special_tokens=True)
-                for text, gold in zip(texts, golds[i:i + batch_size]):
-                    pred = extract_pred(text)
-                    gold_canon = extract_gold(gold)
-                    ok = matches(pred, gold_canon)
+                for row, text in zip(batch, texts):
+                    ok = exact_correct(text, row["ground_truth"], row["data_source"],
+                                       row.get("extra_info"))
                     hits.append(ok)
                     if return_details:
-                        details.append({"completion": text, "pred": pred,
-                                        "gold": gold_canon, "correct": ok})
+                        details.append({"id": row.get("id"), "completion": text, "correct": ok})
     finally:
         tokenizer.padding_side = old_padding_side
     acc = sum(hits) / len(hits) if hits else 0.0
@@ -256,17 +282,16 @@ def guru_greedy_accuracy(model, tokenizer, prompts, golds, domain: str, *,
 
 def _make_eval_callback_class():
     """Builds a `TrainerCallback` subclass for periodic greedy-eval accuracy
-    during GRPO training, domain-dispatched (built on `guru_greedy_accuracy`
-    instead of eaaj-pilot's hardcoded numeric evaluator). Built lazily,
-    inside a function, because `TrainerCallback` is only importable once
-    torch/transformers are available and this module must stay importable
-    without torch (per the module docstring)."""
+    during GRPO training, built lazily inside a function because
+    `TrainerCallback` is only importable once torch/transformers are
+    available and this module must stay importable without torch (per the
+    module docstring)."""
     from transformers import TrainerCallback
 
     class _GuruEvalCallback(TrainerCallback):
-        def __init__(self, prompts, golds, domain, out_path, every: int = 10,
+        def __init__(self, rows, out_path, every: int = 10,
                     batch_size: int = 8, max_new_tokens: int = 512):
-            self.prompts, self.golds, self.domain = prompts, golds, domain
+            self.rows = rows
             self.out_path = Path(out_path)
             self.out_path.parent.mkdir(parents=True, exist_ok=True)
             self.every = every
@@ -277,7 +302,7 @@ def _make_eval_callback_class():
         def _run_eval(self, model, step):
             t0 = time.time()
             acc, details = guru_greedy_accuracy(
-                model, self._tokenizer, self.prompts, self.golds, self.domain,
+                model, self._tokenizer, self.rows,
                 batch_size=self.batch_size, max_new_tokens=self.max_new_tokens,
                 return_details=True)
             row = {"step": step, "accuracy": acc, "n_eval": len(details),
@@ -285,7 +310,7 @@ def _make_eval_callback_class():
                   "eval_seconds": time.time() - t0}
             with self.out_path.open("a") as f:
                 f.write(json.dumps(row, default=str) + "\n")
-            print(f"[eval:{self.domain}] step {step}: accuracy={acc:.4f}")
+            print(f"[eval] step {step}: accuracy={acc:.4f}")
             model.train()
 
         def on_train_begin(self, args, state, control, model=None,
@@ -374,16 +399,22 @@ def fixed_budget_completion(trainer, out_dir, requested_updates: int,
 # ---------------------------------------------------------------------------
 
 def run_stage_a_grpo(model_id: str, peft_cfg: dict, train_dataset, out_dir,
-                     checkpoint_steps: list[int], max_steps: int,
+                     checkpoint_steps: list[int], max_steps: int, reward_mode: str,
                      learning_rate: float, per_device_batch: int, grad_accum: int,
                      num_generations: int, beta: float, temperature: float, top_p: float,
-                     max_prompt_length: int, max_completion_length: int,
+                     max_completion_length: int,
                      revision: str | None = None, seed: int = 42, device: str | None = None,
                      eval_every: int = 25):
-    """Stage-1 (Math) GRPO with LoRA. Saves adapter-only checkpoints at
-    `checkpoint_steps` (`SaveAtSteps.on_step_end` never fires for step 0 —
-    the caller must save ckpt-0 itself, before `trainer.train()`, exactly as
-    the 4070 plan's notebooks do for the base model)."""
+    """Stage-1 (Math) GRPO with LoRA. `train_dataset` is a HF Dataset with
+    columns `prompt`/`ground_truth`/`data_source`/`extra_info` (from
+    `guru_data.to_hf_dataset`) already filtered to `token_filter_max` by
+    `guru_data.build_exp2_splits` — TRL's `GRPOConfig` has no prompt-length
+    field of its own (checked against the installed trl package: only
+    `log_unique_prompts` matches "prompt"), so prompt length is controlled
+    entirely upstream at the data layer, not here. Saves adapter-only
+    checkpoints at `checkpoint_steps` (`SaveAtSteps.on_step_end` never fires
+    for step 0 — the caller must save ckpt-0 itself, before `trainer.train()`,
+    exactly as the 4070 plan's notebooks do for the base model)."""
     import torch
     from transformers import set_seed
     from trl import GRPOConfig, GRPOTrainer
@@ -399,7 +430,7 @@ def run_stage_a_grpo(model_id: str, peft_cfg: dict, train_dataset, out_dir,
     model.save_pretrained(out_dir / "ckpt-0")  # adapter-only; identity at init
 
     t0 = time.time()
-    reward_fn = select_reward_fn("Math")
+    reward_fn = select_reward_fn(reward_mode)
     sentinel_cls = _make_lora_sentinel_class()
     cfg = GRPOConfig(
         output_dir=str(out_dir / "trainer"), seed=seed, max_steps=max_steps,
@@ -425,8 +456,8 @@ def run_stage_a_grpo(model_id: str, peft_cfg: dict, train_dataset, out_dir,
     trainer.train()
 
     completion = fixed_budget_completion(trainer, out_dir, max_steps, out_dir / "safety_stop.json")
-    summary = {"task": "Math", "algo": "grpo", "peft": "lora", **completion,
-              "learning_rate": learning_rate, "seed": seed,
+    summary = {"task": "Math", "algo": "grpo", "peft": "lora", "reward_mode": reward_mode,
+              **completion, "learning_rate": learning_rate, "seed": seed,
               "checkpoint_steps": checkpoint_steps,
               "wall_seconds": time.time() - t0}
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=1))
@@ -443,10 +474,11 @@ def run_stage_a_grpo(model_id: str, peft_cfg: dict, train_dataset, out_dir,
 # ---------------------------------------------------------------------------
 
 def run_transfer_T(model_id: str, peft_cfg: dict, stage_a_out_dir, checkpoint_steps: list[int],
-                   eval_prompts, eval_golds, out_path, revision: str | None = None,
+                   eval_rows: list[dict], out_path, revision: str | None = None,
                    device: str | None = None):
     """Score_B(M_{A,t}) for every checkpoint including ckpt-0 (= M_0, the
-    pure base model — no adapter attached)."""
+    pure base model — no adapter attached). `eval_rows` are the frozen
+    stage-B eval rows."""
     import torch
 
     stage_a_out_dir = Path(stage_a_out_dir)
@@ -458,7 +490,7 @@ def run_transfer_T(model_id: str, peft_cfg: dict, stage_a_out_dir, checkpoint_st
         ckpt_dir = stage_a_out_dir / f"ckpt-{step}"
         model, tokenizer = build_peft_model(
             model_id, peft_cfg, device, revision=revision, adapter_path=ckpt_dir)
-        score = guru_greedy_accuracy(model, tokenizer, eval_prompts, eval_golds, "Simulation")
+        score = guru_greedy_accuracy(model, tokenizer, eval_rows)
         scores[str(step)] = score
         del model, tokenizer
         gc.collect()
@@ -485,10 +517,12 @@ def run_transfer_T(model_id: str, peft_cfg: dict, stage_a_out_dir, checkpoint_st
 # Phase 2b — activation Q metrics
 # ---------------------------------------------------------------------------
 
-def measure_checkpoint_q(model_id: str, peft_cfg: dict, adapter_path, probe_prompts,
+def measure_checkpoint_q(model_id: str, peft_cfg: dict, adapter_path, probe_prompts: list[str],
                          layers: tuple[int, ...], revision: str | None = None,
                          device: str | None = None, batch_size: int = 8,
                          max_length: int = 512) -> dict:
+    """`probe_prompts` are plain prompt strings (no reward needed for
+    activation collection) — callers pass `[r["prompt"] for r in probe_rows]`."""
     import torch
 
     pilot = _pilot()
@@ -512,16 +546,21 @@ def measure_checkpoint_q(model_id: str, peft_cfg: dict, adapter_path, probe_prom
 # ---------------------------------------------------------------------------
 
 def run_stage_b_adaptation(model_id: str, peft_cfg: dict, stage_a_checkpoint,
-                           train_dataset, eval_prompts, eval_golds, out_dir,
-                           budget_updates: int, eval_every: int, learning_rate: float,
+                           train_dataset, eval_rows: list[dict], out_dir,
+                           budget_updates: int, eval_every: int, reward_mode: str,
+                           learning_rate: float,
                            per_device_batch: int, grad_accum: int, num_generations: int,
                            beta: float, temperature: float, top_p: float,
-                           max_prompt_length: int, max_completion_length: int,
+                           max_completion_length: int,
                            revision: str | None = None, seed: int = 42,
                            device: str | None = None):
     """Fixed-budget Simulation-domain GRPO from `stage_a_checkpoint` (a
     stage-A adapter dir, or None for the ckpt-0 / stage-2-alone baseline —
-    trains a fresh LoRA adapter on the base model in that case)."""
+    trains a fresh LoRA adapter on the base model in that case). Both
+    `train_dataset` (HF Dataset) and `eval_rows` (list[dict]) carry
+    `prompt`/`ground_truth`/`data_source`/`extra_info`, already filtered to
+    `token_filter_max` upstream — see `run_stage_a_grpo`'s docstring for why
+    there is no `max_prompt_length` parameter here."""
     import torch
     from transformers import set_seed
     from trl import GRPOConfig, GRPOTrainer
@@ -542,11 +581,11 @@ def run_stage_b_adaptation(model_id: str, peft_cfg: dict, stage_a_checkpoint,
         model_id, peft_cfg, device, revision=revision, adapter_path=stage_a_checkpoint)
 
     t0 = time.time()
-    acc_before = guru_greedy_accuracy(model, tokenizer, eval_prompts, eval_golds, "Simulation")
+    acc_before = guru_greedy_accuracy(model, tokenizer, eval_rows)
     (out_dir / "baseline.json").write_text(json.dumps({"acc_before": acc_before}, indent=1))
     print(f"[adapt] {stage_a_checkpoint}: Simulation accuracy BEFORE = {acc_before:.4f}")
 
-    reward_fn = select_reward_fn("Simulation")
+    reward_fn = select_reward_fn(reward_mode)
     eval_callback_cls = _make_eval_callback_class()
     cfg = GRPOConfig(
         output_dir=str(out_dir / "trainer"), seed=seed, max_steps=budget_updates,
@@ -565,20 +604,20 @@ def run_stage_b_adaptation(model_id: str, peft_cfg: dict, stage_a_checkpoint,
         callbacks=[
             pilot["JsonlDashboardLogger"](out_dir / "dashboard.jsonl"),
             _make_lora_sentinel_class()(out_dir / "update_sentinel.jsonl", every=eval_every),
-            eval_callback_cls(eval_prompts, eval_golds, "Simulation",
-                              out_dir / "stageb_eval_curve.jsonl", every=eval_every),
+            eval_callback_cls(eval_rows, out_dir / "stageb_eval_curve.jsonl", every=eval_every),
             pilot["LocalSafetyCallback"](out_dir / "safety_stop.json"),
         ],
     )
     trainer.train()
     completion = fixed_budget_completion(trainer, out_dir, budget_updates, out_dir / "safety_stop.json")
 
-    acc_after = guru_greedy_accuracy(model, tokenizer, eval_prompts, eval_golds, "Simulation")
+    acc_after = guru_greedy_accuracy(model, tokenizer, eval_rows)
     print(f"[adapt] {stage_a_checkpoint}: Simulation accuracy AFTER = {acc_after:.4f}")
 
     summary = {
         "stage_a_checkpoint": str(stage_a_checkpoint), "task": "Simulation", "algo": "grpo",
-        "peft": "lora", "budget_updates": budget_updates, **completion, "seed": seed,
+        "peft": "lora", "reward_mode": reward_mode, "budget_updates": budget_updates,
+        **completion, "seed": seed,
         "learning_rate": learning_rate, "acc_before": acc_before, "acc_after": acc_after,
         "delta_acc": acc_after - acc_before, "wall_seconds": time.time() - t0,
     }
@@ -596,12 +635,17 @@ def run_stage_b_adaptation(model_id: str, peft_cfg: dict, stage_a_checkpoint,
 # Gate C0 — GPU memory calibration
 # ---------------------------------------------------------------------------
 
-def gate_c0_memory_probe(model_id: str, peft_cfg: dict, smoke_dataset,
-                         device: str = "cuda", revision: str | None = None,
-                         min_headroom_pct: float = 15.0) -> dict:
-    """2-update smoke run on `smoke_dataset`, reports peak allocated memory
-    vs. total device memory. Plan §3 Gate C0: PASS on L4 if headroom >=15%,
-    else escalate to A100 rather than shrinking batch/generation count below
+def gate_c0_memory_probe(model_id: str, peft_cfg: dict, smoke_dataset, reward_mode: str,
+                         num_generations: int, per_device_batch: int, grad_accum: int,
+                         max_completion_length: int, device: str = "cuda",
+                         revision: str | None = None, min_headroom_pct: float = 15.0,
+                         learning_rate: float = 2e-5) -> dict:
+    """2-update smoke run on `smoke_dataset` AT THE SAME GEOMETRY the real
+    run will use (num_generations/batch/grad_accum/completion length all
+    passed in, not hardcoded) — the point of this gate is to measure whether
+    the *actual* recipe fits, not a cheaper stand-in. Reports peak allocated
+    memory vs. total device memory. Plan §3 Gate C0: PASS on L4 if headroom
+    >=15%, else escalate to A100 rather than shrinking the geometry below
     the config defaults."""
     import torch
     from trl import GRPOConfig, GRPOTrainer
@@ -610,11 +654,13 @@ def gate_c0_memory_probe(model_id: str, peft_cfg: dict, smoke_dataset,
         raise RuntimeError("Gate C0 requires a CUDA device")
     torch.cuda.reset_peak_memory_stats()
     model, tokenizer = build_peft_model(model_id, peft_cfg, device, revision=revision)
-    reward_fn = select_reward_fn("Math")
+    reward_fn = select_reward_fn(reward_mode)
     cfg = GRPOConfig(
         output_dir="/tmp/exp2_gate_c0_smoke", seed=42, max_steps=2,
-        learning_rate=2e-5, per_device_train_batch_size=2, gradient_accumulation_steps=2,
-        num_generations=4, beta=0.0, bf16=True, optim="paged_adamw_8bit",
+        learning_rate=learning_rate, per_device_train_batch_size=per_device_batch,
+        gradient_accumulation_steps=grad_accum, num_generations=num_generations,
+        beta=0.0, max_completion_length=max_completion_length,
+        bf16=True, optim="paged_adamw_8bit",
         gradient_checkpointing=True, gradient_checkpointing_kwargs={"use_reentrant": False},
         logging_steps=1, save_strategy="no", report_to="none",
     )
@@ -635,4 +681,6 @@ def gate_c0_memory_probe(model_id: str, peft_cfg: dict, smoke_dataset,
         "total_device_gib": total_bytes / (1024 ** 3),
         "headroom_pct": headroom_pct,
         "gate_pass": headroom_pct >= min_headroom_pct,
+        "geometry": {"num_generations": num_generations, "per_device_batch": per_device_batch,
+                    "grad_accum": grad_accum, "max_completion_length": max_completion_length},
     }

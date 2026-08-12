@@ -1,276 +1,242 @@
-"""GURU (`LLM360/guru-RL-92k`) schema discovery, subset filtering, and frozen
-splits for exp2 (Math -> Simulation).
+"""GURU (`LLM360/guru-RL-92k`) loading for exp2's Colab variant, using the
+**confirmed** contract rather than heuristic discovery.
 
-Phase 0 rule (EXPERIMENT_2_PLAN.md / EXPERIMENT_2_COLAB_PLAN.md, both §3 Phase
-0 step 1): do NOT assume column names. Every function here that touches the
-raw dataset schema either discovers a field or requires the caller to have
-already discovered and confirmed it — nothing here hardcodes a guessed field
-name as if it were verified.
-
-`audit_schema()` proposes a domain-field candidate by heuristic (scans a
-handful of likely column names for values that look like the target subset
-labels) and writes it to `data/guru_schema_audit.json` with
-`domain_field_manually_confirmed: false`. An agent running Phase 0 must open
-that file, verify the candidate against the actual printed examples, and set
-the flag to true before anything downstream trusts it — `filter_stage_subset`
-and `build_exp2_splits` both refuse to run against an unconfirmed audit.
+An earlier version of this module discovered the schema by heuristic
+(candidate field names, substring matching against subset labels) because
+nothing about the real schema was known yet. That discovery has since
+happened for real, on the WIN4070 track (`experiment 2/exp2_4070_data.py`,
+`data/guru_schema_audit.json`, committed 2026-08-04/05) — the repository has
+heterogeneous parquet schemas that `datasets==5.0.0` cannot cast into one
+unified `Dataset`, so domain files must be loaded independently by exact
+path; the prompt field is a chat-message list, not a string, and must go
+through `tokenizer.apply_chat_template`; the answer field is the nested
+`reward_model.ground_truth`, not a flat column. This module is adapted
+directly from that proven loader (same file paths, same dataset revision, same
+stable-ID scheme) so results stay comparable across the team's variants,
+generalized to not require `local_files_only=True` (the WIN4070 machine has a
+warm HF cache; a fresh Colab session does not) and to take the model id from
+the caller's config instead of a hardcoded 0.5B pin.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import random
+from copy import deepcopy
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SEED = 42
+
 GURU_DATASET_ID = "LLM360/guru-RL-92k"
+# Pinned to the revision the WIN4070 track's real audit confirmed and froze
+# splits against (data/guru_schema_audit.json, exp2_4070_splits.json).
+GURU_DATASET_REVISION = "2e2790a962a3c099bfb5ea61389cbf98a5ea439b"
+MATH_FILE = "train/math__combined_54.4k.parquet"
+SIM_FILE = "train/simulation__codeio_3.7k.parquet"
 
-# Stage 1 (Math) and stage 2 (Simulation) subset labels per Tommy's spec.
-# Listed with the spelling variants a real release might use; audit_schema
-# matches case-insensitively and substring-wise against whatever field it
-# tries, so "DeepScaler" also catches "deepscaler_math" etc.
-STAGE_A_SUBSET_NAMES = ("OR1", "DAPO", "DeepScaler")
-STAGE_B_SUBSET_NAMES = ("CodeI/O", "CodeIO", "Code I/O", "codeio")
-
-# Columns worth trying as the domain/subset identifier, in priority order.
-# This is a search list, not a claim that any one of them is correct.
-_CANDIDATE_DOMAIN_FIELDS = (
-    "data_source", "source", "subset", "domain", "task", "dataset",
-    "ability", "category", "task_source",
-)
-
-# Same idea for the prompt-text and gold-answer columns (Phase 0 step 3:
-# answer-format determination). First present column wins as the *candidate*;
-# the manual-confirmation gate covers these too.
-_CANDIDATE_PROMPT_FIELDS = ("prompt", "question", "problem", "query", "input")
-_CANDIDATE_ANSWER_FIELDS = (
-    "answer", "solution", "ground_truth", "gt", "reward_model", "label", "output",
-)
+# math__deepscaler_preview and math__merged_deduped_dapo_or1_dataset are the
+# two data_source values covering OR1+DAPO+DeepScaler — the released parquet
+# merges DAPO and OR1 into one value, so a per-origin split is not
+# recoverable from the released fields (confirmed in guru_schema_audit.json).
+STAGE_A_DATA_SOURCES = ("math__deepscaler_preview", "math__merged_deduped_dapo_or1_dataset")
+STAGE_B_DATA_SOURCES = ("simulation__codeio",)
 
 
-def _load_raw(revision: str | None = None):
-    from datasets import load_dataset
+def _snapshot(dataset_revision: str = GURU_DATASET_REVISION) -> Path:
+    from huggingface_hub import snapshot_download
 
-    kwargs = {"revision": revision} if revision else {}
-    return load_dataset(GURU_DATASET_ID, **kwargs)
-
-
-def _column_looks_like_domain(dataset, column: str, target_names) -> tuple[bool, dict]:
-    """Cheap heuristic: does this column's value set contain something that
-    substring-matches (case-insensitive) any of `target_names`?
-
-    Returns (matched, {name: count}) so the audit file records real evidence,
-    not just a boolean guess.
-    """
-    if column not in dataset.column_names:
-        return False, {}
-    try:
-        values = dataset[column]
-    except Exception:
-        return False, {}
-    counts = {name: 0 for name in target_names}
-    sample_cap = min(len(values), 20000)  # audit is a discovery step, not a full scan
-    for v in values[:sample_cap]:
-        v_str = str(v).lower()
-        for name in target_names:
-            if name.lower().replace("/", "").replace(" ", "") in v_str.replace("/", "").replace(" ", ""):
-                counts[name] += 1
-    matched = any(c > 0 for c in counts.values())
-    return matched, counts
+    return Path(snapshot_download(
+        GURU_DATASET_ID, repo_type="dataset", revision=dataset_revision))
 
 
-def audit_schema(revision: str | None = None) -> dict:
-    """Inspect the real dataset and write data/guru_schema_audit.json.
-
-    Writes, per split: column names, dtypes (via `Dataset.features`), row
-    count. Proposes (does not assert) a domain_field candidate and one full
-    example row per target subset, if a candidate field was found. Idempotent
-    only in the sense that it always re-runs the audit; it never silently
-    reuses a stale file, because the whole point is a fresh discovery pass.
-    """
-    ds = _load_raw(revision=revision)
-
-    split_info = {}
-    domain_field_candidate = None
-    domain_field_evidence = {}
-    prompt_field_candidate = None
-    answer_field_candidate = None
-    examples_by_subset = {}
-
-    all_target_names = STAGE_A_SUBSET_NAMES + STAGE_B_SUBSET_NAMES
-
-    for split_name, split_ds in ds.items():
-        split_info[split_name] = {
-            "n_rows": len(split_ds),
-            "columns": list(split_ds.column_names),
-            "features": {k: str(v) for k, v in split_ds.features.items()},
-        }
-        if prompt_field_candidate is None:
-            prompt_field_candidate = next(
-                (c for c in _CANDIDATE_PROMPT_FIELDS if c in split_ds.column_names), None)
-        if answer_field_candidate is None:
-            answer_field_candidate = next(
-                (c for c in _CANDIDATE_ANSWER_FIELDS if c in split_ds.column_names), None)
-        if domain_field_candidate is None:
-            for col in _CANDIDATE_DOMAIN_FIELDS:
-                matched, counts = _column_looks_like_domain(split_ds, col, all_target_names)
-                if matched:
-                    domain_field_candidate = col
-                    domain_field_evidence = {"split": split_name, "match_counts": counts}
-                    break
-
-    if domain_field_candidate is not None:
-        for split_name, split_ds in ds.items():
-            if domain_field_candidate not in split_ds.column_names:
-                continue
-            for name in all_target_names:
-                if name in examples_by_subset:
-                    continue
-                needle = name.lower().replace("/", "").replace(" ", "")
-                for row in split_ds:
-                    hay = str(row[domain_field_candidate]).lower().replace("/", "").replace(" ", "")
-                    if needle in hay:
-                        examples_by_subset[name] = {"split": split_name, "row": row}
-                        break
-
-    audit = {
-        "dataset_id": GURU_DATASET_ID,
-        "revision_requested": revision,
-        "splits": split_info,
-        "domain_field_candidate": domain_field_candidate,
-        "domain_field_evidence": domain_field_evidence,
-        "prompt_field_candidate": prompt_field_candidate,
-        "answer_field_candidate": answer_field_candidate,
-        "domain_field_manually_confirmed": False,
-        "examples_by_subset": examples_by_subset,
-        "stage_a_subset_names": list(STAGE_A_SUBSET_NAMES),
-        "stage_b_subset_names": list(STAGE_B_SUBSET_NAMES),
-        "note": (
-            "domain/prompt/answer field candidates are heuristic proposals. "
-            "An agent must open this file, inspect examples_by_subset against "
-            "the actual guru-RL-92k documentation/paper, correct any wrong "
-            "candidate, and set domain_field_manually_confirmed=true before "
-            "filter_stage_subset or build_exp2_splits will run. The confirmed "
-            "flag covers all three fields."
-        ),
-    }
-    DATA_DIR.mkdir(exist_ok=True)
-    (DATA_DIR / "guru_schema_audit.json").write_text(json.dumps(audit, indent=1, default=str))
-    return audit
+def _render_prompt(tokenizer, messages: list[dict], prompt_suffix: str | None = None) -> str:
+    """Render a GURU `prompt` column (list of role/content messages) through
+    the target model's own chat template. `prompt_suffix` optionally appends
+    text to the final user turn (e.g. an explicit boxed-answer instruction) —
+    a logged recipe choice, not a silent prompt change."""
+    messages = deepcopy(messages)
+    if prompt_suffix:
+        user_messages = [m for m in messages if m.get("role") == "user"]
+        if not user_messages or not isinstance(user_messages[-1].get("content"), str):
+            raise RuntimeError("prompt suffix requires a final text user message")
+        user_messages[-1]["content"] = (
+            user_messages[-1]["content"].rstrip() + "\n\n" + prompt_suffix.strip())
+    return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
 
-def load_confirmed_audit() -> dict:
-    path = DATA_DIR / "guru_schema_audit.json"
-    if not path.exists():
-        raise RuntimeError("no guru_schema_audit.json — run audit_schema() first (Phase 0 step 1)")
-    audit = json.loads(path.read_text())
-    if not audit.get("domain_field_manually_confirmed"):
-        raise RuntimeError(
-            "guru_schema_audit.json exists but domain_field_manually_confirmed "
-            "is false — inspect examples_by_subset and confirm before filtering "
-            "(Phase 0 step 1: do not assume column names)")
-    if not audit.get("domain_field_candidate"):
-        raise RuntimeError(
-            "no domain_field_candidate was found by the heuristic scan — "
-            "identify the correct field manually, add it to the audit file, "
-            "and set domain_field_manually_confirmed=true")
-    return audit
+def _records(path: Path, tokenizer, prompt_suffix: str | None = None) -> list[dict]:
+    """Load one domain's parquet file into row dicts with a rendered prompt,
+    token count, and the nested ground-truth/data-source fields flattened out."""
+    import pyarrow.parquet as pq
+
+    columns = ["data_source", "prompt", "reward_model", "extra_info"]
+    table = pq.read_table(path, columns=columns)
+    rows = table.to_pylist()
+    texts = [_render_prompt(tokenizer, row["prompt"], prompt_suffix) for row in rows]
+
+    lengths: list[int] = []
+    for offset in range(0, len(texts), 256):
+        encoded = tokenizer(texts[offset:offset + 256], add_special_tokens=False,
+                            truncation=False)["input_ids"]
+        lengths.extend(len(ids) for ids in encoded)
+
+    result = []
+    for row, text, tokens in zip(rows, texts, lengths, strict=True):
+        extra = row["extra_info"] or {}
+        raw_id = f"{row['data_source']}:{extra.get('index')}"
+        stable_id = hashlib.sha256(
+            (raw_id + "\n" + text + "\n" + str(row["reward_model"]["ground_truth"])).encode()
+        ).hexdigest()[:24]
+        result.append({
+            "id": stable_id, "source_id": raw_id, "prompt": text, "prompt_tokens": tokens,
+            "ground_truth": row["reward_model"]["ground_truth"],
+            "data_source": row["data_source"], "extra_info": extra,
+        })
+    if len({r["id"] for r in result}) != len(result):
+        raise RuntimeError(f"stable ID collision in {path}")
+    return result
 
 
-def filter_stage_subset(split_ds, subset_names, domain_field: str | None = None):
-    """Filter a loaded split down to rows whose domain field matches any of
-    `subset_names`. `domain_field` defaults to the confirmed audit's field."""
-    if domain_field is None:
-        domain_field = load_confirmed_audit()["domain_field_candidate"]
-    needles = [n.lower().replace("/", "").replace(" ", "") for n in subset_names]
-
-    def _match(row):
-        hay = str(row[domain_field]).lower().replace("/", "").replace(" ", "")
-        return any(n in hay for n in needles)
-
-    return split_ds.filter(_match)
-
-
-def token_length_audit(prompts: list[str], tokenizer, label: str) -> dict:
-    """p50/p95/p99/max token length of `prompts` under `tokenizer`. Does not
-    write to disk itself — callers combine stage-A/stage-B results into one
-    data/token_length_audit.json (Phase 0 step 4 / GATE 0a)."""
+def token_stats(rows: list[dict]) -> dict:
+    """p50/p95/p99/max of `prompt_tokens` over `rows` (from `_records`) — a
+    re-verification check against the confirmed `data/token_length_audit.json`
+    numbers (GATE 0a), not a discovery step; a different tokenizer (7B vs the
+    0.5B track's) could in principle shift these slightly."""
     import numpy as np
 
-    lengths = [len(tokenizer(p)["input_ids"]) for p in prompts]
-    arr = np.asarray(lengths)
+    lengths = np.asarray([r["prompt_tokens"] for r in rows])
     return {
-        "label": label,
-        "n": len(lengths),
-        "p50": float(np.percentile(arr, 50)),
-        "p95": float(np.percentile(arr, 95)),
-        "p99": float(np.percentile(arr, 99)),
-        "max": int(arr.max()) if len(arr) else 0,
+        "n": len(rows),
+        "p50": float(np.percentile(lengths, 50)) if len(rows) else 0.0,
+        "p95": float(np.percentile(lengths, 95)) if len(rows) else 0.0,
+        "p99": float(np.percentile(lengths, 99)) if len(rows) else 0.0,
+        "max": int(lengths.max()) if len(rows) else 0,
     }
 
 
-def build_exp2_splits(n_train_a: int, n_train_b: int, n_eval_b: int,
-                      n_probe: int = 4096, seed: int = SEED) -> dict:
-    """Freeze stage-A train ids, stage-B train ids, stage-B held-out eval ids,
-    and the frozen Q-metric probe set. Writes data/exp2_splits.json.
+def load_all_records(model_id: str, model_revision: str | None,
+                     dataset_revision: str = GURU_DATASET_REVISION,
+                     stage_a_prompt_suffix: str | None = None) -> tuple[list[dict], list[dict]]:
+    from transformers import AutoTokenizer
 
-    Probe set (plan §1 "probe size" row: n_probe must exceed the 7B model's
-    3584 hidden dim or effective-rank magnitudes are sample-truncated):
-    drawn from stage-B pool rows disjoint from BOTH stage-B train and eval;
-    if the pool can't supply n_probe such rows, topped up from held-out
-    stage-A rows (disjoint from stage-A train). The top-up mixes domains,
-    which is a logged property of the probe — same pattern as eaaj-pilot's
-    probe-superset topping up from held-out GSM8K train (src/data.py) — and
-    the per-source counts are recorded so the write-up can state it.
+    tokenizer = AutoTokenizer.from_pretrained(model_id, revision=model_revision)
+    snapshot = _snapshot(dataset_revision)
+    math_rows = _records(snapshot / MATH_FILE, tokenizer, stage_a_prompt_suffix)
+    sim_rows = _records(snapshot / SIM_FILE, tokenizer)
+    return math_rows, sim_rows
 
-    Requires a confirmed schema audit (raises otherwise) — this function is
-    the one Phase 0 step 5 refers to, and it must not run on an unverified
-    field guess.
+
+def build_exp2_splits(model_id: str, model_revision: str | None,
+                      stage_a_token_limit: int, stage_b_token_limit: int,
+                      stage_b_eval_questions: int, n_probe: int,
+                      stage_a_prompt_suffix: str | None = None,
+                      dataset_revision: str = GURU_DATASET_REVISION,
+                      seed: int = SEED, out_name: str = "exp2_colab_splits.json") -> dict:
+    """Freeze stage-A train ids, stage-B train/eval ids, and the Q-metric
+    probe (drawn from stage-B pool rows disjoint from stage-B train+eval,
+    topped up from stage-A rows if needed — plan §1 "probe size": n_probe
+    must exceed the model's hidden dim). Writes data/<out_name>.
+
+    Idempotent: an existing file is compared against a fresh recomputation
+    and must match exactly, otherwise this raises rather than silently
+    diverging from a previously frozen split (same discipline as
+    `exp2_4070_data.py:ensure_splits`).
     """
-    import random
+    math_rows, sim_rows = load_all_records(
+        model_id, model_revision, dataset_revision, stage_a_prompt_suffix)
+    math_ok = [r for r in math_rows if r["prompt_tokens"] <= stage_a_token_limit]
+    sim_ok = [r for r in sim_rows if r["prompt_tokens"] <= stage_b_token_limit]
 
-    audit = load_confirmed_audit()
-    domain_field = audit["domain_field_candidate"]
-    ds = _load_raw(revision=audit.get("revision_requested"))
+    sim_ids = sorted(r["id"] for r in sim_ok)
     rng = random.Random(seed)
+    eval_ids = sorted(rng.sample(sim_ids, min(stage_b_eval_questions, len(sim_ids))))
+    eval_set = set(eval_ids)
+    remaining_sim_ids = [i for i in sim_ids if i not in eval_set]
 
-    train_split = ds["train"] if "train" in ds else next(iter(ds.values()))
-    stage_a = filter_stage_subset(train_split, STAGE_A_SUBSET_NAMES, domain_field)
-    stage_b = filter_stage_subset(train_split, STAGE_B_SUBSET_NAMES, domain_field)
+    probe_ids = remaining_sim_ids[:n_probe]
+    need = n_probe - len(probe_ids)
+    math_ids_all = sorted(r["id"] for r in math_ok)
+    train_math_pool = math_ids_all  # stage-A train uses ALL eligible math rows
+    probe_math_topup_ids = []
+    if need > 0:
+        # top up from math rows, disjoint from nothing in particular since
+        # stage-A trains on the full eligible pool anyway (no held-out
+        # math slice exists here) — logged as a cross-domain, in-population
+        # top-up, same pattern as the earlier heuristic version.
+        topup_pool = [i for i in math_ids_all if i not in set(probe_ids)]
+        probe_math_topup_ids = rng.sample(topup_pool, min(need, len(topup_pool)))
 
-    a_idx = rng.sample(range(len(stage_a)), min(n_train_a, len(stage_a)))
-    b_perm = list(range(len(stage_b)))
-    rng.shuffle(b_perm)
-    b_eval_idx = b_perm[:n_eval_b]
-    b_train_idx = b_perm[n_eval_b:n_eval_b + n_train_b]
-    probe_b_idx = b_perm[n_eval_b + n_train_b:n_eval_b + n_train_b + n_probe]
-
-    need = n_probe - len(probe_b_idx)
-    a_heldout = sorted(set(range(len(stage_a))) - set(a_idx))
-    probe_a_topup_idx = rng.sample(a_heldout, min(need, len(a_heldout))) if need > 0 else []
+    train_ids = [i for i in remaining_sim_ids if i not in set(probe_ids)]
 
     splits = {
         "seed": seed,
-        "domain_field": domain_field,
-        "prompt_field": audit.get("prompt_field_candidate"),
-        "answer_field": audit.get("answer_field_candidate"),
-        "dataset_revision": audit.get("revision_requested"),
-        "stage_a_subset_names": list(STAGE_A_SUBSET_NAMES),
-        "stage_b_subset_names": list(STAGE_B_SUBSET_NAMES),
-        "stage_a_pool_size": len(stage_a),
-        "stage_b_pool_size": len(stage_b),
-        "stage_a_train_idx": sorted(a_idx),
-        "stage_b_train_idx": sorted(b_train_idx),
-        "stage_b_eval_idx": sorted(b_eval_idx),
-        "probe_stage_b_idx": sorted(probe_b_idx),
-        "probe_stage_a_topup_idx": sorted(probe_a_topup_idx),
+        "dataset_revision": dataset_revision,
+        "model_id": model_id,
+        "model_revision": model_revision,
+        "stage_a_prompt_suffix": stage_a_prompt_suffix,
+        "stage_a_data_sources": list(STAGE_A_DATA_SOURCES),
+        "stage_b_data_sources": list(STAGE_B_DATA_SOURCES),
+        "stage_a_token_limit": stage_a_token_limit,
+        "stage_b_token_limit": stage_b_token_limit,
+        "stage_a_eligible_count": len(math_ok),
+        "stage_b_eligible_count": len(sim_ok),
+        "stage_a_train_ids": train_math_pool,
+        "stage_b_train_ids": sorted(train_ids),
+        "stage_b_eval_ids": eval_ids,
+        "probe_stage_b_ids": sorted(probe_ids),
+        "probe_stage_a_topup_ids": sorted(probe_math_topup_ids),
         "probe_requested": n_probe,
-        "probe_actual": len(probe_b_idx) + len(probe_a_topup_idx),
+        "probe_actual": len(probe_ids) + len(probe_math_topup_ids),
     }
     if splits["probe_actual"] < n_probe:
         splits["probe_shortfall_note"] = (
             f"pools could only supply {splits['probe_actual']} of {n_probe} "
             "probe prompts; effective-rank magnitudes may be sample-truncated "
             "— report n_probe alongside every erank value")
+
     DATA_DIR.mkdir(exist_ok=True)
-    (DATA_DIR / "exp2_splits.json").write_text(json.dumps(splits, indent=1))
+    out_path = DATA_DIR / out_name
+    if out_path.exists():
+        existing = json.loads(out_path.read_text())
+        if existing != splits:
+            raise RuntimeError(
+                f"frozen {out_name} differs from recomputation; preserve it "
+                "and investigate before overwriting")
+        return existing
+    out_path.write_text(json.dumps(splits, indent=1))
     return splits
+
+
+def dataset_rows_for(stage: str, split: str, splits: dict,
+                     model_id: str, model_revision: str,
+                     dataset_revision: str = GURU_DATASET_REVISION) -> list[dict]:
+    """Row dicts (id/prompt/ground_truth/data_source/extra_info) for one
+    stage/split, filtered to the frozen id set in `splits`. Re-renders from
+    the parquet files rather than caching the full row set in the splits
+    JSON — the splits file stays small and auditable (ids only)."""
+    stage_a_prompt_suffix = splits.get("stage_a_prompt_suffix")
+    math_rows, sim_rows = load_all_records(
+        model_id, model_revision, dataset_revision, stage_a_prompt_suffix)
+    if stage == "a":
+        wanted = set(splits["stage_a_train_ids"])
+        rows = [r for r in math_rows if r["id"] in wanted]
+    elif stage == "b":
+        key = f"stage_b_{split}_ids"
+        wanted = set(splits[key])
+        rows = [r for r in sim_rows if r["id"] in wanted]
+    elif stage == "probe":
+        wanted_b = set(splits["probe_stage_b_ids"])
+        wanted_a = set(splits["probe_stage_a_topup_ids"])
+        rows = ([r for r in sim_rows if r["id"] in wanted_b]
+               + [r for r in math_rows if r["id"] in wanted_a])
+    else:
+        raise ValueError("stage must be 'a', 'b', or 'probe'")
+    rows.sort(key=lambda r: r["id"])
+    return rows
+
+
+def to_hf_dataset(rows: list[dict]):
+    from datasets import Dataset
+
+    return Dataset.from_list(rows)
