@@ -1,7 +1,12 @@
 # Finding — GATE 0a is unsatisfiable by its own remedy, and audits a population that is never trained on
 
-**Status:** blocking specification defect. Both exp2 tracks hit it. Needs a team
-decision; deliberately **not** worked around.
+**Status:** specification defect, resolved 2026-08-16 as an operator decision
+per the project's cheaper-default rule (CLAUDE.md: implement the cheaper
+default, log it, flag it) - **flagged to Tommy, not silently decided**. The
+gate now audits the `token_filter_max`-eligible population; registered
+threshold (1024) and filter (640) unchanged; the raw audit is still computed
+and cross-checked against `data/token_length_audit.json` every run. §7 below
+remains the question Tommy should still answer after the fact.
 **Date:** 2026-08-16
 **Observed on:** Colab A100-SXM4-80GB, `exp2_colab_config_mvp.json`,
 Qwen2.5-7B base, via `experiment 2/colab/00_phase0_selfcontained.ipynb`

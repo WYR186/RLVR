@@ -172,6 +172,24 @@ from vendor.reasoning360_reward_score import codeio, naive_dapo  # noqa: F401
 print("Import smoke test passed: bundled data/reward/pipeline modules load cleanly.")
 '''
 
+
+RESTART_GUARD = '''#@title 3b Staleness guard - stop cleanly if the pinned numpy needs a kernel restart
+# Colab preloads an older numpy before cell 3 upgrades it on disk. Using the
+# new-on-disk / old-in-memory mix dies deep inside pandas/datasets with
+# "ImportError: cannot import name '_center' from 'numpy._core.umath'"
+# (hit on 2026-08-16). Detect the mix here and stop with an instruction
+# instead. On the post-restart pass this is a no-op.
+import importlib.metadata as _md
+import numpy as _np
+_installed = _md.version("numpy")
+if _np.__version__ != _installed:
+    raise SystemExit(
+        f"numpy {_np.__version__} is loaded but {_installed} is installed. "
+        "Runtime -> Restart session and run all. Everything downloaded so far "
+        "is on disk and survives; the second pass reaches this point fast.")
+print(f"numpy loaded == installed == {_installed}; no restart needed")
+'''
+
 PREWARM = '''#@title 5 Pre-download the model and dataset (7B is ~15 GB - several minutes)
 # Not strictly required (unlike the 4070 track, this code does not force
 # local_files_only), but downloading here isolates a network failure from a
@@ -244,6 +262,40 @@ print('stage_a      : max_steps', CONFIG['stage_a']['max_steps'],
       '| group', CONFIG['stage_a']['num_generations'])
 '''
 
+
+PERSIST = '''#@title Persist Phase-0 artifacts (Drive if possible, else base64 in output)
+# /content is ephemeral (lesson from the v9 probe: the runtime was recycled
+# overnight and every artifact vanished). The frozen splits and audits below
+# must reach the repo, and the Colab PAT is broken, so they go home via Drive
+# or, failing that, inline base64 that gets transcribed from this output.
+import base64, gzip, io, os, tarfile
+
+SRC = "/content/RLVR/experiment 2/data"
+names = sorted(n for n in os.listdir(SRC) if n.endswith(".json"))
+print("artifacts:", names)
+try:
+    from google.colab import drive
+    drive.mount("/content/drive")
+    dest = "/content/drive/MyDrive/exp2_7b_phase0_artifacts"
+    os.makedirs(dest, exist_ok=True)
+    import shutil
+    for n in names:
+        shutil.copy2(f"{SRC}/{n}", f"{dest}/{n}")
+    print("copied to Drive:", dest)
+except Exception as exc:
+    print("Drive mount unavailable:", exc)
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        for n in names:
+            tar.add(f"{SRC}/{n}", arcname=n)
+    b64 = base64.b64encode(gzip.compress(buf.getvalue(), 9)).decode()
+    print("BEGIN_ARTIFACTS_B64")
+    for i in range(0, len(b64), 200):
+        print(b64[i:i+200])
+    print("END_ARTIFACTS_B64")
+print("commit these into experiment 2/data/ from the Mac afterwards.")
+'''
+
 HEADER = '''# exp2 7B Phase 0 - self-contained (no GitHub token, no Drive mount)
 
 Generated 2026-08-16 from `experiment 2/colab/00_setup_schema_audit.ipynb`.
@@ -288,11 +340,12 @@ for.
 '''
 
 cells = [md(HEADER), code(GPU_GATE), code(UNPACK), code(INSTALL),
-         code(ENVCHECK), code(PREWARM), md("## Phase 0 - pre-registered cells below are unmodified"),
+         code(RESTART_GUARD), code(ENVCHECK), code(PREWARM), md("## Phase 0 - pre-registered cells below are unmodified"),
          code(SETUP)]
 # keep notebook 00's cells from index 2 onward (0 = its markdown header,
 # 1 = the clone cell we just replaced)
 cells.extend(nb["cells"][2:])
+cells.append(code(PERSIST))
 
 nb["cells"] = cells
 nb["metadata"].setdefault("accelerator", "GPU")

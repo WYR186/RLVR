@@ -5,13 +5,11 @@
   "forked_from": "experiment 2/exp2_colab_config.json (pre-merge heuristic-discovery version) + experiment 2/exp2_config_4070_instruct_v9.json (confirmed data/reward contract, group-8 geometry)",
   "status": "pre-registered, phase 0 not started",
   "merge_note": "2026-08-12: merges two independent needs for a >=24GB GPU into one Colab run rather than running them separately - Tommy's ask for a model stronger than Qwen2.5-7B, and the WIN4070 track's v9 finding that GRPO group size 3 leaves most Math prompt groups with zero within-group reward variance (dead gradient) and group 8 needs >=24GB. Operator decision (Aaron), confirmed 2026-08-12.",
-
   "model_id": "Qwen/Qwen2.5-7B",
   "model_revision": null,
   "model_variant": "base",
   "model_variant_contingency": "kept Base over Instruct despite the WIN4070 track switching to Instruct (v1-v9), because 7B >> 0.5B and format-following (boxed-answer emission) is expected to be far less of a problem at this scale than it was for the 0.5B track. NOT yet verified. If Phase 0's sparse-reward preflight or smoke test shows persistent boxed-format failures on the base model, switch to Qwen2.5-7B-Instruct and log the deviation - do not silently push through degraded format compliance.",
   "seed": 42,
-
   "dataset": {
     "source": "LLM360/guru-RL-92k",
     "revision": "2e2790a962a3c099bfb5ea61389cbf98a5ea439b",
@@ -21,24 +19,35 @@
     "domain_field": "data_source",
     "prompt_field": "prompt (list of role/content messages, rendered via tokenizer.apply_chat_template)",
     "answer_field": "reward_model.ground_truth (nested)",
-    "stage_a_data_sources": ["math__deepscaler_preview", "math__merged_deduped_dapo_or1_dataset"],
-    "stage_b_data_sources": ["simulation__codeio"],
+    "stage_a_data_sources": [
+      "math__deepscaler_preview",
+      "math__merged_deduped_dapo_or1_dataset"
+    ],
+    "stage_b_data_sources": [
+      "simulation__codeio"
+    ],
     "source_limitation": "the released math parquet merges DAPO and OR1 into one data_source value; a defensible per-origin DAPO-vs-OR1 split is not recoverable from the released fields",
     "confirmed_by": "data/guru_schema_audit.json (WIN4070 track, 2026-08-04/05) - re-verified, not re-discovered, for this 7B/Colab run"
   },
-
   "peft": {
     "method": "lora",
     "r": 16,
     "lora_alpha": 32,
     "lora_dropout": 0.05,
-    "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    "target_modules": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ],
     "adapter_dtype": "float32",
     "base_dtype": "bfloat16",
     "validated": false,
     "note": "first-pass default; this project has not trained a LoRA adapter before this run"
   },
-
   "stage_a": {
     "domain": "Math",
     "token_filter_max": 512,
@@ -46,9 +55,17 @@
     "reward_mode": "exact_plus_boxed_format_0.1",
     "reward_mode_rationale": "matches the WIN4070 v8/v9 recipe - pure exact-match at this population's low base accuracy leaves most GRPO groups with zero variance (FINDING_GROUP_SIZE_REWARD_VARIANCE.md); the 0.1 boxed-format bonus recovers some gradient, mostly formatting signal not reasoning signal per that finding, reported honestly not as free lift",
     "max_steps": 200,
-    "checkpoint_steps": [0, 100, 200],
-    "adapt_from_checkpoints": [0, 100, 200],
-    "learning_rate": 2e-5,
+    "checkpoint_steps": [
+      0,
+      100,
+      200
+    ],
+    "adapt_from_checkpoints": [
+      0,
+      100,
+      200
+    ],
+    "learning_rate": 2e-05,
     "learning_rate_applies_to": "lora_adapter_only",
     "learning_rate_rationale": "literature-typical order of magnitude for LoRA-adapter GRPO; UNVALIDATED, not derived from a dose-response study like the 4070 exp2's 5.5e-6 full-parameter dose. Not comparable to prior full-parameter doses. See plan §1.1/§1.3/§8.",
     "per_device_train_batch_size": 8,
@@ -63,9 +80,12 @@
     "max_completion_length_rationale": "matches v9 (bumped from a shorter cap to avoid truncating multi-step Math reasoning before a boxed answer is emitted)",
     "eval_every": 25,
     "de_scope_fallback_max_steps": 100,
-    "de_scope_fallback_checkpoint_steps": [0, 50, 100]
+    "de_scope_fallback_checkpoint_steps": [
+      0,
+      50,
+      100
+    ]
   },
-
   "stage_b": {
     "domain": "Simulation",
     "token_filter_max": 640,
@@ -73,8 +93,15 @@
     "reward_mode": "exact",
     "eval_questions": 300,
     "budget_updates": 50,
-    "eval_at_updates": [0, 10, 20, 30, 40, 50],
-    "learning_rate": 2e-5,
+    "eval_at_updates": [
+      0,
+      10,
+      20,
+      30,
+      40,
+      50
+    ],
+    "learning_rate": 2e-05,
     "learning_rate_applies_to": "lora_adapter_only",
     "per_device_train_batch_size": 8,
     "gradient_accumulation_steps": 8,
@@ -85,11 +112,17 @@
     "top_p": 1.0,
     "max_prompt_length": 640,
     "max_completion_length": 384,
-    "seeds": [42],
-    "committed_seeds": [42],
-    "stretch_goal_seeds": [43, 44]
+    "seeds": [
+      42
+    ],
+    "committed_seeds": [
+      42
+    ],
+    "stretch_goal_seeds": [
+      43,
+      44
+    ]
   },
-
   "execution": {
     "backend": "cuda",
     "device_tier_default": "L4",
@@ -107,10 +140,9 @@
       "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"
     }
   },
-
   "gates": {
     "phase0a_stage_b_p95_prompt_tokens_max": 1024,
-    "phase0a_note": "the real token audit (data/token_length_audit.json, WIN4070 track) already found stage-B max_prompt_tokens=640 - this gate is expected to pass comfortably, confirmed rather than assumed",
+    "phase0a_note": "CORRECTED 2026-08-16: the earlier note claimed the WIN4070 audit 'already found stage-B max_prompt_tokens=640' - false; the audit (data/token_length_audit.json) found raw p95=1407, status STOP, and 640 is this config's own token_filter_max, not an audit result. As of 2026-08-16 the gate audits the token_filter_max-eligible population (the rows training actually uses); threshold unchanged. See FINDING_GATE_0A_MEASURES_THE_WRONG_POPULATION.md.",
     "phase0b_sparse_reward_preflight": "tightened per the v9 finding: STOP unless >= min_variable_groups have variable COMBINED reward; separately record and report exact-channel variance (FINDING_GROUP_SIZE_REWARD_VARIANCE.md section 9, 'a gate defined on the exact channel would be the stronger instrument' - reported, not silently adopted as the gate itself, since that would be stricter than what any team run has used)",
     "phase0b_stage_a_preflight_prompts": 16,
     "phase0b_stage_b_preflight_prompts": 8,
@@ -120,27 +152,31 @@
     "phase1_zero_variance_streak_stop": 5,
     "phase1_clipping_over_10pct_streak_stop": 5
   },
-
   "outcomes": {
     "P1_delta_R": "R_end(ckpt0) - R_end(ckpt_t), R_end = mean stage-B eval reward at update 50",
     "P2_delta_AUC": "AUC(ckpt0) - AUC(ckpt_t) over eval_at_updates",
     "P3_transfer_T": "T_t = Score_B(M_{A,t}) - Score_B(M_0), zero-shot, no stage-2 training",
     "reading_rule": "delta_R is interpreted conditional on T_t; T_t far from 0 means delta_R is transfer-confounded and must be reported as such"
   },
-
   "measurement": {
     "note": "beyond Tommy's spec but in scope for this owner; gates nothing in phase 3",
     "probe_questions": 4096,
     "probe_rationale": "hidden dim is 3584 for Qwen2.5-7B; a probe smaller than the hidden dim makes effective-rank magnitudes sample-truncated and n-dependent (same reasoning as the 0.5B plan's 512-vs-896 case, one level up)",
     "probe_source": "frozen at Phase 0 in data/exp2_colab_splits.json: stage-B pool rows disjoint from stage-B train and eval, topped up from held-out stage-A rows if the CodeI/O pool is too small; per-source counts recorded in the splits file",
-    "layers": [5, 14, 26],
+    "layers": [
+      5,
+      14,
+      26
+    ],
     "layers_rationale": "rescaled from the 0.5B plan's [4,12,22] of 24 blocks to the same relative depths (~18%/50%/93%) of Qwen2.5-7B's 28 blocks",
     "model_dtype": "float32",
     "batch_size": 8,
-    "dormant_taus": [0.025, 0.1],
+    "dormant_taus": [
+      0.025,
+      0.1
+    ],
     "ckpt0_identity_gate": "within-run re-measurement consistency check only; NOT compared to the 0.5B pilot reference value (different model, not comparable in magnitude)"
   },
-
   "open_team_questions": [
     "Does 'stronger than Qwen2.5-7B' mean exactly 7B is acceptable, or strictly larger?",
     "LoRA vs full fine-tuning for this arm specifically, if other members' stage-1 arms stay full-parameter at smaller sizes - this is a second confound on top of the task-pair difference",
