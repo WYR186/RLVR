@@ -141,3 +141,21 @@ notebook; check the Colab usage panel before/after).** Deviation to disclose:
 the v9 amendment anticipated an L4 "only after the hardware move is approved";
 this probe used an A100 80 GB, which was neither the anticipated device nor
 pre-approved. Recorded rather than left implicit.
+
+## 2026-08-16 Experiment 2 Colab/7B MVP Phase-0 attempt (Colab A100)
+
+Notebook: `experiment 2/colab/00_phase0_selfcontained.ipynb` (self-contained; the
+Colab Secrets PAT is broken — verified today, clone returns HTTP 403 "Write
+access to repository not granted"). Config: `exp2_colab_config_mvp.json`,
+Qwen2.5-7B base, MVP scope. Findings:
+`experiment 2/FINDING_GATE_0A_MEASURES_THE_WRONG_POPULATION.md`.
+
+| Phase | Hardware | Wall time | Notes |
+|-------|----------|-----------|-------|
+| PAT diagnostic | Colab CPU | ~2 min | ran notebook 00's clone cell only. Secret exists and notebook access was granted, but the clone fails HTTP 403. Token sanitizer worked — nothing leaked. Establishes that Colab's GitHub OAuth reads the private repo fine and only the PAT path is broken. |
+| Phase 0 attempt 1 | Colab A100 (Python 3) | ~8 min incl. deps + 7B download | died at `load_all_records` with `ImportError: cannot import name '_center' from 'numpy._core.umath'` — the pinned `numpy==2.3.5` install needs a kernel restart, which notebook 00 never does. The v9 4070 probe avoided this only because it runs every stage in a subprocess. Latent bug in notebook 00. |
+| Phase 0 attempt 2 | Colab A100 (Python 3) | ~20 min | after `Restart session and run all`: config loaded (`..._MVP`, Qwen2.5-7B base, max_steps 100, checkpoints [0,50,100], group 8), data loaded (Math 54404 / Simulation 3730), then **GATE 0a STOP: stage-B p95=1407.0 > 1024**. Reproduced the WIN4070 audit byte-for-byte. No training reached. Runtime disconnected immediately. |
+
+**Compute units consumed: _____ (to be filled in by hand.)** Both A100 sessions
+were stopped at their gate rather than left running, and the runtime was
+disconnected each time.
