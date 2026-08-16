@@ -173,21 +173,29 @@ print("Import smoke test passed: bundled data/reward/pipeline modules load clean
 '''
 
 
-RESTART_GUARD = '''#@title 3b Staleness guard - stop cleanly if the pinned numpy needs a kernel restart
-# Colab preloads an older numpy before cell 3 upgrades it on disk. Using the
-# new-on-disk / old-in-memory mix dies deep inside pandas/datasets with
-# "ImportError: cannot import name '_center' from 'numpy._core.umath'"
-# (hit on 2026-08-16). Detect the mix here and stop with an instruction
-# instead. On the post-restart pass this is a no-op.
+RESTART_GUARD = '''#@title 3b Self-healing restart - the pinned numpy upgrade needs a clean kernel
+# requirements.txt pins numpy 2.3.5 over Colab's preinstalled 1.26.x. That is a
+# major-version swap under a live interpreter: the new files land on disk while
+# the old module stays in memory, and anything touching pandas/datasets then
+# dies with "ImportError: cannot import name '_center' from 'numpy._core.umath'"
+# - or the kernel simply dies mid-install, which is what happened on 2026-08-16
+# and cost ~2h of wall clock before the disconnect was noticed.
+#
+# So: detect the mismatch and restart the kernel FROM CODE rather than printing
+# an instruction nobody is present to read. Pass 1 ends here with a deliberate
+# restart; press Run all once more and pass 2 sails through, because everything
+# downloaded so far is on disk and survives. This cell is a no-op on pass 2.
 import importlib.metadata as _md
+import os
 import numpy as _np
+
 _installed = _md.version("numpy")
 if _np.__version__ != _installed:
-    raise SystemExit(
-        f"numpy {_np.__version__} is loaded but {_installed} is installed. "
-        "Runtime -> Restart session and run all. Everything downloaded so far "
-        "is on disk and survives; the second pass reaches this point fast.")
-print(f"numpy loaded == installed == {_installed}; no restart needed")
+    print(f"numpy {_np.__version__} loaded but {_installed} installed.")
+    print("Restarting the kernel now. When it comes back: Runtime -> Run all.")
+    print("Nothing is lost - the unpacked source and any downloads are on disk.")
+    os.kill(os.getpid(), 9)
+print(f"numpy loaded == installed == {_installed}; kernel is clean, continuing")
 '''
 
 PREWARM = '''#@title 5 Pre-download the model and dataset (7B is ~15 GB - several minutes)
