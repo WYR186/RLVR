@@ -114,3 +114,30 @@ Run dir: `outputs/exp15_cuda_grpo_gsm8k_caebbcc73461`.
 | Phase 2 + ckpt-0 gate | RTX 4070 Laptop (CUDA float32 measurement) | 4.6 min | measured checkpoints 0/25/50/100/200/300/400/500; ckpt-0 reproduced the pilot effective ranks exactly; identity gate PASS |
 | Phase 3 endpoint probe | RTX 4070 Laptop (CUDA) | 7.74 h | completed ckpt {0,500} × seed {42,43,44}, six cells total, all 50/50 updates; no OOM or safety stop |
 | Expansion gate | CPU analysis | <1 min | G-A failed (+4.06% late-window erank_L12 displacement vs 7.5% threshold); G-B failed (-0.0089 endpoint mean-delta drop vs +0.05 threshold); verdict STOP, so full grid and Phase 4 were not run |
+
+## 2026-08-16 Experiment 2 v9 Phase-0 feasibility probe (Colab A100)
+
+Notebook: `exp2_v9_colab_probe_en.ipynb` — Drive-only self-contained probe
+(carries `experiment 2/` source as a gzip+base64 blob; no repo clone, no token).
+Config: `exp2_config_4070_instruct_v9.json`, unmodified. Phase 0 only; Stage A
+never launched. Findings: `experiment 2/FINDING_V9_PHASE0_COLAB_A100.md`.
+
+| Phase | Hardware | Wall time | Notes |
+|-------|----------|-----------|-------|
+| Phase 0 `contract` | Colab A100-SXM4-80GB High-RAM | 0.3 min | exit 0; config verified pristine at group 8 / device batch 8 / accumulation 8 |
+| Phase 0 `prepare` | Colab A100-SXM4-80GB High-RAM | 0.4 min | exit 0; `geometry_and_split_gate_pass`; v9 split IDs `exact_id_match` vs frozen v8 splits |
+| Phase 0 `smoke` | Colab A100-SXM4-80GB High-RAM | 11.5 min | exit 1, not a crash — both stages trained 2/2 updates with healthy gradients, then Stage A stopped on the pre-registered gate `stage_a_smoke_completion_clipping_exceeded_limit` (clip 0.09375 / 0.140625 vs 0.1 limit). Preflight gate PASS: 7/16 combined variance groups, reproducing the 4070 reference exactly. `step_times` 59.481 / 59.506 s → Stage A 200 updates ≈ 3.31 h. VRAM peak NOT captured (the probe's Phase-0 cell has lost its `nvidia-smi` sampler thread). |
+| Whole-notebook run | Colab A100-SXM4-80GB High-RAM | ~13 min incl. pip install + HF downloads | runtime disconnected immediately after the result was read, to stop unit consumption |
+
+Earlier same-day attempts on a Colab **L4 (22 GiB)** are part of this accounting:
+group 8 OOM'd there (`Tried to allocate 5.80 GiB. GPU 0 has a total capacity of
+22.03 GiB of which 791.12 MiB is free`), i.e. the recipe needs ≈27 GiB. Several
+L4 sessions were also spent on notebook-plumbing failures (missing HF artifact
+pre-download, and one attempted batch-geometry change that the contract
+correctly refused in 0.3 min).
+
+**Compute units consumed: _____ (to be filled in by hand — not readable from the
+notebook; check the Colab usage panel before/after).** Deviation to disclose:
+the v9 amendment anticipated an L4 "only after the hardware move is approved";
+this probe used an A100 80 GB, which was neither the anticipated device nor
+pre-approved. Recorded rather than left implicit.
