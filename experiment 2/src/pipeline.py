@@ -324,6 +324,49 @@ def _make_eval_callback_class():
     return _GuruEvalCallback
 
 
+def _make_drive_sync_callback():
+    """Builds a `TrainerCallback` subclass that mirrors `out_dir` to a Drive
+    (or any persistent) path periodically during training.
+
+    Colab's local disk (`/content/...`, where the cloned repo and all run
+    artifacts live) is ephemeral — it disappears on a runtime disconnect
+    (idle timeout, session recycle, manual reconnect), regardless of what's
+    already been written there. `SaveAtSteps`/`JsonlDashboardLogger` already
+    write checkpoints and logs progressively to *local* disk during training,
+    which protects nothing on its own: a disconnect mid-run loses the whole
+    working directory, checkpoints included. This callback is the other half
+    — periodically `copytree`-ing that directory to a Drive-backed path, so a
+    mid-run disconnect loses at most the interval between syncs, not the
+    entire run. Cheap here specifically because checkpoints are LoRA
+    adapters (tens of MB), not full 7B weights — a full-copy-every-sync
+    approach (not an incremental rsync) would be too slow otherwise.
+    """
+    from transformers import TrainerCallback
+    import shutil
+
+    class _DriveSyncCallback(TrainerCallback):
+        def __init__(self, out_dir, drive_dir, every: int = 25):
+            self.out_dir = Path(out_dir)
+            self.drive_dir = Path(drive_dir)
+            self.every = every
+
+        def _sync(self, reason: str):
+            t0 = time.time()
+            self.drive_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(self.out_dir, self.drive_dir, dirs_exist_ok=True)
+            print(f"[drive-sync] {reason}: mirrored {self.out_dir} -> "
+                  f"{self.drive_dir} in {time.time() - t0:.1f}s")
+
+        def on_step_end(self, args, state, control, **kwargs):
+            if state.global_step % self.every == 0:
+                self._sync(f"step {state.global_step}")
+
+        def on_train_end(self, args, state, control, **kwargs):
+            self._sync("train end")
+
+    return _DriveSyncCallback
+
+
 # ---------------------------------------------------------------------------
 # Fixed-budget completion bookkeeping (generic; adapted from
 # eaaj-pilot/src/adaptation.py with domain-neutral file names — that module's
@@ -404,7 +447,7 @@ def run_stage_a_grpo(model_id: str, peft_cfg: dict, train_dataset, out_dir,
                      num_generations: int, beta: float, temperature: float, top_p: float,
                      max_completion_length: int,
                      revision: str | None = None, seed: int = 42, device: str | None = None,
-                     eval_every: int = 25):
+                     eval_every: int = 25, drive_backup_dir=None):
     """Stage-1 (Math) GRPO with LoRA. `train_dataset` is a HF Dataset with
     columns `prompt`/`ground_truth`/`data_source`/`extra_info` (from
     `guru_data.to_hf_dataset`) already filtered to `token_filter_max` by
@@ -414,7 +457,14 @@ def run_stage_a_grpo(model_id: str, peft_cfg: dict, train_dataset, out_dir,
     entirely upstream at the data layer, not here. Saves adapter-only
     checkpoints at `checkpoint_steps` (`SaveAtSteps.on_step_end` never fires
     for step 0 — the caller must save ckpt-0 itself, before `trainer.train()`,
-    exactly as the 4070 plan's notebooks do for the base model)."""
+    exactly as the 4070 plan's notebooks do for the base model).
+
+    `drive_backup_dir`, if given, mirrors `out_dir` there every `eval_every`
+    steps and once more at the end — protects a multi-hour run against a
+    Colab runtime disconnect wiping the (ephemeral) local disk. Optional
+    because Phase 0's cheap smoke runs don't need it; Phase 1/3's real runs
+    should always pass one (plan §6 commit protocol).
+    """
     import torch
     from transformers import set_seed
     from trl import GRPOConfig, GRPOTrainer
@@ -432,6 +482,14 @@ def run_stage_a_grpo(model_id: str, peft_cfg: dict, train_dataset, out_dir,
     t0 = time.time()
     reward_fn = select_reward_fn(reward_mode)
     sentinel_cls = _make_lora_sentinel_class()
+    callbacks = [
+        pilot["JsonlDashboardLogger"](out_dir / "dashboard.jsonl"),
+        sentinel_cls(out_dir / "update_sentinel.jsonl", every=eval_every),
+        pilot["SaveAtSteps"]([s for s in checkpoint_steps if s > 0], out_dir, tokenizer=tokenizer),
+        pilot["LocalSafetyCallback"](out_dir / "safety_stop.json"),
+    ]
+    if drive_backup_dir is not None:
+        callbacks.append(_make_drive_sync_callback()(out_dir, drive_backup_dir, every=eval_every))
     cfg = GRPOConfig(
         output_dir=str(out_dir / "trainer"), seed=seed, max_steps=max_steps,
         learning_rate=learning_rate, per_device_train_batch_size=per_device_batch,
@@ -446,12 +504,7 @@ def run_stage_a_grpo(model_id: str, peft_cfg: dict, train_dataset, out_dir,
     trainer = GRPOTrainer(
         model=model, args=cfg, train_dataset=train_dataset,
         reward_funcs=reward_fn, processing_class=tokenizer,
-        callbacks=[
-            pilot["JsonlDashboardLogger"](out_dir / "dashboard.jsonl"),
-            sentinel_cls(out_dir / "update_sentinel.jsonl", every=eval_every),
-            pilot["SaveAtSteps"]([s for s in checkpoint_steps if s > 0], out_dir, tokenizer=tokenizer),
-            pilot["LocalSafetyCallback"](out_dir / "safety_stop.json"),
-        ],
+        callbacks=callbacks,
     )
     trainer.train()
 
@@ -461,6 +514,9 @@ def run_stage_a_grpo(model_id: str, peft_cfg: dict, train_dataset, out_dir,
               "checkpoint_steps": checkpoint_steps,
               "wall_seconds": time.time() - t0}
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=1))
+    if drive_backup_dir is not None:
+        import shutil
+        shutil.copytree(out_dir, drive_backup_dir, dirs_exist_ok=True)
 
     del trainer, model
     gc.collect()
@@ -553,14 +609,15 @@ def run_stage_b_adaptation(model_id: str, peft_cfg: dict, stage_a_checkpoint,
                            beta: float, temperature: float, top_p: float,
                            max_completion_length: int,
                            revision: str | None = None, seed: int = 42,
-                           device: str | None = None):
+                           device: str | None = None, drive_backup_dir=None):
     """Fixed-budget Simulation-domain GRPO from `stage_a_checkpoint` (a
     stage-A adapter dir, or None for the ckpt-0 / stage-2-alone baseline —
     trains a fresh LoRA adapter on the base model in that case). Both
     `train_dataset` (HF Dataset) and `eval_rows` (list[dict]) carry
     `prompt`/`ground_truth`/`data_source`/`extra_info`, already filtered to
     `token_filter_max` upstream — see `run_stage_a_grpo`'s docstring for why
-    there is no `max_prompt_length` parameter here."""
+    there is no `max_prompt_length` parameter here. `drive_backup_dir` —
+    see `run_stage_a_grpo`'s docstring; same purpose, per-cell here."""
     import torch
     from transformers import set_seed
     from trl import GRPOConfig, GRPOTrainer
@@ -587,6 +644,14 @@ def run_stage_b_adaptation(model_id: str, peft_cfg: dict, stage_a_checkpoint,
 
     reward_fn = select_reward_fn(reward_mode)
     eval_callback_cls = _make_eval_callback_class()
+    callbacks = [
+        pilot["JsonlDashboardLogger"](out_dir / "dashboard.jsonl"),
+        _make_lora_sentinel_class()(out_dir / "update_sentinel.jsonl", every=eval_every),
+        eval_callback_cls(eval_rows, out_dir / "stageb_eval_curve.jsonl", every=eval_every),
+        pilot["LocalSafetyCallback"](out_dir / "safety_stop.json"),
+    ]
+    if drive_backup_dir is not None:
+        callbacks.append(_make_drive_sync_callback()(out_dir, drive_backup_dir, every=eval_every))
     cfg = GRPOConfig(
         output_dir=str(out_dir / "trainer"), seed=seed, max_steps=budget_updates,
         learning_rate=learning_rate, per_device_train_batch_size=per_device_batch,
@@ -601,12 +666,7 @@ def run_stage_b_adaptation(model_id: str, peft_cfg: dict, stage_a_checkpoint,
     trainer = GRPOTrainer(
         model=model, args=cfg, train_dataset=train_dataset,
         reward_funcs=reward_fn, processing_class=tokenizer,
-        callbacks=[
-            pilot["JsonlDashboardLogger"](out_dir / "dashboard.jsonl"),
-            _make_lora_sentinel_class()(out_dir / "update_sentinel.jsonl", every=eval_every),
-            eval_callback_cls(eval_rows, out_dir / "stageb_eval_curve.jsonl", every=eval_every),
-            pilot["LocalSafetyCallback"](out_dir / "safety_stop.json"),
-        ],
+        callbacks=callbacks,
     )
     trainer.train()
     completion = fixed_budget_completion(trainer, out_dir, budget_updates, out_dir / "safety_stop.json")
@@ -623,6 +683,9 @@ def run_stage_b_adaptation(model_id: str, peft_cfg: dict, stage_a_checkpoint,
     }
     summary_path.write_text(json.dumps(summary, indent=1))
     validate_stage_b_completion(out_dir, budget_updates, eval_every)
+    if drive_backup_dir is not None:
+        import shutil
+        shutil.copytree(out_dir, drive_backup_dir, dirs_exist_ok=True)
 
     del trainer, model
     gc.collect()

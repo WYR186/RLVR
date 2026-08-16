@@ -419,16 +419,27 @@ budget, and baseline all defined above and kept attached to every number reporte
 
 ## 6. Commit protocol
 
-- Run artifacts saved to **Google Drive** under
-  `eaaj-pilot/outputs/exp2_colab_guru_math7b_group8_<hash>/` (matches
+- Run artifacts are written live to the cloned repo's working copy on Colab's **local**
+  (ephemeral) disk, under `eaaj-pilot/outputs/exp2_colab_guru_math7b_group8_<hash>/` (matches
   `exp2_colab_config.json`'s `experiment` field; mirrors the 4070 plan's naming so all three
   runs — 4070 group-3, 4070/Colab group-8-only, and this merged 7B+group-8 run — stay
   distinguishable by directory name alone, not just by reading each config).
+- **Notebooks 01 and 03 (the two long, hours-long GPU phases) also mirror that directory to
+  Google Drive periodically during training**, not just at the end — `pipeline.py`'s
+  `drive_backup_dir` parameter (wired into `run_stage_a_grpo`/`run_stage_b_adaptation`),
+  syncing every `eval_every` steps via a `TrainerCallback`. This exists specifically because
+  Colab's local disk is wiped on a runtime disconnect regardless of what's already been
+  written there — without it, a disconnect at update 180 of 200 would lose the entire Phase-1
+  run, not just the unsaved tail. The Drive mirror is a live backup, **not** a substitute for
+  the git commit below — commit to git after every phase regardless of whether Drive has a
+  copy. Notebooks 00/02/04 don't mount Drive or need this (Phase 0 is a cheap smoke test,
+  Phase 2/2b/4 are all minutes, not hours).
 - LoRA checkpoints saved as PEFT adapters (`save_pretrained` on the wrapped model), **not**
   merged into the base — keeps checkpoints small and keeps the frozen base identical and
   reloadable across cells.
 - `outputs/ACTIVE_RUN.txt` stays machine-local/untracked per project convention — on Colab this
-  means it lives in the Drive-mounted working copy, not committed to git.
+  means it lives in the local cloned working copy, not committed to git and not mirrored to
+  Drive.
 - Commit after each completed phase, message prefix `exp2-colab:` (distinct from the 4070
   plan's `exp2:` prefix, so `git log` alone tells the two runs apart).
 - Push to `main`; do not open a branch for this, matching the 4070 plan's protocol.
