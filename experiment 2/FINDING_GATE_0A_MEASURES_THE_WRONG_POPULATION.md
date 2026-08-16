@@ -99,16 +99,19 @@ The number 640 is the config's own `stage_b.token_filter_max` — a filter
 setting, not an audit result. Whoever wrote the note conflated the two, which is
 why the gate was expected to pass and did not.
 
-## 6. What this does NOT license
+## 6. What was and was not changed
 
-Nothing here justifies editing the gate to make the run proceed. The threshold,
-the `token_filter_max`, and the "do not shrink batch, truncate prompts" language
-are all pre-registered. The v9 amendment's rule — *"Do not reduce the group,
-shorten completions, change the reward, or move another scientific variable to
-make the smoke pass"* — applies with equal force to gates. **This run is stopped
-and left stopped.**
+Changed (implementation only): the population the Step-4 audit feeds the gate —
+now the `token_filter_max`-eligible rows, selected by the identical filter
+expression `build_exp2_splits` applies. NOT changed: the registered threshold
+(1024), `token_filter_max` (640), and every other gate. Strengthened: the raw
+audit is now HARD-checked against `data/token_length_audit.json` each run — if
+the raw numbers ever drift from the confirmed reference, the gate stops on that
+before anything else, so the cross-track verification the old cell provided is
+tighter than before, not lost. The 2026-08-16 STOP run itself was preserved
+as-is and not re-run under the old definition.
 
-## 7. What the team needs to decide
+## 7. What Tommy should still confirm (after the fact)
 
 1. Should GATE 0a audit the **post-filter** stage-B population (the one that is
    trained on) instead of the raw pool? That is the reading under which the gate
@@ -119,10 +122,14 @@ and left stopped.**
 3. Either way `phase0a_note` must be corrected in both configs — it currently
    states an audit result that does not exist.
 
-Until (1) or (2) is answered, **both exp2 tracks are blocked at Phase 0**: the
-0.5B track on the v10 completion-clipping amendment
-([`FINDING_V9_PHASE0_COLAB_A100.md`](FINDING_V9_PHASE0_COLAB_A100.md)), and the
-7B track here.
+Point (3) is done (2026-08-16, same changeset as the gate fix). Points (1) and
+(2) are the after-the-fact confirmation this deviation is flagged for: the
+eligible-population reading was implemented as the cheaper default; if Tommy
+rules the raw-pool reading was intended, the 7B track re-stops here and the run
+made under this deviation is discarded, which is the accepted cost of the
+implement-log-flag pattern. The 0.5B track remains separately paused on the v10
+completion-clipping question
+([`FINDING_V9_PHASE0_COLAB_A100.md`](FINDING_V9_PHASE0_COLAB_A100.md)).
 
 ## 8. Compute spent
 
