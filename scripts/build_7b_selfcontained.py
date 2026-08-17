@@ -137,11 +137,46 @@ for _p in sorted(Path(REPO_DIR).rglob("*")):
 print("\\nunpacked into", REPO_DIR)
 '''.replace("{BLOB}", blob_lines)
 
-INSTALL = '''#@title 3 Install pinned dependencies (2-4 min)
-# Pins come from experiment 2/requirements.txt unchanged. torch is deliberately
-# NOT reinstalled -- Colab's preinstalled CUDA build is kept.
-!pip install -q -r "/content/RLVR/experiment 2/requirements.txt"
+INSTALL = '''#@title 3 Install pinned dependencies, keeping the resident numpy (2-4 min)
+# DEVIATION LOGGED 2026-08-16: requirements.txt pins numpy==2.3.5 to mirror the
+# local env, but Colab's kernel has numpy RESIDENT from interpreter startup
+# (2.0.2 today) - before any user cell runs. Upgrading numpy across versions
+# under a live kernel breaks every later import ("cannot import name '_center'
+# from 'numpy._core.umath'"), and the only cure is a kernel restart, which makes
+# Run all two-pass and cost three runtimes to idle reclamation on 2026-08-16.
+# So numpy is deliberately HELD at the resident version via a pip constraint.
+# The scientific manifest (trl/transformers/datasets/accelerate/peft/
+# bitsandbytes/pylatexenc, checked in cell 4) is installed exactly as pinned;
+# numpy is not part of that contract and its exact patch version does not enter
+# GRPO semantics. torch is NOT reinstalled - Colab's CUDA build is kept.
+import importlib.metadata as _md
+
+_resident_numpy = _md.version("numpy")
+_req = open("/content/RLVR/experiment 2/requirements.txt").read().splitlines()
+_kept = [l for l in _req if not l.strip().lower().startswith("numpy")]
+open("/tmp/req_no_numpy.txt", "w").write("\\n".join(_kept))
+open("/tmp/constraints.txt", "w").write(f"numpy=={_resident_numpy}\\n")
+print(f"holding numpy at resident {_resident_numpy}; installing the rest as pinned")
+
+%pip install -q -r /tmp/req_no_numpy.txt -c /tmp/constraints.txt
 print("\\nInstall finished.")
+'''
+
+RESTART_GUARD = '''#@title 3b Assert the kernel is clean (must be a no-op)
+# numpy is resident from interpreter startup (before any user cell), so cell 3
+# holds it at that version by constraint instead of upgrading it. Loaded and
+# installed must therefore agree here on the FIRST pass, and Run all completes
+# without any restart. If this fires, the constraint failed (e.g. some package
+# force-upgraded numpy transitively) - fix cell 3, do not add a restart.
+import importlib.metadata as _md
+import numpy as _np
+
+_installed = _md.version("numpy")
+if _np.__version__ != _installed:
+    raise SystemExit(
+        f"CONSTRAINT FAILED: numpy {_np.__version__} loaded but {_installed} "
+        "on disk. Something in cell 3 upgraded numpy despite the constraint.")
+print(f"kernel clean: numpy loaded == installed == {_installed}, single pass OK")
 '''
 
 ENVCHECK = '''#@title 4 Environment check - versions must match the pinned manifest
@@ -171,6 +206,8 @@ if mismatched:
     print("TRL version drift can silently change GRPO semantics. Report before trusting results.")
 else:
     print("\\nAll pinned packages match the manifest.")
+import numpy as _np_v
+print(f"numpy held at resident {_np_v.__version__} (deviation logged in cell 3; not part of the pinned manifest)")
 
 # Import the bundled modules now, in-process, so a missing dependency surfaces in
 # seconds rather than after the 7B download.
