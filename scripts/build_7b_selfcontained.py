@@ -101,11 +101,11 @@ if total_gb < 35:
         f"OOM'd on a 22 GiB L4. Use A100.")
 
 if problems:
-    print("\nUnsuitable GPU:")
+    print("\\nUnsuitable GPU:")
     for p in problems:
         print("  -", p)
     raise SystemExit("GPU gate failed")
-print("\nGPU gate passed (bf16 support is re-confirmed against torch in cell 4)")
+print("\\nGPU gate passed (bf16 support is re-confirmed against torch in cell 4)")
 '''
 
 UNPACK = '''#@title 2 Unpack embedded source (no GitHub token required)
