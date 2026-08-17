@@ -63,28 +63,36 @@ def md(src):
 
 
 GPU_GATE = '''#@title 1 GPU gate - refuse to continue on unsuitable hardware
-import torch
+# Deliberately does NOT import torch. torch imports numpy, and this notebook
+# later installs a pinned numpy that is a major version ahead of Colab's; if
+# numpy is already resident when that install lands, every downstream import
+# dies ("cannot import name '_center' from 'numpy._core.umath'") and the only
+# cure is a kernel restart, which turns Run all into a two-pass process that
+# needs a human to press it again. On 2026-08-16 that cost two runtimes to idle
+# reclamation. Querying nvidia-smi in a subprocess keeps this cell's fail-fast
+# value without touching the numpy that cell 3 is about to replace.
+import subprocess, sys
 
-assert torch.cuda.is_available(), "No GPU. Runtime -> Change runtime type -> A100"
+_q = subprocess.run(
+    ["nvidia-smi",
+     "--query-gpu=name,memory.total,compute_cap",
+     "--format=csv,noheader,nounits"],
+    capture_output=True, text=True)
+if _q.returncode != 0 or not _q.stdout.strip():
+    raise SystemExit("No GPU. Runtime -> Change runtime type -> A100 GPU -> Save")
 
-name = torch.cuda.get_device_name(0)
-cap = torch.cuda.get_device_capability(0)
-total_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
-bf16 = torch.cuda.is_bf16_supported()
-
-print(f"GPU            : {name}")
-print(f"compute cap    : {cap[0]}.{cap[1]}")
-print(f"total memory   : {total_gb:.1f} GiB")
-print(f"bf16 supported : {bf16}")
-print(f"torch          : {torch.__version__}")
+_name, _mem_mib, _cap = [f.strip() for f in _q.stdout.strip().splitlines()[0].split(",")]
+total_gb = int(_mem_mib) / 1024
+cap_major = int(float(_cap))
+print(f"GPU          : {_name}")
+print(f"compute cap  : {_cap}")
+print(f"total memory : {total_gb:.1f} GiB")
 
 problems = []
-if cap[0] < 8:
+if cap_major < 8:
     problems.append(
-        f"Architecture too old (cap {cap[0]}.{cap[1]}). The recipe uses bfloat16, "
-        f"which needs Ampere (8.0) or newer. T4/V100 will not work.")
-if not bf16:
-    problems.append("This device has no native bf16 support.")
+        f"Architecture too old (cap {_cap}). The recipe uses bfloat16, which "
+        f"needs Ampere (8.0) or newer. T4/V100 will not work.")
 if total_gb < 35:
     problems.append(
         f"Only {total_gb:.1f} GiB of VRAM. Qwen2.5-7B in bf16 is ~15 GiB of weights "
@@ -93,11 +101,11 @@ if total_gb < 35:
         f"OOM'd on a 22 GiB L4. Use A100.")
 
 if problems:
-    print("\\nUnsuitable GPU:")
+    print("\nUnsuitable GPU:")
     for p in problems:
         print("  -", p)
     raise SystemExit("GPU gate failed")
-print("\\nGPU gate passed")
+print("\nGPU gate passed (bf16 support is re-confirmed against torch in cell 4)")
 '''
 
 UNPACK = '''#@title 2 Unpack embedded source (no GitHub token required)
@@ -173,29 +181,25 @@ print("Import smoke test passed: bundled data/reward/pipeline modules load clean
 '''
 
 
-RESTART_GUARD = '''#@title 3b Self-healing restart - the pinned numpy upgrade needs a clean kernel
-# requirements.txt pins numpy 2.3.5 over Colab's preinstalled 1.26.x. That is a
-# major-version swap under a live interpreter: the new files land on disk while
-# the old module stays in memory, and anything touching pandas/datasets then
-# dies with "ImportError: cannot import name '_center' from 'numpy._core.umath'"
-# - or the kernel simply dies mid-install, which is what happened on 2026-08-16
-# and cost ~2h of wall clock before the disconnect was noticed.
-#
-# So: detect the mismatch and restart the kernel FROM CODE rather than printing
-# an instruction nobody is present to read. Pass 1 ends here with a deliberate
-# restart; press Run all once more and pass 2 sails through, because everything
-# downloaded so far is on disk and survives. This cell is a no-op on pass 2.
+RESTART_GUARD = '''#@title 3b Assert the kernel is clean (must be a no-op)
+# With the cell-1 reorder nothing imports numpy before cell 3 installs it, so
+# the loaded and installed versions must agree on the first pass and Run all
+# completes without a restart. If this ever fires, the ordering invariant broke:
+# something above imported numpy (directly, or via torch/pandas) before the
+# install. Fix the ordering rather than adding a restart - a restart makes Run
+# all two-pass, which needs an operator present and cost two runtimes to idle
+# reclamation on 2026-08-16.
 import importlib.metadata as _md
-import os
 import numpy as _np
 
 _installed = _md.version("numpy")
 if _np.__version__ != _installed:
-    print(f"numpy {_np.__version__} loaded but {_installed} installed.")
-    print("Restarting the kernel now. When it comes back: Runtime -> Run all.")
-    print("Nothing is lost - the unpacked source and any downloads are on disk.")
-    os.kill(os.getpid(), 9)
-print(f"numpy loaded == installed == {_installed}; kernel is clean, continuing")
+    raise SystemExit(
+        f"ORDERING BROKEN: numpy {_np.__version__} was already resident before "
+        f"the install put {_installed} on disk. Something above cell 3 imports "
+        "numpy. Restarting would work but re-introduces the two-pass problem - "
+        "fix the import order instead.")
+print(f"kernel clean: numpy loaded == installed == {_installed}, single pass OK")
 '''
 
 PREWARM = '''#@title 5 Pre-download the model and dataset (7B is ~15 GB - several minutes)
