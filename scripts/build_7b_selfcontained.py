@@ -393,7 +393,38 @@ cells = [md(HEADER), code(GPU_GATE), code(UNPACK), code(INSTALL),
          code(SETUP)]
 # keep notebook 00's cells from index 2 onward (0 = its markdown header,
 # 1 = the clone cell we just replaced)
-cells.extend(nb["cells"][2:])
+_tail = [dict(c) for c in nb["cells"][2:]]
+
+# Notebook 00 carries its OWN `%pip install -r requirements.txt` cell. Left in
+# place it re-installs the full manifest INCLUDING numpy==2.3.5, silently
+# undoing cell 3's constraint - and because it sits AFTER the 3b assertion, the
+# tripwire passes and the breakage only surfaces later as
+# "cannot import name '_center' from 'numpy._core.umath'" inside
+# load_all_records. That is exactly how the 2026-08-16 19:56 run died. Cell 3
+# already installed this same manifest, so this cell is pure duplication;
+# neutralise it rather than let it fight the constraint.
+_neutralised = 0
+for _c in _tail:
+    _s = "".join(_c.get("source", []))
+    if _c.get("cell_type") == "code" and "pip install" in _s and "requirements.txt" in _s:
+        _c["source"] = (
+            "# NEUTRALISED 2026-08-16 by scripts/build_7b_selfcontained.py.\n"
+            "# The original line here was:\n"
+            "#     %pip install -q -r \"/content/RLVR/experiment 2/requirements.txt\"\n"
+            "# Cell 3 above already installed that exact manifest, but with a pip\n"
+            "# constraint holding numpy at the version Colab has resident from\n"
+            "# interpreter startup. Re-running the unconstrained install here put\n"
+            "# numpy 2.3.5 on disk under a kernel holding 2.0.2, which breaks every\n"
+            "# later import ('cannot import name _center from numpy._core.umath').\n"
+            "# It also sits after the 3b tripwire, so the damage went undetected\n"
+            "# until load_all_records. Deliberately a no-op; see the header cell.\n"
+            "print('skipped: cell 3 already installed the pinned manifest')\n"
+        ).splitlines(keepends=True)
+        _c["outputs"] = []
+        _c["execution_count"] = None
+        _neutralised += 1
+assert _neutralised == 1, f"expected exactly one duplicate pip cell, found {_neutralised}"
+cells.extend(_tail)
 cells.append(code(PERSIST))
 
 nb["cells"] = cells
