@@ -159,3 +159,18 @@ Qwen2.5-7B base, MVP scope. Findings:
 **Compute units consumed: _____ (to be filled in by hand.)** Both A100 sessions
 were stopped at their gate rather than left running, and the runtime was
 disconnected each time.
+
+### 2026-08-16 (later) — 7B MVP Phase 0, A100 High-RAM, first real measurements
+
+Reached Gate C0 for the first time. Results in
+`experiment 2/FINDING_STAGE_B_TRAIN_EMPTY.md`.
+
+| Gate | Result |
+|------|--------|
+| GATE 0a | **PASS** on the eligible population (p95=628 <= 1024); raw p95=1407 recorded and cross-checked against the WIN4070 reference. Confirms the gate fix. |
+| Splits | stage_a_train 54257 / **stage_b_train 0** / stage_b_eval 300 / probe 4096. The zero is a real bug — the probe consumed the whole CodeIO pool. Fixed same day. |
+| Gate C0 | **PASS** — peak 40.14 GiB of 79.25 GiB, headroom 49.3%, 2 training steps ran (loss -0.007958, -0.049697). First 7B+LoRA+group-8 memory number in the project. **40 GiB A100 would NOT fit.** |
+| GATE 0b + smoke | not reached — Colab reclaimed the runtime for inactivity at the preflight cell. |
+
+**Compute units consumed: _____ (fill in by hand.)** Four A100 sessions today;
+this was the only one to produce measurements.

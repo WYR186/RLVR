@@ -154,7 +154,22 @@ def build_exp2_splits(model_id: str, model_revision: str | None,
     eval_set = set(eval_ids)
     remaining_sim_ids = [i for i in sim_ids if i not in eval_set]
 
-    probe_ids = remaining_sim_ids[:n_probe]
+    # DEVIATION LOGGED 2026-08-16 (operator decision; see
+    # FINDING_STAGE_B_TRAIN_EMPTY.md). Stage-B TRAIN is allocated before the
+    # probe, not after. The previous order took `remaining_sim_ids[:n_probe]`
+    # first, and since n_probe (4096) exceeds the eligible CodeIO pool (~1132
+    # after eval), the probe consumed every remaining row and left
+    # stage_b_train EMPTY - observed on the 2026-08-16 7B run
+    # (stage_b_train: 0), which makes the Delta-R curve impossible to produce.
+    # The config's own probe_source says the probe is "disjoint from stage-B
+    # train and eval, topped up from held-out stage-A rows if the CodeI/O pool
+    # is too small", i.e. train is meant to be carved out first and the
+    # shortfall made up from math - which is what this does. The WIN4070
+    # track's splits agree (eligible 1432 -> train 1132 / eval 300).
+    # Practical effect is small: with n_probe=4096 the probe was already ~72%
+    # math top-up, and is now 100% math.
+    train_ids = [i for i in remaining_sim_ids]
+    probe_ids = []
     need = n_probe - len(probe_ids)
     math_ids_all = sorted(r["id"] for r in math_ok)
     train_math_pool = math_ids_all  # stage-A train uses ALL eligible math rows
@@ -167,7 +182,6 @@ def build_exp2_splits(model_id: str, model_revision: str | None,
         topup_pool = [i for i in math_ids_all if i not in set(probe_ids)]
         probe_math_topup_ids = rng.sample(topup_pool, min(need, len(topup_pool)))
 
-    train_ids = [i for i in remaining_sim_ids if i not in set(probe_ids)]
 
     splits = {
         "seed": seed,
