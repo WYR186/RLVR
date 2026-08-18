@@ -108,3 +108,31 @@ In priority order, cheapest first:
    flattened.
 3. **Increase the dose or unfreeze the base.** LoRA r=16 bounds how much the
    representation *can* change, which bounds how much Q *can* report.
+
+---
+
+## 7. Phase 3 launched with a logged ordering change
+
+Stage B (3 checkpoints x 30 updates, seed 42) started 2026-08-18 from the same
+warm runtime, following `colab/03_stage_b_simulation_adaptation.ipynb` cell 6.
+
+**Execution order changed from `[0, 50, 100]` to `[0, 100, 50]`, and logged.**
+The three cells are independent and separately seeded, so order is not a
+scientific variable — but a runtime reclaim mid-way then costs the *interior*
+point rather than an endpoint, and Delta-R is undefined without ckpt-0, so
+ckpt-0 runs first. `run_stage_b_adaptation` returns early if `summary.json`
+exists and refuses to resume a safety-stopped cell, so a reclaim loses only the
+in-flight cell.
+
+**Measured cost projection, from this run's own numbers:** each cell is one
+300-question baseline eval (~25 min, from the T_t timing) + 30 updates at
+cap 640 + three in-training evals at updates 10/20/30 (~25 min each). That is
+**~2.5 h per checkpoint, ~7.5 h total, of which roughly two thirds is
+evaluation, not training.**
+
+That ratio is the actionable part: at n=300 the eval resolves ~6 pp
+([`FINDING_TRANSFER_T_7B_INSTRUCT.md`](FINDING_TRANSFER_T_7B_INSTRUCT.md) §5),
+so the run spends two thirds of its GPU time on a measurement whose resolution
+is coarser than the effect it is looking for. If this arm is ever repeated, the
+first thing to change is the eval — either fewer eval points or a larger eval
+set — not the update budget.
