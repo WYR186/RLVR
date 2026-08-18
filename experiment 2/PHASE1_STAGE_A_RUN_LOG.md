@@ -101,6 +101,7 @@ Run `exp2_colab_guru_math7b_instruct_group8_e33527592dd9`, cap 1536, gates uncha
 | 9 | 0.000 – 0.266 | 1 | 709 – 1038 | ~0.26 | 197 |
 | 22 | 0.047 – 0.172 | 1 | 746 – 936 | ~0.25 | 198 |
 | 31 | 0.016 – 0.141 | 1 | 774 – 1032 | ~0.24 | 203 |
+| 40 | 0.016 – 0.125 | 1 | 733 – 982 | ~0.20 | 207 |
 
 Steady. Clipping stays mostly under the 10% gate and the consecutive-breach
 streak has never exceeded 1 against a patience of 5. Mean completion length is
