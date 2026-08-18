@@ -153,6 +153,8 @@ Fresh 80 GB A100, identical config `e33527592dd9`, polling every 15 min.
 | 70 | .016 0 .016 .063 0 .125 | 730 – 866 | .18 – .27 | 197 | NOT MOUNTED |
 | 76 | .078 .047 .063 .063 .016 0 | 717 – 911 | .15 – .30 | 201 | NOT MOUNTED |
 | 80 | .016 0 .078 .016 .094 .203 | 717 – 1000 | .16 – .27 | 196 | NOT MOUNTED |
+| 85 | .203 .016 .063 .047 .063 .016 | 717 – 1000 | .11 – .27 | 204 | NOT MOUNTED |
+| 90 | .016 .047 .063 0 0 .047 | 710 – 970 | .21 – .33 | 213 | NOT MOUNTED |
 
 Reproducibility spot-check against attempt 1: step-3 `mean_len` is 953.06 here
 against 953.2 there, and step-4 clip 0.156 against 0.156. The seed is doing its
@@ -203,3 +205,14 @@ band is 730-866 with no 1000+ excursions, while the learning rate has decayed to
 rather than drifting, which is the opposite of the failure mode the base run
 showed and is the strongest sign yet that the cap at 1536 is genuinely adequate
 for this variant rather than marginally so.
+
+### 90/100 — reward rising while length holds flat
+
+Updates 86-90: reward .236 / .297 / .241 / .319 / .330, the best sustained
+stretch of the run, against `mean_len` 710-970 with no upward drift and zero
+clipping breaches. Reward going up *without* length going up is the shape that
+matters — the policy is getting more answers right rather than padding its way
+to the reward.
+
+For contrast, the base run's first 7 updates sat at reward ~0.10 and were
+already breaching the clipping gate every step.
