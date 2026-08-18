@@ -89,3 +89,22 @@ Two numbers to carry forward regardless of what happens next:
 - **s/update drift.** Phase 0 extrapolated ~2 min/update from a 2-update smoke.
   If the true rate is materially worse, the MVP schedule to 2026-08-23 needs
   re-planning, and it is better to know at update 10 than at update 90.
+
+---
+
+## 5. Instruct run — periodic checks
+
+Run `exp2_colab_guru_math7b_instruct_group8_e33527592dd9`, cap 1536, gates unchanged.
+
+| updates | clip range (last 8) | max consecutive >10% | mean_len | reward | s/update |
+|---:|---|---:|---:|---:|---:|
+| 9 | 0.000 – 0.266 | 1 | 709 – 1038 | ~0.26 | 197 |
+| 22 | 0.047 – 0.172 | 1 | 746 – 936 | ~0.25 | 198 |
+| 31 | 0.016 – 0.141 | 1 | 774 – 1032 | ~0.24 | 203 |
+
+Steady. Clipping stays mostly under the 10% gate and the consecutive-breach
+streak has never exceeded 1 against a patience of 5. Mean completion length is
+oscillating around ~875 with no upward trend since the step-6 peak of 1038.
+Reward holds ~0.24–0.26, about 2.5x the base run's ~0.10.
+
+At ~203 s/update, 100 updates is **~5.6 h**. `ckpt-50` is the next artifact.
