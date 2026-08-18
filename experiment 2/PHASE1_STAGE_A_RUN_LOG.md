@@ -141,6 +141,7 @@ Fresh 80 GB A100, identical config `e33527592dd9`, polling every 15 min.
 | 15 | .109 .016 .125 0 0 .172 | 676 – 945 | .13 – .41 | 197 | NOT MOUNTED |
 | 20 | .172 .125 .031 .047 .063 .063 | 780 – 945 | .14 – .45 | 192 | NOT MOUNTED |
 | 25 | .063 .141 .063 0 .063 .031 | 806 – 927 | .14 – .25 | 201 | NOT MOUNTED |
+| 29 | .063 .031 .031 **.125 .109 .156** | 819 – 1036 | .14 – .34 | 199 | NOT MOUNTED |
 
 Reproducibility spot-check against attempt 1: step-3 `mean_len` is 953.06 here
 against 953.2 there, and step-4 clip 0.156 against 0.156. The seed is doing its
@@ -149,3 +150,18 @@ different recipe. At 9 updates the match is stronger still: the mean-length
 transient peaks at step 6 in both runs (1034 here, 1038 there) and collapses at
 step 7 in both (726 vs 731). The step-6 length spike is a **reproducible feature
 of this recipe**, not a one-off.
+
+### 29/100 — first 3-update breach streak
+
+Steps 27, 28, 29 all exceeded the 10% clipping limit (.125, .109, .156) with
+mean length climbing 890 -> 928 -> 1036. **Streak 3 against a patience of 5** —
+two more consecutive breaches stop the run.
+
+No intervention. The cap is not being raised, the gate is not being touched, and
+no third variable is moving. If it stops, that is the registered protection
+doing its job and it is the reportable outcome; chasing it would mean an
+unbounded sequence of untracked changes.
+
+Worth noting the shape is familiar: attempt 1 showed the same mean-length
+transient (peak 1038 at step 6) and recovered from it without the streak
+completing. Whether this one recovers is the thing to watch, not to act on.
