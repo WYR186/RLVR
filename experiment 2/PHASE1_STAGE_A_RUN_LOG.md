@@ -151,6 +151,8 @@ Fresh 80 GB A100, identical config `e33527592dd9`, polling every 15 min.
 | 61 | .078 0 0 .078 .156 0 | 668 – 1008 | .17 – .43 | 190 | NOT MOUNTED |
 | 66 | 0 .063 .094 .078 .016 0 | 643 – 944 | .11 – .43 | 199 | NOT MOUNTED |
 | 70 | .016 0 .016 .063 0 .125 | 730 – 866 | .18 – .27 | 197 | NOT MOUNTED |
+| 76 | .078 .047 .063 .063 .016 0 | 717 – 911 | .15 – .30 | 201 | NOT MOUNTED |
+| 80 | .016 0 .078 .016 .094 .203 | 717 – 1000 | .16 – .27 | 196 | NOT MOUNTED |
 
 Reproducibility spot-check against attempt 1: step-3 `mean_len` is 953.06 here
 against 953.2 there, and step-4 clip 0.156 against 0.156. The seed is doing its
