@@ -1,0 +1,1040 @@
+
+===== [PAGE 1] =====
+On the Plasticity and Stability for Post-Training Large Language Models
+Wenwen Qiang 1 2 Ziyin Gu 1 2 Jiahuan Zhou 3 Jie Hu 4 Jingyao Wang 1 2 * Changwen Zheng 1 2 Hui Xiong 5
+Abstract
+Training stability remains a critical bottleneck for
+Group Relative Policy Optimization (GRPO), of-
+ten manifesting as a trade-off between reasoning
+plasticity and general capability retention. We
+identify a root cause as the geometric conflict
+between plasticity and stability gradients, which
+leads to destructive interference. Crucially, we ar-
+gue that deterministic projection methods are sub-
+optimal for GRPO as they overlook the intrinsic
+stochasticity of group-based gradient estimates.
+To address this, we proposeProbabilisticConflict
+Resolution (PCR), a Bayesian framework that
+models gradients as random variables. PCR dy-
+namically arbitrates conflicts via an uncertainty-
+aware “soft projection” mechanism, optimizing
+the signal-to-noise ratio. Extensive experiments
+demonstrate that PCR significantly smooths the
+training trajectory and achieves a superior perfor-
+mance in various reasoning tasks.
+1. Introduction
+Large Language Models (LLMs) like DeepSeek-R1 (Guo
+et al., 2025) has proven that Reinforcement Learning (RL)
+is essential for unlocking complex reasoning capabilities.
+Among the various RL techniques, Group Relative Policy
+Optimization (GRPO) (Shao et al., 2024) has become the
+standard choice. By removing the need for a separate value
+network, GRPO significantly reduces memory usage and en-
+ables scalable training, allowing models to learn effectively
+from group-based relative rewards.
+However, despite its efficiency, GRPO is notoriously dif-
+ficult to train (Zhang et al., 2025; Ge et al., 2025; Wu
+1Institute of Software Chinese Academy of Sciences, Beijing,
+China 2University of the Chinese Academy of Sciences, Bei-
+jing, China 3Wangxuan Institute of Computer Technology, Peking
+University, Beijing, China 4Meituan 5Thrust of Artificial Intel-
+ligence, The Hong Kong University of Science and Technology
+(Guangzhou), China Department of Computer Science and En-
+gineering, The Hong Kong University of Science and Technol-
+ogy Hong Kong SAR, China. Correspondence to: Jingyao Wang
+<wangjingyao2023@iscas.ac.cn>.
+Preprint. February 9, 2026.
+et al., 2025). Practitioners face a harsh “Plasticity-Stability
+Dilemma”: aggressive updates to improve reasoning (plas-
+ticity) often cause the model to forget general knowledge
+or lose linguistic coherence (stability). Conversely, strict
+constraints to preserve language often prevent the model
+from learning new reasoning skills. Balancing these two
+forces typically requires exhaustive, fragile tuning of the
+KL penalty coefficient (β).
+Why is GRPO so unstable? In this paper, inspired by (Liu
+et al., 2021), we argue that a possible root cause is a geo-
+metric conflict between two optimization objectives in the
+GRPO loss. Our analysis reveals that the gradient for rea-
+soning (gpla) and the gradient for stability (gsta) frequently
+point in opposite directions. The standard GRPO update
+rule simply adds these two opposing vectors together. This
+results in “destructive interference”, where the two forces
+cancel each other out, causing the optimizer to fight against
+itself and traverse the loss landscape inefficiently.
+Addressing this conflict is not as simple as using geometric
+projection methods like PCGrad (Yu et al., 2020). These
+methods assume that the calculated gradients are perfect,
+deterministic vectors. However, in GRPO, gradients are
+Monte Carlo estimates derived from a small group of train-
+ing queries, Therefore, they are inherently noisy and uncer-
+tain. If we blindly project one gradient vector onto another
+based on noisy data (a “hard projection”), we risk discarding
+valid learning signals or enforcing incorrect constraints. We
+need a method that considers not just the direction of the
+gradients, but our confidence in them.
+To solve this, we proposeProbabilisticConflictResolution
+(PCR). Instead of treating gradients as fixed arrows, we
+model them as probability distributions (Gaussian random
+variables) to capture their uncertainty. We then employ
+Bayesian inference to dynamically arbitrate the conflict.
+The core idea is intuitive: if the reasoning signal is strong
+and precise (low variance), PCR trusts it and allows the
+update; if the reasoning signal is noisy or the stability con-
+straint is rigid (high variance), PCR suppresses the update.
+This results in a soft projection mechanism. Unlike PCGrad,
+which deletes conflicting components entirely, PCR scales
+them based on the signal-to-noise ratio. To make this com-
+putationally feasible for billion-parameter models, we apply
+PCR strategically: we use it only on the MLP layers (which
+1
+arXiv:2602.06453v1  [cs.LG]  6 Feb 2026
+===== [PAGE 2] =====
+On the Plasticity and Stability for Post-Training Large Language Models
+act as knowledge stores) while using standard updates for
+Attention layers. This hybrid approach ensures rigorous
+stability for core knowledge without slowing down training.
+Our contributions:1) We identify that the instability in
+GRPO stems from the high-dimensional geometric conflict
+between plasticity and stability gradients;2) We propose
+PCR, a Bayesian framework that derives a closed-form,
+uncertainty-aware “soft projection” rule. To our knowledge,
+this is the first work to introduce probabilistic modeling into
+gradient projection for LLM post-training;3) We introduce
+an efficient hybrid implementation that applies PCR only to
+MLP layers, making it scalable for LLM training;4) Theo-
+retically, we prove that PCR is the mathematically optimal
+estimator in the gradient space. It minimizes the update
+error by finding the perfect trade-off between bias and vari-
+ance. Empirically, extensive experiments demonstrate that
+this stability allows PCR to eliminate training oscillations
+and achieve superior performance on reasoning tasks.
+2. Related Work
+Large language models (LLMs) have achieved remarkable
+success in reasoning tasks through reinforcement learn-
+ing post-training (Ouyang et al., 2022; Wang et al., 2025).
+While GRPO (Shao et al., 2024) has emerged as a dominant
+paradigm due to its memory efficiency, training stability
+remains a critical bottleneck. Recent studies have proposed
+various mechanisms to mitigate this volatility. On one hand,
+methods like ∆L Norm (He et al., 2025) and BNPO (Xiao
+et al., 2025) introduce advanced normalization statistics to
+smooth the reward landscape and reduce variance. On the
+other hand, approaches like GSPO (Zheng et al., 2025) and
+BAPO (Xi et al., 2025) focus on refining policy constraints,
+employing adaptive clipping or sequence-level optimiza-
+tion to prevent policy divergence. Other works such as
+GVPO (Zhang et al., 2025) and MRT (Qu et al., 2025) uti-
+lize analytic re-weighting or reward correction. Meanwhile,
+GCPO (Gu et al., 2025) maintains stable training by con-
+structing causal collision structures. Despite these diverse
+improvements, most existing methods focus on shaping the
+scalar loss or reward values. They often overlook the high-
+dimensional geometric antagonism between the plasticity
+gradient and the stability constraint, which our work identi-
+fies as a possible root cause of optimization conflict.
+The challenge of conflicting gradients is a central theme
+in Multi-Task Learning (MTL). When objectives compete,
+simple summation leads to destructive interference. Classic
+solutions like PCGrad (Yu et al., 2020) project conflicting
+gradients onto the normal plane, while recent advances like
+MMPareto (Wei & Hu, 2024) and Robust MTL (He et al.,
+2024) explore Pareto-optimal frontiers and risk minimiza-
+tion to balance innocent unimodal assistance or excess risks.
+However, these methods typically operate under a deter-
+ministic assumption, treating gradient estimates as reliable
+ground truths. In the context of GRPO, gradients are Monte
+Carlo estimates carrying significant stochastic noise. Ap-
+plying hard geometric projection to such noisy signals can
+erroneously discard valid exploration. Our proposed PCR
+bridges this gap by modeling gradients as probabilistic dis-
+tributions. Instead of a hard cut, PCR introduces a Bayesian
+arbitration mechanism that performs “soft projection” based
+on the signal-to-noise ratio, offering a mathematically opti-
+mal trade-off for stochastic optimization.
+3. Problem Formulation and Analysis
+To rigorously analyze the plasticity-stability trade-off in
+post-training, we first reformulate the GRPO objective by
+decoupling it into two distinct forces. We then derive their
+respective gradients to examine their physical roles. Finally,
+through empirical analysis, we demonstrate that the inherent
+geometric conflict between these update directions serves
+as the root cause of training instability.
+3.1. Reformulating the GRPO Objective
+A LLM can be formulated as an autoregressive policy πθ(· |
+q), which generates a response token-by-token conditioned
+on a query q. GRPO optimizes this policy by introducing a
+group relative advantage. Given a query q∼P and a group
+of candidate outputs {yi}n
+i=1 sampled from the old policy
+πθold, the standard GRPO objective aims to maximize:
+JGRPO(θ) =E q∼P,{yi}∼πθold
+[ 1
+n
+Pn
+i=1
+1
+Ti
+PTi
+j=1 (Si,j(θ)−βK i,j(θ))].
+(1)
+To clearly identify the sources of the gradients, we formally
+define the two core components in the objective above:
+(1)Token-level Surrogate Gain ( Si,j):This term drives
+the model updates towards regions of higher reward. We
+define the importance ratio as Ri,j(θ) = πθ(yi,j |q,yi,<j )
+πθold (yi,j |q,yi,<j ).
+Incorporating the clipping mechanism for training stability,
+the surrogate gain is defined as:
+Si,j(θ) = min (Ri,j(θ)Ai,clip(R i,j(θ),1−ϵ,1 +ϵ)A i), (2)
+where Ai denotes the group relative advantage, computed
+by standardizing the rewards within the group: Ai = (ri −
+µgroup)/σgroup, andy i = (yi,1,· · ·, y i,Ti).
+(2)Token-level KL Penalty ( Ki,j):This term acts as a reg-
+ularizer, constraining the policy from deviating excessively
+from the reference distribution:
+Ki,j(θ) =D KL (πθ(·|q, yi,<j)∥π ref(·|q, yi,<j)).(3)
+Here,π ref is typically set to the old policyπ θold.
+2
+===== [PAGE 3] =====
+On the Plasticity and Stability for Post-Training Large Language Models
+3.2. Dual Decomposition of Loss and Gradients
+For gradient analysis, we transform the maximization prob-
+lem of JGRPO into a minimization problem of a loss func-
+tion LGRPO =−J GRPO. Based on the Eq. 1, we explicitly
+decompose the total loss into two independent terms repre-
+senting plasticity and stability:
+LGRPO(θ) =L pla(θ)| {z }
+Plasticity
++β· L sta(θ)| {z }
+Stability
+,(4)
+Here, the plasticity loss corresponds to the negative expecta-
+tion of the surrogate gain. It aims to enhance task-specific
+performance by exploiting the advantage signals:
+Lpla(θ) =−E[ 1
+n
+Pn
+i=1
+1
+Ti
+PTi
+j=1Si,j(θ)].(5)
+The stability loss corresponds to the KL divergence term.
+It aims to anchor the policy to the reference manifold to
+preserve general capabilities:
+Lsta(θ) =E[ 1
+n
+Pn
+i=1
+1
+Ti
+PTi
+j=1Ki,j(θ)].(6)
+From the above, we derive two gradient vectors used for
+parameter updates. Relying on the linearity of the gradient
+operator, the total gradientg total can be expressed as:
+∇θLGRPO(θ) =g pla +β·g sta.(7)
+Suppose a batch has Nbatch queries, these two gradients pos-
+sess distinct physical interpretations and adversarial natures:
+(1)The Plasticity Gradient (g pla):
+gpla ≜∇ θLpla(θ)≈ − 1
+Nbatch
+X
+∇θSi,j(θ).(8)
+This gradient represents the signal for policy improvement.
+It drives the parameters θ in a direction that maximizes the
+specific task reward, serving as the primary source of the
+model’s new capabilities (i.e., plasticity).
+(2)The Stability Gradient (g sta):
+gsta ≜∇ θLsta(θ)≈ 1
+Nbatch
+X
+∇θKi,j(θ).(9)
+This gradient represents the signal for behavior maintenance.
+It drives the parameters θ back towards the parameter space
+of the reference model, serving as the key constraint to
+prevent catastrophic forgetting and maintain general capa-
+bilities (i.e., stability).
+3.3. Empirical Analysis
+While GRPO theoretically balances policy improvement
+and reference maintenance, in practice, it exhibits signifi-
+cant training instability (Ouyang et al., 2022; Simoni et al.,
+2025; Dai et al., 2025). Models often oscillate between
+overfitting to the reasoning task (forgetting general knowl-
+edge) and stagnation (failing to learn reasoning), requiring
+exhaustive hyperparameter tuning. To diagnose the root
+cause of this instability, we analyze the optimization dynam-
+ics of DeepSeek-R1-Distill-Llama-8B on the AIME dataset
+(detailed setup in Appendix B).
+We first visualize the trade-off between reasoning perfor-
+mance (AIME Pass@1) and linguistic stability (WikiText-2
+PPL) by varying the KL coefficientβ. The results are shown
+in Figure 1(a)-(b). We can observe that a slight decrease in
+β triggers a disproportionate collapse in PPL (Note that a
+lower PPL is better), while a slight increase suppresses rea-
+soning gains entirely. As shown in Figure 1(b), the Pareto
+frontier is extremely sharp. This sensitivity suggests that the
+two objectives are functionally antagonistic, and standard
+scalarization fails to find a stable equilibrium, leading to the
+observed training volatility.
+To confirm this antagonism physically, we compute the
+layer-wise cosine similarity between the Plasticity gradi-
+ent gpla and the stability gradient gsta. The heatmap
+in Figure 1(b) reveals that the middle-to-deep MLP lay-
+ers—critical for knowledge storage—exhibit persistent neg-
+ative cosine similarity (gradient conflict) throughout train-
+ing. This geometric conflict implies that the standard GRPO
+update rule ( gpla +βg sta) results in destructive interfer-
+ence: the opposing vectors partially cancel each other out,
+reducing the effective update magnitude and skewing the
+direction. This cancellation explains the instability: the opti-
+mizer is fighting against itself, leading to inefficient traversal
+of the loss landscape and sensitivity to noise.
+4. Methodology
+In this section, we introduce Probabilistic Conflict Resolu-
+tion (PCR), a principled framework that dynamically arbi-
+trates gradient conflicts in GRPO. Our method unfolds in
+four key stages: probabilistic modeling, geometric decom-
+position, Bayesian arbitration, and finally reconstruction
+and projection. This pipeline effectively transforms the
+hard geometric constraints of prior methods into a flexible,
+uncertainty-aware optimization process.
+4.1. Probabilistic Modeling
+As formalized in the previous section, the plasticity gradient
+gpla and the stability gradient gsta frequently exhibit adver-
+sarial directions. The canonical approach to resolving such
+conflicts is PCGrad (Yu et al., 2020), which treats gradients
+as deterministic vectors and performs geometric projection
+upon conflict. However, this deterministic perspective over-
+looks a fundamental property of GRPO optimization: the
+observed gradients are not true expectations over the full
+3
+===== [PAGE 4] =====
+On the Plasticity and Stability for Post-Training Large Language Models
+0.00 0.02 0.04 0.06 0.08 0.10
+Weighting Coefficient 
+0
+10
+20
+30
+40
+50
+60
+70
+80Performance (%)
+AIME Pass@1
+MMLU Score
+WikiT ext-2 PPL
+4
+6
+8
+10
+12
+14
+16
+Perplexity Score
+(a)Trade-off performance.
+60 62 64 66 68 70 72 74
+Stability (MMLU Score)
+20
+25
+30
+35
+40
+45
+50
+55Plasticity (Pass@1)
+Standard GRPO
+PCR (Ours) (b)The Pareto frontier.
+0 100 200 300 400 500
+Training Steps
+0
+4
+8
+12
+16
+20
+24
+28
+32Transformer Layer Index
+ 1.00
+0.75
+0.50
+0.25
+0.00
+0.25
+0.50
+0.75
+1.00
+Similarity (c)Visualization of heatmap.
+Figure 1.Motivating results. (a) Results of AIME accuracy, MMLU score, and PPL, varying with the KL coefficient β. (b) The Pareto
+frontier. (c) The layer-wise cosine similarity between plasticity and stability gradients across training steps.
+data distribution but are Monte Carlo estimators derived
+from a finite group of samples.
+From a statistical lens, gradient estimates are often noisy. A
+gradient with high variance is unreliable, meaning we can-
+not fully trust its direction. In such cases, PCGrad blindly
+applies projection regardless of uncertainty, creating the
+risk of over-trusting a noisy direction and removing valid
+signals. Intuitively, the projection should be adaptive based
+on confidence. If the gradient is precise (low variance), we
+should strictly perform geometric projection. However, if
+the gradient is noisy and random (high variance), we should
+trust it less and perform a weaker projection to avoid being
+misled by noise. Therefore, to formalize this adaptive mech-
+anism, we must model gradients as random variables rather
+than deterministic vectors, which allows us to quantify the
+uncertainty (refer to Appendix C for more explanation).
+To mathematically capture this uncertainty, we look at the
+aggregation mechanism of GRPO. Since the gradient is com-
+puted by averaging over a group of independent stochastic
+queries {qi}Nbatch
+i=1 , we can invoke the Central Limit Theo-
+rem (CLT) (Feller, 1991). The CLT states that the distribu-
+tion of the sample mean approaches a multivariate Gaussian
+as the sample size implies. This provides a rigorous justifica-
+tion for approximating the gradient estimation as Gaussian,
+a standard practice in the analysis of stochastic optimization
+dynamics (Mandt et al., 2017). By leveraging this prop-
+erty, we can explicitly quantify the confidence of update
+directions via their covariance structure. Thus, we have:
+gpla ∼ N(µ pla ,Σ pla ),g sta ∼ N(µ sta ,Σ sta ), (10)
+where µpla and µsta represent the theoretical expectations
+of the gradients over the underlying data distribution, e.g.,
+the latent ground truths we aim to approximate. Meanwhile,
+Σ characterize the estimation uncertainty, quantifying how
+significantly the observed gradients derived from group sam-
+pling diverge from these true expectations.
+To bridge the gap between theoretical rigor and practical
+feasibility, we adopt three physically motivated approxima-
+tions. First, regarding the direction, we approximate the
+latent true mean µ directly using the observed gradient g.
+This relies on the fundamental premise of stochastic approx-
+imation (Robbins & Monro, 1951), treating the empirical
+gradient as an unbiased estimator of the population expec-
+tation. Second, following standard adaptive optimization
+practices (e.g., Adam (Kingma & Ba, 2015)), we simplify
+the complex covariance structure via an isotropic assump-
+tion (Σ≈σ 2I), where the scalar variance is estimated by
+the trace of intra-group gradients. This effectively captures
+the global noise level without incurring memory overhead.
+Third, inspired by the mean-field assumption common in
+variational inference (Blei et al., 2017), we treat the estima-
+tion errors of the two gradients as conditionally independent.
+This is justified by their orthogonal sources of stochasticity:
+the variance in gpla is primarily driven by the instability of
+discrete rewards, whereas the variance in gsta arises from
+the probabilistic divergence of the token distribution.
+4.2. Geometric Decomposition
+While the probabilistic model measures gradient uncertainty,
+the actual interaction between the two gradient distribution
+is determined by their expected directions, represented by
+the means µpla and µsta (refer to Appendix E for more
+detailed explanation). To rigorously incorporate uncertainty
+into conflict resolution, we must first analyze the geometric
+relationship between these two vectors. The goal of this step
+is to physically isolate the specific component responsible
+for the directional opposition.
+We formally define a gradient conflict as a situation where
+the two expected gradients point in opposing directions, sat-
+isfying µpla·µsta <0 . This simply means that the plasticity
+objective is pushing the parameters in a direction that hurts
+the stability objective. To resolve this, mere identification is
+not enough. We must geometrically separate the “safe” part
+of the update from the “harmful” part.
+To isolate the specific source of the conflict, we perform
+an orthogonal decomposition of the plasticity gradient µpla
+using the stability gradient µsta as the reference frame. We
+choose the stability gradient as the anchor because of the
+Alignment Hypothesis (Zhou et al., 2024). It suggests that
+the pre-trained knowledge is the foundation of the model’s
+4
+===== [PAGE 5] =====
+On the Plasticity and Stability for Post-Training Large Language Models
+intelligence. Therefore, our primary goal is to learn new
+capabilities without breaking this foundation. Based on this
+logic, we decompose the plasticity gradient as follows:
+µpla =µ ⊥
+pla +µ ∥
+pla.(11)
+This formula splits the update into two components with
+clear physical meanings. The first is the independent compo-
+nent (µ⊥
+pla), which is perpendicular to the stability gradient.
+Since it moves in a direction that has no effect on the sta-
+bility objective, it is structurally safe and should be fully
+preserved. The second is the conflicting component (µ∥
+pla),
+which is the projection of the plasticity gradient onto the
+stability gradient. When a conflict happens, this component
+points directly against the constraint:
+µ∥
+pla = µpla ·µ sta
+∥µsta∥2 µsta.(12)
+This component represents the specific force that attempts
+to violate the stability rule. Note that in this step, we only
+identify this conflicting force geometrically. The decision
+of whether to remove it or keep it depends on its uncertainty,
+which we will handle in the next section.
+4.3. Bayesian Arbitration
+Having isolated the conflicting component µ∥
+pla, we face
+the central decision of determining exactly how much of
+this conflicting update to retain. Traditional methods like
+PCGrad are too extreme because they bluntly discard the
+entire component, implicitly assuming that the stability con-
+straint is perfect and allows for no error. To correct this bias,
+we use Bayesian inference to dynamically balance the two
+objectives based on their reliability. Crucially, although the
+parameter space of an LLM is high-dimensional, the gradi-
+ent conflict is strictly localized along a single line defined
+by the stability gradient µsta. Any movement perpendicular
+to this axis is already safe. Therefore, we can simplify this
+complex optimization into a scalar estimation problem for a
+variablex, denoting the optimal move along conflict axis.
+To estimate this optimal magnitude, we combine two dis-
+tinct sources of information. We view the plasticity gradient
+as a noisy observation (the Likelihood). It pushes the model
+to move by a magnitude of xobs =∥µ ∥
+pla∥, but its reliability
+is inherently limited by its variance. If this driving signal is
+precise, we trust the observation and move. Simultaneously,
+we view the stability requirement as a prior belief (the Prior).
+Its goal is to act as an anchor, aiming to prevent deviation
+from the reference manifold. Mathematically, this creates
+a preference for the update to be zero. The variance of this
+prior acts like a physical stiffness parameter. A small vari-
+ance represents a rigid wall that forbids movement, while a
+large variance acts like a flexible elastic band that permits
+necessary exploration.
+By combining the likelihood and the prior using Bayes’
+theorem, the optimal update x∗ emerges as the precision-
+weighted average of the two. We formalize this result as:
+Proposition 4.1(Optimal Conflict Retention).The optimal
+update magnitudex ∗ is governed by the following:
+x∗ =k·x obs,wherek= λpla
+λpla +λ sta
+.(13)
+Here, λ= 1/σ 2 denotes precision, and the scalar k∈[0,1]
+is defined as the retention coefficient.
+The proof is provided in Appendix F. The coefficientk offers
+a very clear physical interpretation: it represents the relative
+confidence of the plasticity signal compared to the stability
+constraint. If the plasticity signal is far more reliable, k
+approaches 1 and we fully keep the update. Conversely,
+if the stability constraint is far more certain, k approaches
+0 and we discard the update. This allows the algorithm
+to smoothly interpolate between exploring and restraining
+based on the instantaneous signal-to-noise ratio.
+4.4. Reconstruction and Projection
+With the retention coefficient k derived from Bayesian arbi-
+tration, we now reconstruct the final gradient update. The
+logic is simple: we preserve the safe component entirely
+since it violates no constraints, but we only retain a fraction
+k of the conflicting component. Mathematically, the final
+gradient is composed as gf inal =µ ⊥
+pla +k·µ ∥
+pla. By using
+the geometric definitionµ⊥
+pla =µ pla −µ ∥
+pla, we can rewrite
+this equation to show that the final gradient is simply the
+original gradient minus a correction term:
+gf inal= (µpla −µ∥
+pla) +k·µ ∥
+pla =µ pla −(1−k)µ ∥
+pla. (14)
+To make this physically intuitive, we define a new term
+α= 1−k , which represents the projection strength (i.e.,
+how much of the conflict we strictly remove). Substituting
+the precision terms derived earlier, α takes the form α=
+λsta/(λpla +λ sta). Finally, by plugging in the formula for
+the conflicting component, we arrive at the final update:
+gf inal =µ pla −α µpla ·µ sta
+∥µsta∥2 µsta (15)
+This closed-form solution reveals that PCR is essentially
+a soft projection algorithm where the projection strength
+α is not manually set but automatically calculated from
+the data. We can validate its rationality by examining two
+extreme cases. First, consider the case of a high certainty
+constraint where the stability gradient is very precise and
+rigid (λsta ≫λ pla). Here, α approaches 1, meaning PCR
+converges to PCGrad and performs a hard projection to
+strictly eliminate the conflict. Conversely, consider the case
+5
+===== [PAGE 6] =====
+On the Plasticity and Stability for Post-Training Large Language Models
+of a low certainty constraint where the stability signal is
+noisy and unreliable (λsta ≪λ pla). Here, α approaches 0,
+meaning PCR converges to standard gradient addition, ef-
+fectively ignoring the constraint to allow full exploration. In
+this way, PCR achieves a smooth and theoretically grounded
+interpolation between obeying the constraint and ignoring
+it, based purely on which signal is more trustworthy.
+4.5. Policy Optimization
+While PCR provides a theoretically optimal solution for
+resolving conflicts, applying it element-wise to every single
+parameter in a billion-parameter LLM is computationally
+too expensive. Maintaining variance estimators and calcu-
+lating projection coefficients for the entire model would
+drastically increase memory usage and slow down training.
+To make PCR practical for large-scale models, we introduce
+an efficient hybrid update strategy grounded in the specific
+roles of Transformer components.
+Modern LLMs are built from alternating Self-Attention
+layers and Feed-Forward Networks (MLPs). Recent in-
+terpretability studies (Geva et al., 2021; Meng et al., 2022)
+offer a crucial insight: MLP layers act as factual knowledge
+stores, holding the vast majority of the model’s domain ex-
+pertise. In contrast, Attention layers serve primarily as con-
+text routers that move information around. Consequently,
+the problem of catastrophic forgetting, which represents the
+loss of model stability, is possibly caused by overwriting
+the knowledge stored within these MLP layers.
+Based on this insight, we apply a strategic split. We use the
+computationally intensive PCR exclusively for the MLP lay-
+ers to rigorously protect knowledge where it actually lives.
+For the Attention layers and other parameters (like Layer-
+Norm), we revert to the standard, efficient GRPO update
+(simple addition). This approach strikes an optimal balance:
+it secures the core knowledge modules without paying the
+computational price for the whole model. Mathematically,
+the update rule for parametersθ (l) at layerlis defined as:
+g(l)
+update =
+(
+g(l)
+f inal (via Eq. 17)ifθ (l) ∈MLP
+g(l)
+pla +βg (l)
+sta otherwise (16)
+The parameters are then updated using the optimizer:
+θ(l)
+t+1 ←θ (l)
+t −η·Optimizer(g (l)
+update). By restricting the
+overhead of PCR to only the most critical layers, we en-
+sure training stability with negligible cost. The complete
+algorithm is detailed in Appendix D.
+5. Theoretical Analysis
+In this section, we demonstrate that the projection coeffi-
+cient derived in PCR is not a heuristic design but the precise
+analytical solution under the Minimum Mean Square Error
+(MMSE) criterion. This means that PCR mathematically
+0-shot 5-shot60
+62
+64
+66
+68
+70
+72Pass@1 (%)
+GRPO
+MRT
+GCPO
+PCR
+Figure 2.Performance analysis with PCR on code reasoning tasks.
+We record the 1-shot and 5-shot results on HumanEval.
+finds the optimal balance between the bias caused by violat-
+ing constraints and the variance caused by noisy gradients.
+Theorem 5.1(MMSE Optimality of Soft Projection).Con-
+sider the scalar estimation problem along the conflict axis
+defined by the unit vector u=−µ sta/∥µsta∥. Let the la-
+tent true update z∗ ∈R follow a prior distribution governed
+by the stability constraint z∗ ∼ N(0, σ 2
+sta). Let the plas-
+ticity gradient provide a noisy observation zobs =z ∗ +ϵ ,
+where the noise ϵ∼ N(0, σ 2
+pla) is independent of z∗. For
+the family of linear estimators ˆz(α) = (1−α)z obs with
+α∈[0,1] , the projection coefficient α∗ = λsta
+λpla+λsta
+uti-
+lized by PCR achieves the global minimum of the posterior
+expected riskR(α) =E[(ˆz(α)−z ∗)2].
+The proof is provided in Appendix G. Based on this theorem,
+we verify why PCR is superior to fixed strategies. By sub-
+stituting α∗ back into the risk function, the minimum risk
+of PCR is RP CR = (λpla +λ sta)−1. In contrast, PCGrad
+(Hard Projection, α= 1 ) yields a risk of σ2
+sta, while Naive
+Sum (No Projection, α= 0 ) yields a risk of σ2
+pla. Since
+the combined precision is always higher than individual
+precisions, PCR is theoretically guaranteed to achieve lower
+error than both baselines, i.e., RP CR <R P CGrad and
+RP CR <R Sum. The mechanism is physically intuitive.
+If the stability constraint is unreliable (large σ2
+sta), hard
+projection introduces a massive error known as bias. PCR
+avoids this by automatically reducing α. Conversely, if the
+plasticity gradient is unstable (large σ2
+pla), a direct update
+introduces a massive error known as variance. PCR sup-
+presses this noise by automatically increasing α. Therefore,
+we can conclude that PCR guarantees better convergence
+stability than fixed strategy.
+6. Experiment
+In this section, we begin by describing the experimental
+setup. We then present the results of the evaluation, followed
+by an ablation study to analyze how it works well. More
+details and results are provided in the Appendices J-L.
+6.1. Experimental Settings
+We evaluate our method on a diverse suite of reasoning
+benchmarks, covering competition math and code genera-
+6
+===== [PAGE 7] =====
+On the Plasticity and Stability for Post-Training Large Language Models
+Table 1.Pass@1 performance on various math reasoning benchmarks. We compare base models trained with different fine-tuning
+approaches. The best results are highlighted inbold. More details and results are provided in Appendix L.1.
+Base model + Method AIME 2024 AIME 2025 AMC 2023 MATH500 MinervaMATH A vg.
+DeepScaleR-1.5B-Preview 42.8 36.7 83.0 85.2 24.6 54.5
+GRPO (Shao et al., 2024) 44.5 (+1.7) 39.3 (+2.6) 81.5 (-1.5) 84.9 (-0.3) 24.7 (+0.1) 55.0 (+0.5)
+GVPO (Zhang et al., 2025) 46.1 (+3.3) 39.7 (+3.0) 83.6 (+0.6) 85.7 (+0.5) 25.3 (+0.7) 56.1 (+1.6)
+MRT (Qu et al., 2025) 47.2 (+4.4) 39.7 (+3.0) 83.1 (+0.1) 85.1 (-0.1) 24.2 (-0.4) 55.9 (+1.4)
+GCPO (Gu et al., 2025) 46.7 (+3.9) 40.3 (+3.6) 84.1 (+1.1) 86.3 (+1.1) 25.9 (+1.4) 56.8 (+2.3)
+PCR (Ours) 48.1 (+5.3) 41.4 (+4.7) 84.9 (+1.9) 87.0 (+1.8) 26.8 (+2.2) 57.7 (+3.2)
+DeepSeek-R1-Distill-Qwen-1.5B 28.7 26.0 69.9 80.1 19.8 44.9
+GRPO (Shao et al., 2024) 29.8 (+1.1) 27.3 (+1.3) 70.5 (+0.6) 80.3 (+0.2) 22.1 (+2.3) 46.0 (+1.1)
+GVPO (Zhang et al., 2025) 30.6 (+1.9) 28.2 (+2.2) 71.5 (+1.6) 80.5 (+0.4) 23.1 (+3.3) 46.7 (+1.8)
+MRT (Qu et al., 2025) 30.3 (+1.6) 29.3 (+3.3) 72.9 (+3.0) 80.4 (+0.3) 22.5 (+2.7) 47.1 (+2.2)
+GCPO (Gu et al., 2025) 31.0 (+2.3) 29.0 (+3.0) 71.8 (+1.9) 81.6 (+1.5) 23.4 (+3.6) 47.4 (+2.5)
+PCR (Ours) 32.3 (+3.6) 30.4 (+4.4) 72.7 (+2.8) 82.2 (+2.1) 24.8 (+5.0) 48.5 (+3.6)
+DeepSeek-R1-Distill-Qwen-7B 55.5 50.2 85.1 87.4 42.1 64.1
+GRPO (Shao et al., 2024) 56.9 (+1.4) 51.7 (+1.5) 85.5 (+0.4) 87.7 (+0.3) 43.5 (+1.4) 65.1 (+1.0)
+GVPO (Zhang et al., 2025) 57.5 (+2.0) 52.1 (+1.9) 86.3 (+1.2) 88.5 (+1.1) 44.2 (+2.1) 65.7 (+1.6)
+MRT (Qu et al., 2025) 57.0 (+1.5) 52.4 (+2.2) 86.0 (+0.9) 88.4 (+1.0) 44.3 (+2.2) 65.6 (+1.5)
+GCPO (Gu et al., 2025) 58.3 (+2.8) 53.0 (+2.8) 87.3 (+2.2) 89.1 (+1.7) 45.0 (+2.9) 66.5 (+2.4)
+PCR (Ours) 59.7 (+4.2) 54.1 (+3.9) 88.0 (+2.9) 89.8 (+2.4) 46.5 (+4.4) 67.6 (+3.5)
+tion, including AIME24–25, AMC, MATH500 (Hendrycks
+et al., 2021), MinervaMATH (Lewkowycz et al., 2022),
+and HumanEval (Chen et al., 2021). The experiments
+are conducted with four base models: DeepScaleR-1.5B-
+Preview, DeepSeek-R1-Distill-Qwen-1.5B, DeepSeek-R1-
+Distill-Qwen-7B, and Qwen2-7B-Instruct. We compare
+against representative classic and state-of-the-art (SOTA)
+RL post-training baselines, including GRPO (Shao et al.,
+2024), GVPO (Zhang et al., 2025), MRT (Qu et al.,
+2025), and GCPO (Gu et al., 2025). For data preparation,
+DeepScaleR-1.5B-Preview, which was previously fine-tuned
+on 40k math QA pairs, is further trained on 919 AIME prob-
+lems spanning 1989–2023. DeepSeek-R1-Distill-Qwen-
+1.5B is fine-tuned on a random subset of 4,000 QA pairs
+from NuminaMath (Li et al., 2024). Following (Wang et al.,
+2025), we cap both training and evaluation with a token
+budget of 16,384. Unless otherwise noted, we use a learning
+rate of 1e−6, weight decay of 0.01, and batch size of 256.
+All experiments are run on A100 GPU clusters.
+6.2. Performance Analysis
+We evaluate our method, PCR, against all the men-
+tioned baselines across diverse benchmarks. The eval-
+uation involves three widely adopted base models, in-
+cluding DeepScaleR-1.5B-Preview, DeepSeek-R1-Distill-
+Qwen-1.5B, and DeepSeek-R1-Distill-Qwen-7B, with per-
+formance measured by pass@1 accuracy following the pro-
+tocols in (Gu et al., 2025). The results are shown in Table
+1. Across all experimental settings, our method consis-
+tently secures the top performance, surpassing both the
+base models and competitive RL baselines. Specifically,
+our method yields substantial improvements over the base
+0 200 400 600 800 1k
+Step
+0
+200
+400
+600
+800
+1k
+Gradient Norm
+Standard GRPO
+Ours
+Figure 3.Stability analyses. We provide the norm of the gradient
+during training. A stable gradient norm implies consistent updates;
+large swings suggest unstable or overly aggressive shifts.
+models, achieving average gains of 3% on all the base mod-
+els. Critical to this success is our Bayesian formulation,
+which effectively integrates generalizability and transfer-
+ability. Unlike standard RL baselines that may overfit to spe-
+cific reward signals, e.g., GRPO with negative performance
+gains in AMC, our method treats the optimization process
+as a Bayesian inference problem, i.e., our method demon-
+strates superior robustness on challenging benchmarks such
+as AIME and MinervaMATH, where it outperforms the
+strongest baselines by over nearly 1.2%. These results
+demonstrate the effectiveness of our method.
+To further validate the versatility of PCR, we conduct exper-
+iments on code reasoning tasks using Qwen2-7B-Instruct.
+We evaluate performance via the standard HumanEval pro-
+tocol under both 0-shot and 5-shot settings. The results are
+presented in Figure 2. From the results, we can observe that
+our method achieves the best results among all methods:
+PCR achieves the improvements of almost 1.2% over the
+baselines. This further shows the advantages of our method.
+7
+===== [PAGE 8] =====
+On the Plasticity and Stability for Post-Training Large Language Models
+Fixed = 0.2
+ Fixed = 0.5
+ Fixed = 0.8
+ Auto 
+44
+45
+46
+47
+48
+49
+50Pass@1 (%)
+(a)Effect of probabilistic modeling.
+0.8 1.0 1.2 1.4 1.6 1.8 2.0 2.2
+Training Time (N × )
+40
+42
+44
+46
+48
+50Pass@1 (%) GRPO (Base)
+PCR (Transformer Layers)
+PCR (MLP Only)
+PCR (All Layers) (b)Effect of hybrid strategy.
+0.5 1.0 1.5 2.0 2.5
+Update Magnitude Scale of  (N × )
+45
+46
+47
+48
+49
+50Pass@1 (%)
+ (c)Impact of Learning Rateη.
+Figure 4.Ablation Study. (a) and (b) evaluate the effect of different components within PCR. (c) shows the scalability to larger update
+magnitudes. More experiments and results are provided in Appendix L.
+0.0 0.2 0.4 0.6 0.8 1.0
+Projection Strength 
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5Density
+(a) Distribution of projection strength 
+MLP Layers
+Attention Layers
+0 200 400 600 800 1000
+Training Steps
+0.4
+0.2
+0.0
+0.2
+0.4
+0.6
+cos(gfinal, gsta)
+(b) Cosine similarity between gfinal and gsta
+PCR (Ours)
+Standard GRPO
+Figure 5.Visualization results. (a) The distribution of projection
+strength. (b) The cosine similarity between gf inal and gsta. More
+results are shown in Appendix L.2.
+6.3. Visualization Analysis
+To further investigate how PCR dynamically resolves gra-
+dient conflicts, we conduct a series of visualization exper-
+iments. We first visualize the statistical distribution of the
+projection strength α across different functional modules
+during training (Figure 5(a)). Unlike PCGrad, which ap-
+plies a binary projection (i.e., α∈ {0,1} ), PCR exhibits a
+continuous and adaptive distribution. Notably, we observe
+that MLP layers generally maintain a higher α density com-
+pared to Attention layers. This confirms our hypothesis
+that knowledge-heavy MLP modules encounter more severe
+directional conflicts, requiring stronger Bayesian arbitration
+to safeguard linguistic stability. We then measure the cosine
+similarity between the final update gradient gf inal and the
+stability gradient gsta throughout the post-training phase.
+As shown in Figure 5(b), PCR maintains a non-negative or
+slightly positive correlation. Besides, we also follow the
+same experimental settings in Subsection 3.3, and record
+the corresponding results. The results in Figure 6 shows
+that our method breaks the suboptimal Pareto frontier con-
+strained by standard GRPO: PCR achieves superior AIME
+accuracy improvement while simultaneously maintaining
+WikiText-2 PPL. These results demonstrate that PCR suc-
+cessfully navigates the underlying conflicts, improving the
+LLM performance. See Appendix L.2 for more results.
+6.4. Training Stability Analyses
+Given the high cost of post-training LLMs, optimization
+stability is essential for efficient convergence and avoid-
+ing collapse. Instability often stems from gradient conflict
+between reward maximization and reference preservation,
+which amplifies update variance and wastes compute. To
+quantitatively assess this, we utilize the gradient norm as
+a proxy for optimization smoothness, consistent with stan-
+dard RL practices (Xiao et al., 2025). As shown in Figure 3,
+PCR exhibits the most stable training dynamics among all
+compared methods. While GRPO suffers from pronounced
+oscillations due to the conflicting gradients, PCR maintains
+a relatively smooth and consistent gradient norm throughout
+the training process. This superior stability demonstrates
+the effectiveness of our Bayesian fusion mechanism.
+6.5. Ablation Studies
+The effect of different components within PCR.We
+conduct ablation studies to justify the necessity of each
+component in PCR. Specifically, we first compare PCR
+(i.e., auto α) against fixed soft projection baselines (i.e.,
+α∈ {0.2,0.5,0.8} ). The results in Figure 4(a) demonstrate
+that our method consistently outperforms any fixed heuris-
+tic, proving the superiority of Bayesian arbitration. Next,
+we evaluate applying PCR to different layer subsets. Our
+results in Figure 4(b) show that applying PCR exclusively
+to MLP layers achieves a performance gain comparable to
+the all layers setting while significantly reducing training
+time. This demonstrate the effectiveness of our design.
+Parameter Sensitivity.We also conduct sensitivity studies
+on the weighting coefficient β and the PCR parameter learn-
+ing rate η. Figures 6a and 4c show that PCR is highly robust
+to variations in β and continues to improve performance as
+the parameter update magnitude increases.
+7. Conclusion
+This work attributes the instability of GRPO to the high-
+dimensional conflict between task-specific optimization and
+reference maintenance. We argue that standard gradient
+aggregation fails due to the stochastic nature of group sam-
+pling. To resolve this, we introduced Probabilistic Conflict
+Resolution (PCR), which reformulates gradient projection
+8
+===== [PAGE 9] =====
+On the Plasticity and Stability for Post-Training Large Language Models
+as a Bayesian inference problem. By adaptively balancing
+exploration bias against constraint variance, PCR acts as
+an optimal linear filter in the gradient space. Our results
+confirm the effectiveness of the proposed PCR.
+Impact Statement
+This paper presents work whose goal is to advance the field
+of machine learning. There are many potential societal
+consequences of our work, none of which we feel must be
+specifically highlighted here.
+References
+Blei, D. M., Kucukelbir, A., and McAuliffe, J. D. Varia-
+tional inference: A review for statisticians.Journal of
+the American Statistical Association, 112(518):859–877,
+2017.
+Chen, M., Tworek, J., Jun, H., Yuan, Q., Pinto, H. P. D. O.,
+Kaplan, J., Edwards, H., Burda, Y ., Joseph, N., Brockman,
+G., et al. Evaluating large language models trained on
+code.arXiv preprint arXiv:2107.03374, 2021.
+Dai, M., Liu, S., and Si, Q. Stable reinforcement learning
+for efficient reasoning.arXiv preprint arXiv:2505.18086,
+2025.
+Feller, W.An introduction to probability theory and its
+applications, Volume 2, volume 2. John Wiley & Sons,
+1991.
+Ge, C., Yin, C. H., Liang, H., and Zhang, J. Why grpo needs
+normalization: A local-curvature perspective on adaptive
+gradients. InNeurIPS 2025 Workshop on Efficient Rea-
+soning, 2025.
+Geva, M., Schuster, R., Berant, J., and Levy, O. Transformer
+feed-forward layers are key-value memories. InProceed-
+ings of the 2021 Conference on Empirical Methods in
+Natural Language Processing, pp. 5484–5495, 2021.
+Gu, Z., Wang, J., Zuo, R., Sun, C., Song, Z., Zheng,
+C., and Qiang, W. Group causal policy optimization
+for post-training large language models.arXiv preprint
+arXiv:2508.05428, 2025.
+Guo, D., Yang, D., Zhang, H., Song, J., Zhang, R., Xu, R.,
+Zhu, Q., Ma, S., Wang, P., Bi, X., et al. Deepseek-r1: In-
+centivizing reasoning capability in llms via reinforcement
+learning.arXiv preprint arXiv:2501.12948, 2025.
+He, Y ., Zhou, S., Zhang, G., Yun, H., Xu, Y ., Zeng, B.,
+Chilimbi, T., and Zhao, H. Robust multi-task learn-
+ing with excess risks.arXiv preprint arXiv:2402.02009,
+2024.
+He, Z., Luo, X., Zhang, Y ., Yang, Y ., and Qiu, L.δl normal-
+ization: Rethink loss aggregation in rlvr.arXiv e-prints,
+pp. arXiv–2509, 2025.
+Hendrycks, D., Burns, C., Kadavath, S., Arora, A., Basart,
+S., Tang, E., Song, D., and Steinhardt, J. Measuring math-
+ematical problem solving with the math dataset.arXiv
+preprint arXiv:2103.03874, 2021.
+Kingma, D. P. and Ba, J. Adam: A method for stochastic
+optimization. InInternational Conference on Learning
+Representations, 2015.
+Lewkowycz, A., Andreassen, A., Dohan, D., Dyer, E.,
+Michalewski, H., Ramasesh, V ., Slone, A., Anil, C.,
+Schlag, I., Gutman-Solo, T., et al. Solving quantitative
+reasoning problems with language models.Advances in
+Neural Information Processing Systems, 35:3843–3857,
+2022.
+Li, J., Beeching, E., Tunstall, L., Lipkin, B., Soletskyi, R.,
+Huang, S., Rasul, K., Yu, L., Jiang, A. Q., Shen, Z., et al.
+Numinamath: The largest public dataset in ai4maths with
+860k pairs of competition math problems and solutions.
+Hugging Face repository, 13:9, 2024.
+Liu, B., Liu, X., Jin, X., Stone, P., and Liu, Q. Conflict-
+averse gradient descent for multi-task learning.Advances
+in Neural Information Processing Systems, 34:18878–
+18890, 2021.
+Mandt, S., Hoffman, M. D., and Blei, D. M. Stochastic gra-
+dient descent as approximate bayesian inference.Journal
+of Machine Learning Research, 18(134):1–35, 2017.
+Meng, K., Bau, D., Andonian, A., and Belinkov, Y . Locating
+and editing factual associations in gpt. InAdvances in
+Neural Information Processing Systems, volume 35, pp.
+17359–17372, 2022.
+Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C.,
+Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A.,
+et al. Training language models to follow instructions
+with human feedback.arXiv preprint arXiv:2203.02155,
+2022.
+Qu, Y ., Yang, M. Y ., Setlur, A., Tunstall, L., Beeching,
+E. E., Salakhutdinov, R., and Kumar, A. Optimizing test-
+time compute via meta reinforcement fine-tuning.arXiv
+preprint arXiv:2503.07572, 2025.
+Robbins, H. and Monro, S. A stochastic approximation
+method.The annals of mathematical statistics, pp. 400–
+407, 1951.
+Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Bi, X., Zhang,
+H., Zhang, M., Li, Y ., Wu, Y ., et al. Deepseekmath: Push-
+ing the limits of mathematical reasoning in open language
+models.arXiv preprint arXiv:2402.03300, 2024.
+9
+===== [PAGE 10] =====
+On the Plasticity and Stability for Post-Training Large Language Models
+Simoni, M., Fontana, A., Rossolini, G., Saracino, A., and
+Mori, P. Gtpo: Stabilizing group relative policy opti-
+mization via gradient and entropy control.arXiv preprint
+arXiv:2508.03772, 2025.
+Wang, J., Qiang, W., Song, Z., Zheng, C., and Xiong, H.
+Learning to think: Information-theoretic reinforcement
+fine-tuning for llms, 2025. URL https://arxiv.
+org/abs/2505.10425.
+Wei, Y . and Hu, D. Mmpareto: Boosting multimodal learn-
+ing with innocent unimodal assistance.arXiv preprint
+arXiv:2405.17730, 2024.
+Wu, Y ., Ma, L., Ding, L., Li, M., Wang, X., Chen, K., Su, Z.,
+Zhang, Z., Huang, C., Zhang, Y ., et al. It takes two: Your
+grpo is secretly dpo.arXiv preprint arXiv:2510.00977,
+2025.
+Xi, Z., Guo, X., Nan, Y ., Zhou, E., Shen, J., Chen, W., Liu,
+J., Huang, J., Zhang, Z., Guo, H., et al. Bapo: Stabilizing
+off-policy reinforcement learning for llms via balanced
+policy optimization with adaptive clipping.arXiv preprint
+arXiv:2510.18927, 2025.
+Xiao, C., Zhang, M., and Cao, Y . Bnpo: Beta normalization
+policy optimization.arXiv preprint arXiv:2506.02864,
+2025.
+Yu, T., Kumar, S., Gupta, A., Levine, S., Hausman, K.,
+and Finn, C. Gradient surgery for multi-task learning.
+InAdvances in Neural Information Processing Systems,
+volume 33, pp. 5824–5836, 2020.
+Zhang, K., Hong, Y ., Bao, J., Jiang, H., Song, Y ., Hong, D.,
+and Xiong, H. Gvpo: Group variance policy optimization
+for large language model post-training.arXiv preprint
+arXiv:2504.19599, 2025.
+Zheng, C., Liu, S., Li, M., Chen, X.-H., Yu, B., Gao,
+C., Dang, K., Liu, Y ., Men, R., Yang, A., et al.
+Group sequence policy optimization.arXiv preprint
+arXiv:2507.18071, 2025.
+Zhou, C., Liu, P., Xu, P., Iyer, S., Sun, J., Mao, Y ., Ma, X.,
+Efrat, A., Yu, P., Yu, L., et al. Lima: Less is more for
+alignment. InAdvances in Neural Information Processing
+Systems, volume 36, 2024.
+10

@@ -1,0 +1,1685 @@
+
+===== [PAGE 1] =====
+When RL Fails after SFT: Rejuvenating Model Plasticity
+for Robust SFT-to-RL Handoff
+Runze Liu1∗ Jiashun Liu1∗ Xu Wan2 Yuqian Fu3 Ling Pan1
+1Hong Kong University of Science and Technology 2Zhejiang University
+3State Key Laboratory of Multimodal Artificial Intelligence Systems, CASIA
+Abstract
+Supervised Fine-Tuning (SFT) followed by Reinforcement Learning (RL) has become a standard
+pipeline for Large Language Model (LLM) post-training. SFT is expected to provide a useful
+behavioral prior for RL to further enhance model capabilities. However, checkpoints with excessive
+SFT often show limited improvement during RL. We attribute this failure to the loss of model
+plasticity: the reduced ability of an SFT-initialized policy to be effectively reshaped by subsequent
+RL. To better understand this phenomenon, we conduct detailed analysis from multiple perspectives,
+including parameter changes, output spaces, and RL optimization dynamics. Our results show that
+models from excessive SFT tend to produce over-confident token distributions and exhibit sharp
+parameter landscapes, which make them harder to optimize in the RL stage. To enable a more
+robust SFT-to-RL handoff, we propose Rejuvenation, a simple yet effective method that restores
+plasticity while preserving useful SFT-acquired priors. Rejuvenation leverages base-anchored
+model fusion to reduce excessive SFT-induced drift with targeted neuron reset to mitigate model
+rigidity. Experimental results on both math reasoning tasks and agentic tasks demonstrate that our
+approach consistently improves RL performance on over-trained SFT models, while also enhancing
+generalization to out-of-distribution tasks.
+1 Introduction
+Post-training has emerged as a critical phase for unlocking the reasoning and agentic capabilities
+of large language models (LLMs) (OpenAI, 2024; Guo et al., 2025). Many practical systems adopt
+the SFT-then-RL (Guo et al., 2025) pipeline, where supervised fine-tuning (SFT) (Ouyang et al.,
+2022; Bai et al., 2022) first teaches models to follow instructions, produce the desired format, and
+acquire cold-start knowledge, after which reinforcement learning (RL) (Shao et al., 2024; Zhang
+et al., 2025a) further optimizes the policy according to task rewards (Yue et al., 2025; Liu et al., 2025a;
+Wang et al., 2025a,b; Liu et al., 2025c; Zhang et al., 2026b). In this pipeline, SFT is not merely for
+imitating high-quality solutions, but also determines the initialization that RL inherits. This pipeline
+therefore relies on an implicit assumption: after acquiring useful behaviors through imitation, the
+SFT checkpoint should still serve as a suitable starting point for reward-driven optimization.
+However, the amount of SFT needed for strong supervised behavior may not coincide with the
+amount of SFT that yields the best final model after RL. Intuitively, if SFT is stopped too early, the
+model may be under-prepared for RL, lacking the instruction-following patterns or task-specific
+behaviors needed for efficient optimization. Meanwhile, if SFT is continued for too long, the model
+may become overly specialized to the supervised data, and the resulting checkpoint may leave
+∗ Equal contribution
+1
+arXiv:2606.09932v1  [cs.LG]  7 Jun 2026
+===== [PAGE 2] =====
+UnderSFTModSFTOverSFTBase
+RL
+RLRL
+……
+Checkpoint1Checkpoint𝑖Checkpoint𝑛
+🚧
+HighplasticityWeakpriorabilityEnoughplasticityUsefulpriorabilityLowplasticityStrongpriorability
+Rejuvenation……
+RestoredplasticityPreservedpriorability
+üEffectiveRLoptimizationüBettergeneralization
+OODIn-distribution
+Whichonetochoose?
+Figure 1: Overview ofRejuvenation.
+limited room for RL to further improve the policy and generalize (Chu et al., 2025). Thus, despite its
+widespread success, the handoff from SFT to RL remains a fragile and computationally expensive.
+A critical yet often overlooked challenge is to determine which SFT checkpoint should be used as
+the RL initial policy.
+Standard SFT metrics (e.g., training loss, validation accuracy) measure imitation quality, not
+the checkpoint’s capacity for reward-driven improvement. A natural remedy is early stopping (Li
+et al., 2026), but it still assumes that the appropriate stopping point can be reliably identified, and
+therefore does not resolve the core problem. Recent work improves the SFT stage through better
+data (Huang et al., 2026; Zhao et al., 2026), objectives (Fu et al., 2026; Zhu et al., 2026b), or training
+recipes (Zhang et al., 2025b), but these methods primarily change the SFT trajectory rather than
+provide a reliable criterion for RL readiness. As a result, practitioners still often have to launch RL
+from multiple SFT checkpoints to determine the appropriate handoff point. This search is expensive,
+and its outcome can be sensitive to RL hyperparameters and optimization noise.
+In this paper, we aim to analyze and address this critical dilemma in the SFT-to-RL handoff,
+where insufficient SFT may prematurely stop imitation learning that prevents the model from
+acquiring useful skills, while over-trained SFT becomes highly resistant to further improvement
+via RL. To better understand this issue, we conduct a detailed analysis of how extended SFT
+changes both model behavior and subsequent optimization dynamics under RL. We find that
+OverSFT models tend to produce sharper, more over-confident output distributions and less
+smooth parameter space, showing large gradient norms but limited performance gains and smaller
+parameter update magnitude compared toModSFT models. These findings suggest that the excessive
+SFT does not merely overfit the supervised data, but also make the policy resistant and becomes less
+effectively adaptable in the subsequent RL stage. We identify this failure mode as a loss ofmodel
+plasticity1 (Dohare et al., 2024; Han et al., 2026): the model becomes difficult to reshape through RL.
+Based on this observation, we propose Rejuvenation, a simple yet effective post-hoc mecha-
+nism that enables robust SFT-to-RL handoff for recovering model plasticity, which avoids complex
+1We use model plasticity to refer to the ability of SFT models to undergo reward-driven improvement in subsequent RL. A plastic
+model should remain responsive to RL update and such updates can effectively translate into task performance gains.
+2
+===== [PAGE 3] =====
+SFT loss modifications and costly checkpoint searches. Our key insight is that SFT should provide a
+useful behavioral prior, but not at the cost of losing plasticity. Our approach is a dual-level strategy.
+First, at the global level, we utilize base-anchored model fusion to reduce excessive SFT-induced drift
+while retaining useful behavior. At the local level, we introduce a targeted neuron reset mechanism
+based on logit attribution to selectively restore diversity in over-confident LLM most responsible
+for collapsed predictions. As shown in Figure 1, our method effectively mitigates the resulting
+rigidity induced by excessive SFT, while preserving the effective behavioral prior acquired from
+sufficient SFT. We evaluate Rejuvenation on both mathematical reasoning tasks and agentic
+tasks. Experiments show that our method not only consistently recovers RL improvement from
+previously OverSFT models, but also achieves superior performance compared to ModSFT models
+on out-of-distribution (OOD) tasks with even better generalization ability.
+The main contributions of this work can be summarized as follows:
+1. We identify a failure mode in the SFT-then-RL pipeline: the SFT-to-RL handoff dilemma, where
+fully-trained SFT models lose plasticity and limit RL improvement.
+2. We provide detailed analysis from multiple perspectives, revealing that over-SFT leads to reduced
+effective gradients during RL, which leads to entropy collapse and fundamentally hurts RL
+optimization dynamics.
+3. We propose a simple, cheap, and effective rejuvenation method to recover model plasticity
+post-hoc using model fusion and neuron reset, making it robust to different SFT-to-RL handoffs.
+4. We demonstrate the effectiveness of our method on both mathematical and agentic tasks, showing
+that it consistently recovers RL improvement from OverSFT checkpoints and improves OOD
+generalization overModSFTbaselines.
+2 Related Work
+SFT and RL in LLM Post-Training.Recent work has shown that RL emerges as an effective
+method for LLM post-training (OpenAI, 2024; Guo et al., 2025; Shao et al., 2024; Yu et al., 2025).
+Many methods aim to better integrate SFT and RL, such as improving the use of off-policy data (Yan
+et al., 2025; Chen et al., 2025; Liu et al., 2025d; Ma et al., 2026; Huang et al., 2025), designing unified
+training objectives (Liu et al., 2025b; Fu et al., 2026; Zhang et al., 2026c; Lv et al., 2025; Gan et al.,
+2026), or using importance weighted objectives to better align SFT with RL optimization (Zhu
+et al., 2026b; Qin and Springenberg, 2025; Zhang et al., 2026a). At the same time, recent evidence
+suggests that comparisons between mixed-policy methods and the standard SFT-then-RL pipeline
+can be sensitive to SFT implementation details, and that carefully controlled SFT-then-RL remains
+a strong baseline (Limozin et al., 2026). Several recent studies further analyze why SFT and RL
+lead to different generalization behavior: SFT tends to memorize supervised data while RL can
+improve out-of-distribution generalization (Chu et al., 2025), RL may partially heal OOD forgetting
+introduced by SFT but only within a suitable checkpoint range (Jin et al., 2025b,a), and high SFT
+scores are not necessarily reliable predictors of post-RL performance (Kang et al., 2026; Zhang
+et al., 2026a). These works expose the fragility of the SFT-to-RL handoff, but they mainly diagnose
+checkpoint selection or redesign the SFT objective. In contrast, we ask whether the plasticity of an
+already over-trained SFT model can be restored post-hoc before RL starts.
+Overfitting and Regularization in SFT.Recently, many works have explored how to prevent
+overfitting or excessive policy drift during SFT. Methods such as GEM (Li et al., 2025), PSFT (Zhu
+et al., 2026b), ASFT (Zhu et al., 2026a), and CurioSFT (Wang et al., 2026), introduce an auxiliary
+3
+===== [PAGE 4] =====
+regularization loss to maintain model diversity. DFT (Wu et al., 2026), AESL (Li et al., 2026), and
+ProFit (Liu et al., 2026) incorporate probability-based weighting in the cross-entropy loss. However,
+they mainly focus on preventing overfitting during SFT or designing a better SFT objective from
+the beginning. Our setting is different that we assume an over-trained SFT model has already been
+obtained, and ask whether its plasticity can be restored for subsequent RL.
+3 Diagnosing and Restoring Plasticity in Over-Trained Models
+In this section, we analyze why over-trained SFT models become difficult to improve with
+RL and then introduce two post-hoc recovery operations. We first investigate what excessive SFT
+changes in both parameter and output spaces before any RL update is applied, to understand the
+handoff-specific question:does continued SFT move the checkpoint into a state that is less amemnable
+to subsequent RL optimization?We then connect these changes to poor RL trainability, where large
+gradient norms do not translate into effective parameter movement or meaningful performance
+gains (Section 3.2). Motivated by these observations, we recover plasticity at two levels: base-
+anchored model fusion globally pulls the model toward a smoother region (Section 3.3), while
+attribution-guided neuron reset locally restores the high-contribution directions responsible for
+abnormal logits (Section 3.4).
+3.1 How Does Over-Training Change the SFT Model?
+3.1.1 Parameter Space
+We train EvoLM-4B (Qi et al., 2025) on the math SFT data and save checkpoints along the
+SFT process. We denote the moderately trained checkpoint (epoch=2) as ModSFT and the over-
+trained checkpoint (epoch=32) as OverSFT. More training details are provided in Section 4.1 and
+Appendix B.
+0.5 1 2 4 8 16 32
+SFT Epoch
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+1.4
+Weight Difference (Mean Squared)
+×10 7
+Weight Difference (Mean Squared)
+Weight (Mean Squared)
+3.1525
+3.1530
+3.1535
+3.1540
+3.1545
+3.1550
+Weight (Mean Squared)
+×10 4
+Figure 2: Parameter changes and statis-
+tics of different SFT checkpoints.
+Excessive SFT induces large parameter shifts and weight
+magnitude.We first examine how SFT changes the
+model parameters. For each checkpoint, we visualize the
+element-wise parameter difference with respect to the base
+model. As shown in Figure 2 and the first row of Figure 3,
+we observe that ModSFT only introduces moderate and rel-
+atively smooth parameter changes, while OverSFT leads
+to extremely large parameter shifts and there are sharp
+spikes in the shifts, resulting in larger weight magnitude.
+These spikes indicate that over-training does not simply
+continue improving the same solution found by moderate
+SFT. Instead, it drives a small subset of parameters signif-
+icantly far away from the base model. Additionally, these
+observations are consistent across all modules and layers.
+Please find Appendix C for more visualizations.
+Subsequent RL induces much smaller movement than the preceding SFT-induced drift.We
+further examine how RL changes the model parameters by plotting the difference between: (1) RL vs
+SFT and (2) RL vs Base. Figure 3 shows that the subsequent RL stage only introduces much smaller
+4
+===== [PAGE 5] =====
+SFT - Base
+Delta
+0.5 Epochs
+(Under-Trained)
+2 Epochs
+(Moderately Trained)
+8 Epochs
+(Over-Trained)
+32 Epochs
+(Severely Over-Trained)
+RL - SFT
+Delta
+RL - Base
+Delta
+0.00075
+0.00050
+0.00025
+0.00000
+0.00025
+0.00050
+0.00075
+Figure 3: Parameter changes of layers.0.self_attn.v_proj.weight induced by SFT and RL.
+changes compared with the SFT-induced shift. This suggests that once SFT has caused relatively
+high parameter distortion, RL is unlikely to reverse it through standard policy optimization.
+3.1.2 Output Space
+Excessive SFT saturates the policy before RL.We compare the output diversity of different SFT
+checkpoints in Table 1. We can observe that OverSFT achieves near-zero training loss but exhibits
+substantially lower token entropy than ModSFT (0.024 vs. 0.184), suggesting that excessive SFT
+drives the policy toward an over-confident regime. AlthoughOverSFT attains a higher Pass@1 score
+than ModSFT, its Pass@K-Pass@1 gap is the smallest, indicating reduced output diversity despite
+stronger greedy performance. Consistently, Figure 6 shows logit distributions where OverSFT
+concentrates probability mass almost entirely on a single token (Li et al., 2025), whereas ModSFT
+still assigns non-negligible probability to alternative tokens.
+Table 1: Diversity-related metrics of different SFT checkpoints.
+Checkpoint Training Loss Entropy MATH-500 Pass@1 Pass@K - Pass@1 Gap
+UnderSFT0.178 0.281 9.7 13.7
+ModSFT0.111 0.184 15.215.3
+OverSFT0.002 0.02415.811.2
+Takeaway
+Over-trained SFT models differ from moderately trained models in both parameter and output
+spaces: they contain large parameter shifts and produce over-confident token distributions.
+These two signatures indicate reduced plasticity before RL starts.
+3.2 Does RL Fail after Over-Trained SFT?
+3.2.1 Training Dynamics
+5
+===== [PAGE 6] =====
+0.5 1 2 4 8 16 32
+SFT Epoch
+14.5
+15.0
+15.5
+16.0
+16.5
+17.0Score (%)
+(a) Total Avg
+0.5 1 2 4 8 16 32
+SFT Epoch
+17.5
+18.0
+18.5
+19.0
+19.5
+20.0Score (%)
+(b) ID Avg
+0.5 1 2 4 8 16 32
+SFT Epoch
+11.5
+12.0
+12.5
+13.0
+13.5
+14.0Score (%)
+(c) OOD Avg
+0
+2
+4
+6
+8
+RL gain (pp)
+0
+2
+4
+6
+8
+10
+12
+RL gain (pp)
+0
+2
+4
+6
+RL gain (pp)
+Figure 5: Evaluation results of RL-trained models from different SFT checkpoints. (a) Average score
+of ID and OOD tasks. (b) Average score on ID tasks. (c) Average score on OOD tasks.
+0.5 1 2 4 8 16 32
+SFT Epoch
+0.22
+0.24
+0.26
+0.28
+0.30
+0.32
+0.34Mean Grad Norm
+6.2
+6.4
+6.6
+6.8
+7.0
+Weight Update Magnitude
+1e 9
+Figure 4: Average gradient norm
+and weight update magnitude of RL
+with different SFT checkpoints.
+Over-trained models exhibit larger RL gradient norms.We
+next study whether these SFT-induced changes affect RL opti-
+mization. Figure 4 shows an apparent paradox: OverSFT has
+a much larger gradient norm thanModSFT throughout RL, yet
+its RL-induced parameter shift is smaller (Figure 3, RL-vs-SFT
+row) and its reward improvement is smaller as well.
+3.2.2 RL Performance Gain
+Over-training reduces RL performance gain.Figure 5
+shows that after excessive SFT training, the RL gain of
+OverSFT models drop significantly compared with ModSFT
+models, demonstrating that over-training harms the RL performance gain.
+Takeaways
+• Over-trained models are hard to optimize during RL, exhibiting higher gradient norm but
+inducing less weight update magnitude.
+• Over-training leads to smaller performance gains after RL on both ID and OOD tasks.
+3.3 Global Recovery via Base-Anchored Fusion
+Section 3.1 shows that over-training pushes a small set of parameters far from the base model
+and places the model in a sharp region. A natural fix is to pull the over-trained model back toward
+the base so that the shift shrinks and the surrounding landscape becomes smoother, while still
+keeping the useful behavior that SFT has acquired (Wortsman et al., 2022; Ilharco et al., 2023).
+Base-anchored linear fusion.We therefore perform a simple element-wise linear interpolation
+between the base model and theOverSFTmodel:
+θfuse =α θ OverSFT + (1−α)θ Base, α∈[0,1].(1)
+The interpolation is applied to all model parameters, including attention and MLP weights as well
+as RMSNorm weights, the final norm, and lm_head. The fusion weight α controls how much of
+6
+===== [PAGE 7] =====
+OverSFT is retained: α→1 reduces to the original OverSFT model, and α→0 falls back to the
+base model.
+Why fusion helps.This operation scales the SFT-induced weight delta θOverSFT −θ Base by α.
+From the task-vector perspective of model editing and composition (Ilharco et al., 2023), the SFT
+update θOverSFT −θ Base can be viewed as a task vector that moves the base model toward the
+SFT solution. Base-anchored fusion preserves the direction of this task vector while reducing its
+magnitude, thereby retaining much of the task-specific behavior learned during SFT but avoiding
+the full parameter displacement caused by over-SFT. Additionally, fusion shrinks the element-wise
+deviation from the base to α·(θ OverSFT −θ Base), which reduces the large shifts and sharp spikes
+in Figure 3. The fused model therefore sits in a smoother region that is easier for RL to optimize.
+In practice, a moderate α (e.g., α= 0.5 ) recovers most of the training-dynamics signals and token
+entropy while preserving much of the ID performance gained from SFT.
+3.4 Local Recovery via Attribution-Guided Neuron Reset
+Global fusion treats every parameter equally and cannot pinpoint which parameters actually
+drive the over-confident behavior. In particular, only a small number of neurons account for most of
+the over-confident logits, and scaling all parameters uniformly toward the base cannot selectively
+relax these neurons without weakening the rest. We therefore add a targeted step that first locates
+the neurons most responsible for the collapsed token distributions via direct logit attribution, a
+residual-stream decomposition technique commonly used in Transformer circuit analysis (Elhage
+et al., 2021), and then resets these neurons inθ fuse back to their base-model values.
+3.4.1 Identifying abnormal logit contributors
+Step 1: Selecting over-confident target tokens.Over-confidence concentrates on a subset of
+response tokens rather than being spread uniformly, so we first find where the effect is strongest and
+then attribute the logits only at those positions. Given a calibration set of prompt–response pairs, we
+run both the base model and OverSFT in teacher-forcing mode and record the per-position token
+entropy HBase(t) and HOverSFT(t). For each sample, we pick the Top-N response positions with the
+largest entropy gap |HOverSFT(t)−H Base(t)| as the target tokens T . These are the positions where
+OverSFT has most aggressively sharpened the distribution relative to the base model, making them
+the most informative anchors for attribution.
+Step 2: Decomposing logits into per-neuron contributions.Under a frozen final-RMSNorm
+approximation, the target logit onOverSFT can be written as a sum of residual-stream contributions,
+projected onto a fixed direction that depends on the target tokeny ∗:
+˜zy∗(t) =b y∗ +⟨e(t), d y∗(t)⟩+
+X
+ℓ
+h
+⟨rattn
+ℓ (t), dy∗(t)⟩+⟨r mlp
+ℓ (t), dy∗(t)⟩
+i
+,
+dy∗(t) =s RMS(t)·
+ 
+γ⊙W U [y∗]
+
+,
+(2)
+where by∗ is the optional lm_head bias for y∗2, e(t) is the token-embedding write, rattn
+ℓ (t) and rmlp
+ℓ (t)
+are the residual-stream writes from the attention and MLP blocks at layer ℓ, γ is the gain of the
+final RMSNorm, sRMS(t) is its normalization scalar at position t, and WU [y∗] is the unembedding
+2by∗ denotes the lm_head bias for token y∗ if present (e.g., models without tied embeddings); for models with bias-free lm_head (as
+in Llama (Grattafiori et al., 2024) and Qwen (Yang et al., 2024, 2025)), this term vanishes.
+7
+===== [PAGE 8] =====
+row of y∗. This decomposition becomes exact only because we freeze sRMS(t) at its forward-pass
+value and replace the nonlinear RMSNorm with the linear projection dy∗(t). In our implementation
+we therefore track the reconstruction error |˜zy∗(t)−z y∗(t)| to confirm that this approximation is
+tight. We use the resulting scores as attribution signals for ranking rather than as a complete
+causal explanation, since direct logit attribution can be misleading when later components erase or
+overwrite earlier residual-stream directions (Janiak et al., 2024).
+For the modules that directly write to the residual stream, namely o_proj and down_proj,
+equation equation 2 can be further pushed down to the input-neuron level, giving an exact per-
+neuron contribution
+s(ℓ,m)
+i =a (ℓ,m)
+i (t)·
+
+W (ℓ,m)
+:,i , d y∗(t)
+
+, m∈ {o_proj,down_proj},(3)
+where a(ℓ,m)
+i (t) is the neuron activation at position t and W (ℓ,m)
+:,i is the corresponding column of the
+writer weight.
+For the remaining internal projections ( q_proj, k_proj, v_proj, up_proj, gate_proj),
+whose outputs do not directly write to the residual stream, no such exact neuron-level decomposition
+is available. We therefore score them with a local “gradient×activation” proxy on the same target
+logit zy∗(t). This proxy can be viewed as a first-order Taylor approximation to the change in the target
+logit induced by perturbing or removing the corresponding activation, and has been commonly used
+as a gradient-based importance estimate for neural units and Transformer components (Molchanov
+et al., 2017; Michel et al., 2019). Specifically, for k_proj and v_proj the score is aggregated over all
+prefix positions 0..t, since these projections are read by attention at every later step. For q_proj,
+up_proj, and gate_proj, it is taken at the target position only. For q_proj and k_proj, the
+implementation uses pre-RoPE projection outputs, so these scores should be read as local attribution
+proxies rather than exact causal decompositions. This gives a uniform per-neuron score s(ℓ,m)
+i across
+all linear modules of the network, which we use for ranking in Section 3.4. The visualization of logit
+attribution is shown in Figure 7 in Appendix C.
+3.4.2 Resetting high-attribution neurons
+Building the reset set.For each selected target token t, we rank all neurons across all replaceable
+modules by their most positively contributing to the target logit and keep the topρ fraction, yielding
+a token-level setS x,t for each promptx. The final reset set is the union over all selected tokens and
+calibration examples:
+S=
+[
+(x,t)∈T
+Sx,t.(4)
+In our implementation, ρ controls the per-token selection budget; we report the resulting effective
+whole-model reset ratio after taking the union. We introduce a token-level gating variable ω(i) =
+I(i∈ S)∈ {0,1}based on the above definition.
+Reset operation.Inspired by attribution-based neuron intervention in pretrained Transform-
+ers (Dai et al., 2022), we then overwrite each selected neuron in θfuse with its base-model value while
+leaving the rest untouched:
+θ(i)
+reset =ω (i)θ(i)
+Base + (1−ω (i))θ(i)
+fuse (5)
+where each neuron index corresponds to either a row or a column of the underlying weight ma-
+trix, depending on the module’s role in the residual stream: rows for q_proj, k_proj, v_proj,
+8
+===== [PAGE 9] =====
+up_proj, gate_proj, and columns for o_proj and down_proj. The full procedure is summa-
+rized in Algorithm 1.
+Why reset helps.Reset and fusion play complementary roles. Fusion smooths the parameter
+space globally and brings the model into a better-conditioned region, but leaves every direction
+scaled uniformly, so the neurons that dominate the over-confident logits remain close to their over-
+trained configuration up to a factor of α. The reset step replaces exactly these rigid directions with
+base-model values, breaking the shortcut that produces collapsed token distributions. Because |S|
+is very small, the vast majority of SFT-acquired behavior in θfuse is preserved, while diversity is
+restored precisely where it was most lost. As shown in Figure 9, the output entropy on the affected
+tokens recovers substantially after the reset, and the resulting model becomes more responsive to
+subsequent RL optimization.
+4 Experiments
+4.1 Setup
+Models and Baselines.We adopt EvoLM-4B (Qi et al., 2025) as the base model for mathematical
+tasks since it is pre-trained on a controlled corpus without evaluation data contamination, which
+makes the gain from RL more reliable. For agentic tasks, we use Qwen3-8B (Yang et al., 2025), a
+strong general-purpose backbone widely used in tool-use scenarios. To isolate the effect of plasticity
+recovery on the SFT-to-RL handoff, we compare Rejuvenation against the following baselines: (1)
+ModSFT: a moderately trained SFT checkpoint (epoch=2 for EvoLM-4B), which serves as a strong
+upper-bound reference for the SFT-to-RL handoff; (2) OverSFT: the over-trained SFT checkpoint
+(epoch=32 for EvoLM-4B) that exhibits plasticity loss and is the target for our recovery method; (3)
+DFT (Wu et al., 2026): a representative regularized SFT objective that re-weights the cross-entropy
+loss with token probabilities to mitigate over-confidence during SFT. Following the same protocol,
+we report the corresponding +RL results obtained by running the same RL recipe on top of each SFT
+variant.
+Training Details.For SFT training, we use LlamaFactory (Zheng et al., 2024b) for EvoLM-4B
+and slime (Zhu et al., 2025) for Qwen3-8B, both with the AdamW (Kingma, 2014) optimizer and
+learning rate of 3.0×10 −6. To probe behavior under extreme over-training, we train ModSFT for
+2 epochs and OverSFT for 32 epochs without any learning rate schedule or weight decay, so that
+any difference between the two checkpoints comes purely from training duration. For RL training,
+we use verl (Sheng et al., 2025) for mathematical tasks and slime (Zhu et al., 2025) for agentic tasks.
+Both stages adopt GRPO (Shao et al., 2024) as the base RL algorithm with KL loss. For EvoLM-4B
+on math, we use a learning rate of 1×10 −6, sample 8 responses per prompt, and apply rule-based
+rewards on the boxed final answer. For Qwen3-8B on τ-bench Retail, we follow the official τ-bench
+protocol and use a separate Qwen3-4B-Instruct-2507 (Yang et al., 2025) as the user simulator. We
+provide full hyper-parameter tables and infrastructure details in Appendix B.
+Evaluation Details.For mathematical reasoning, we evaluate on five widely used in-distribution
+(ID) benchmarks: GSM8K (Cobbe et al., 2021), MATH-500 (Lightman et al., 2024), AMC23 (MAA,
+2023), Minerva Math (Lewkowycz et al., 2022), and OlympiadBench (He et al., 2024). For agentic
+tasks, we evaluate on τ-bench (Yao et al., 2025) Retail and Airline. We further evaluate on three out-
+of-distribution (OOD) benchmarks: GPQA-Diamond (Rein et al., 2024), ARC-Challenge (Clark et al.,
+2018), and MMLU-Pro (Wang et al., 2024) following Yan et al. (2025). We report Pass@1, which is
+9
+===== [PAGE 10] =====
+Table 2: Evaluation results on ID and OOD benchmarks of EvoLM-4B. The highest values before RL
+are underlined and the highest values after RL arebolded.
+Method GSM8K MATH AMC23 Miner. Olymp. ID
+Avg. GPQA ARC MMLU OOD
+Avg. Avg.
+ModSFT28.1 15.2 4.3 4.0 2.4 10.8 5.3 13.4 3.4 7.4 9.1
++RL51.625.7 6.411.6 4.7 20.0 13.222.9 6.2 14.1 17.0 (+7.9)
+OverSFT31.7 15.8 3.8 5.1 2.4 11.8 7.8 13.7 3.3 8.3 10.0
++RL 45.2 22.0 6.6 9.9 4.1 17.5 9.9 21.3 5.6 12.2 14.9 (+4.9)
+DFT30.9 14.5 5.3 5.2 2.3 11.7 5.8 7.2 3.3 5.4 8.5
++RL 43.6 24.4 7.5 11.9 3.9 18.3 8.3 22.3 5.7 12.1 15.2 (+6.7)
+Rejuvenation18.5 12.0 3.0 4.3 2.5 8.1 3.6 2.6 2.1 2.8 5.4
++RL 49.126.2 8.010.8 4.2 19.7 12.926.2 6.9 15.3 17.5 (+12.1)
+Table 3: Evaluation results on ID and OOD benchmarks of Qwen3-8B. The highest values after RL
+arebolded.
+Method τ-bench
+Retail
+τ-bench
+Airline
+ID
+Avg. GPQA ARC MMLU OOD
+Avg. Avg.
+ModSFT+RL78.316.1 47.2 40.5 77.962.560.3 53.8
+OverSFT+RL 70.319.945.142.075.9 61.7 59.9 52.5
+DFT+RL 75.3 12.2 43.8 38.8 76.862.559.3 51.6
+Rejuvenation+RL 77.0 17.547.341.078.262.460.5 53.9
+averaged over multiple samples to ensure robust evaluation. Decoding parameters, per-benchmark
+K, and the full evaluation details are shown in Appendix B.
+4.2 Main Results
+Math.Table 2 reports the evaluation results on EvoLM-4B and we have three observations as
+follows: (1) Starting RL from OverSFT leads to a clear performance drop compared with ModSFT
+(e.g., 17.5 vs. 20.0 ID Avg. and 12.2 vs. 14.1 OOD Avg.), confirming that prolonged SFT actively
+hurts the subsequent RL stage rather than only saturating it. (2) Replacing SFT with DFT slows
+down the SFT-induced collapse but does not fully recover the gap, since it modifies the SFT objective
+in advance and does not address an already over-trained checkpoint. (3) Rejuvenation, applied
+as a post-hoc operation on top of OverSFT, recovers and surpasses the ModSFT+RL upper bound
+on the average score, with particularly large improvements on the OOD tasks. This indicates that
+smoothing the parameter landscape and resetting over-confident neurons not only restores RL
+trainability but also retains the broader knowledge acquired during pre-training, leading to better
+OOD generalization.
+Agentic.Table 3 summarizes the agentic results on Qwen3-8B. Consistent with the math setting,
+OverSFT+RL substantially trails ModSFT+RL on the ID τ-bench Retail and Airline tasks, where
+the over-confident policy fails to explore alternative tool-use trajectories and quickly converges to
+suboptimal behaviors. Rejuvenation lifts the success rate of OverSFT back to (and beyond) the
+ModSFT+RL reference on both τ-bench tasks, while simultaneously improving the OOD scores on
+GPQA, ARC, and MMLU. This shows that the recovered plasticity transfers across rather different
+task families: the same fusion-and-reset operation that helps reasoning RL also enables tool-use RL
+to keep learning from environment feedback.
+10
+===== [PAGE 11] =====
+4.3 Ablation Study
+Components.To understand the contribution of each component in Rejuvenation, we ablate it
+on EvoLM-4B. As shown in Table 4, applying base-anchored fusion alone already brings most of the
+gain over OverSFT+RL: the smoother parameter region restores RL trainability and lifts both ID
+and OOD scores. Adding the attribution-guided neuron reset on top further improves the average
+performance, especially on OOD benchmarks. This is consistent with our analysis in Section 3.4:
+fusion shrinks the global SFT-induced drift, while the targeted reset selectively breaks the small set
+of over-confident logit-contributing directions that fusion alone cannot relax.
+Table 4: Evaluation results on ID and OOD benchmarks. The highest values arebolded.
+Method GSM8K MATH AMC23 Miner. Olymp. ID
+Avg. GPQA ARC MMLU OOD
+Avg. Avg.
+OverSFT45.2 22.0 6.6 9.9 4.1 17.5 9.9 21.3 5.6 12.2 14.9
+OverSFTw/Fusion 46.926.66.312.2 4.3 19.3 14.722.77.0 14.8 17.0
+Rejuvenation49.126.28.010.8 4.2 19.7 12.926.26.9 15.3 17.5
+Fusion Weight.We further sweep the fusion weight α in {0.4,0.45,0.5,0.55,0.6} on EvoLM-4B to
+understand how strongly the over-trained checkpoint should be pulled toward the base. As shown
+in Table 5, a small α (e.g., 0.4) drops more of the SFT-acquired ID skills but leaves the model in a
+smoother region with stronger OOD learning potential, whereas a large α (e.g., 0.6) preserves more
+SFT behavior at the cost of carrying over the rigidity in both ID and OOD evaluation. A moderate
+value of α= 0.5 balances the two effects best on average and is used as the default in all main
+experiments.
+Table 5: Evaluation results on ID and OOD benchmarks with different fusion weight α. The highest
+values arebolded.
+Method GSM8K MATH AMC23 Miner. Olymp. ID
+Avg. GPQA ARC MMLU OOD
+Avg. Avg.
+0.4 47.7 23.9 6.2 10.3 4.5 18.5 12.826.45.9 15.0 16.8
+0.45 46.6 26.4 6.2 10.6 4.0 18.8 14.723.3 6.4 14.8 16.8
+0.5 46.9 26.6 6.312.24.3 19.3 14.722.77.0 14.8 17.0
+0.55 48.826.8 9.512.0 3.5 20.1 9.3 23.2 6.6 13.0 16.6
+0.650.1 26.86.8 9.85.0 19.7 8.8 21.0 5.9 11.9 15.8
+Reset Percentage.We then study the effect of the per-token reset budget ρ, which controls how
+many of the most positively contributing neurons are rolled back to their base-model values per
+target token. We sweep ρ∈ {0.5%,1%,2%,4%} . As shown in Table 6, even a very small ρ already
+yields a noticeable improvement, indicating that the over-confident behavior concentrates in a tiny
+fraction of neurons. Moderate values further improve OOD generalization, while overly aggressive
+reset starts to erase useful SFT-acquired behaviors and hurts ID accuracy. We therefore adopt a small
+default reset ratio for all main experiments.
+Rejuvenation with different SFT checkpoints.Table 7 further studies whether Rejuvenation
+is specific to severely over-trained checkpoints or can also be applied to checkpoints with differ-
+ent SFT degrees. Starting RL from ModSFT already gives strong ID performance, but applying
+11
+===== [PAGE 12] =====
+Table 6: Evaluation results on ID and OOD benchmarks with different reset percentage ρ. The
+highest values arebolded.
+Method GSM8K MATH AMC23 Miner. Olymp. ID
+Avg. GPQA ARC MMLU OOD
+Avg. Avg.
+0.5% 49.1 25.9 10.7 12.0 3.9 20.3 11.6 21.3 6.0 13.0 16.7
+1%49.126.28.010.8 4.2 19.7 12.926.26.9 15.3 17.5
+2% 48.9 25.5 7.312.2 5.4 19.9 13.723.47.3 14.8 17.3
+4% 46.8 24.7 5.0 10.1 4.8 18.3 9.9 22.6 6.6 13.0 15.6
+Rejuvenation before RL further improves the overall average score from 17.0 to 17.6, mainly by
+increasing the OOD average from 14.1 to 16.3. This suggests that even a moderately trained SFT
+checkpoint may still contain SFT-induced rigidity, and a mild recovery operation can improve its
+ability to generalize after RL. However, this improvement comes with a small drop on the ID average,
+indicating a trade-off between preserving task-specific SFT behavior and restoring broader plastic-
+ity. These results indicate that the proposed recovery procedure is not merely an early-stopping
+substitute: it can rejuvenate checkpoints from different stages of SFT.
+Table 7: Evaluation results on ID and OOD benchmarks of different methods after RL training. The
+highest values arebolded.
+Method GSM8K MATH AMC23 Miner. Olymp. ID
+Avg. GPQA ARC MMLU OOD
+Avg. Avg.
+ModSFT51.625.7 6.411.6 4.7 20.0 13.2 22.9 6.2 14.1 17.0
+ModSFT+Rejuvenation46.9 24.38.210.8 4.5 18.9 14.2 26.3 8.4 16.3 17.6
+OverSFT+Rejuvenation48.626.28.0 10.8 4.2 19.6 12.9 26.2 6.9 15.3 17.5
+5 Conclusion
+In this paper, we identify a failure mode where excessive SFT training leads to loss of plasticity,
+which limits the effectiveness of subsequent RL optimization. Through analysis of parameter
+changes, token distributions, and RL training dynamics, we show that over-trained models become
+over-confident and harder to update. To address this issue, we introduce a two-stage method that
+includes global model fusion and neuron reset. These components help smooth the parameter space
+and restore diversity in key parts of the model, making it more amenable to further optimization
+during RL. Empirical results on mathematical and agentic tasks demonstrate the effectiveness of
+our method. Our approach consistently improves RL performance over over-trained SFT models
+and also shows better generalization on out-of-distribution benchmarks. Our findings highlight the
+importance of model plasticity in the SFT-then-RL pipeline. We hope this work can motivate future
+research on understanding optimization dynamics in post-training and developing more robust
+training strategies.
+Although our method effectively restores the plasticity of the over-trained SFT models, both
+model fusion and neuron reset require the access to the base model for reference. We will explore
+how to restore the plasticity of over-trained models without the base model in the future work.
+12
+===== [PAGE 13] =====
+References
+Yuntao Bai, Andy Jones, Kamal Ndousse, Amanda Askell, Anna Chen, Nova DasSarma, Dawn
+Drain, Stanislav Fort, Deep Ganguli, Tom Henighan, et al. Training a helpful and harmless
+assistant with reinforcement learning from human feedback.arXiv preprint arXiv:2204.05862, 2022.
+Jack Chen, Fazhong Liu, Naruto Liu, Yuhan Luo, Erqu Qin, Harry Zheng, Tian Dong, Haojin
+Zhu, Yan Meng, and Xiao Wang. Step-wise adaptive integration of supervised fine-tuning and
+reinforcement learning for task-specific llms.arXiv preprint arXiv:2505.13026, 2025.
+Tianzhe Chu, Yuexiang Zhai, Jihan Yang, Shengbang Tong, Saining Xie, Dale Schuurmans, Quoc V
+Le, Sergey Levine, and Yi Ma. SFT memorizes, RL generalizes: A comparative study of foun-
+dation model post-training. In Aarti Singh, Maryam Fazel, Daniel Hsu, Simon Lacoste-Julien,
+Felix Berkenkamp, Tegan Maharaj, Kiri Wagstaff, and Jerry Zhu, editors,Proceedings of the 42nd
+International Conference on Machine Learning, volume 267 ofProceedings of Machine Learning Research,
+pages 10818–10838. PMLR, 13–19 Jul 2025. URL https://proceedings.mlr.press/v267/
+chu25c.html.
+Peter Clark, Isaac Cowhey, Oren Etzioni, Tushar Khot, Ashish Sabharwal, Carissa Schoenick, and
+Oyvind Tafjord. Think you have solved question answering? try arc, the ai2 reasoning challenge.
+arXiv preprint arXiv:1803.05457, 2018.
+Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser,
+Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, et al. Training verifiers to solve
+math word problems.arXiv preprint arXiv:2110.14168, 2021.
+Damai Dai, Li Dong, Yaru Hao, Zhifang Sui, Baobao Chang, and Furu Wei. Knowledge neurons in
+pretrained transformers. In Smaranda Muresan, Preslav Nakov, and Aline Villavicencio, editors,
+Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long
+Papers), pages 8493–8502, Dublin, Ireland, May 2022. Association for Computational Linguistics.
+doi: 10.18653/v1/2022.acl-long.581. URL https://aclanthology.org/2022.acl-long.
+581/.
+Shibhansh Dohare, J Fernando Hernandez-Garcia, Qingfeng Lan, Parash Rahman, A Rupam Mah-
+mood, and Richard S Sutton. Loss of plasticity in deep continual learning.Nature, 632(8026):
+768–774, 2024.
+Nelson Elhage, Neel Nanda, Catherine Olsson, Tom Henighan, Nicholas Joseph, Ben Mann, Amanda
+Askell, Yuntao Bai, Anna Chen, Tom Conerly, Nova DasSarma, Dawn Drain, Deep Ganguli,
+Zac Hatfield-Dodds, Danny Hernandez, Andy Jones, Jackson Kernion, Liane Lovitt, Kamal
+Ndousse, Dario Amodei, Tom Brown, Jack Clark, Jared Kaplan, Sam McCandlish, and Chris
+Olah. A mathematical framework for transformer circuits.Transformer Circuits Thread, 2021.
+https://transformer-circuits.pub/2021/framework/index.html.
+Yuqian Fu, Tinghong Chen, Jiajun Chai, Xihuai Wang, Songjun Tu, Guojun Yin, Wei Lin, Qichao
+Zhang, Yuanheng Zhu, and Dongbin Zhao. SRFT: A single-stage method with supervised and
+reinforcement fine-tuning for reasoning. InThe Fourteenth International Conference on Learning
+Representations, 2026. URLhttps://openreview.net/forum?id=n6E0r6kQWQ.
+Wangjie Gan, Miao Pan, Linbo Xi, Wenqi Zhang, Jintao Chen, Jianwei Yin, and Xuhong Zhang. Gft:
+From imitation to reward fine-tuning with unbiased group advantages and dynamic coefficient
+rectification.arXiv preprint arXiv:2604.14258, 2026.
+Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad
+Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. The llama 3 herd of
+models.arXiv preprint arXiv:2407.21783, 2024.
+13
+===== [PAGE 14] =====
+Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu
+Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1 incentivizes reasoning in llms through reinforce-
+ment learning.Nature, 645(8081):633–638, 2025.
+Tessa Han, Sebastian Bordt, Hanlin Zhang, and Sham Kakade. Weight decay improves language
+model plasticity.arXiv preprint arXiv:2602.11137, 2026.
+Chaoqun He, Renjie Luo, Yuzhuo Bai, Shengding Hu, Zhen Thai, Junhao Shen, Jinyi Hu, Xu Han,
+Yujie Huang, Yuxiang Zhang, Jie Liu, Lei Qi, Zhiyuan Liu, and Maosong Sun. OlympiadBench: A
+challenging benchmark for promoting AGI with olympiad-level bilingual multimodal scientific
+problems. In Lun-Wei Ku, Andre Martins, and Vivek Srikumar, editors,Proceedings of the 62nd
+Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages
+3828–3850, Bangkok, Thailand, August 2024. Association for Computational Linguistics. doi:
+10.18653/v1/2024.acl-long.211. URL https://aclanthology.org/2024.acl-long.211/.
+Zeyu Huang, Tianhao Cheng, Zihan Qiu, Zili Wang, Yinghui Xu, Edoardo M Ponti, and Ivan
+Titov. Blending supervised and reinforcement fine-tuning with prefix sampling.arXiv preprint
+arXiv:2507.01679, 2025.
+Zixian Huang, Kaichen Yang, Xu Huang, Feiyang Hao, Qiming Ge, Bowen Li, He Du, Kai Chen, and
+Qipeng Guo. How to fine-tune a reasoning model? a teacher-student cooperation framework to
+synthesize student-consistent sft data.arXiv preprint arXiv:2604.14164, 2026.
+Gabriel Ilharco, Marco Tulio Ribeiro, Mitchell Wortsman, Ludwig Schmidt, Hannaneh Hajishirzi,
+and Ali Farhadi. Editing models with task arithmetic. InThe Eleventh International Conference on
+Learning Representations, 2023. URLhttps://openreview.net/forum?id=6t0Kwf8-jrj.
+Jett Janiak, Can Rager, James Dao, and Yeu-Tong Lau. An adversarial example for direct logit
+attribution: Memory management in GELU-4L. In Yonatan Belinkov, Najoung Kim, Jaap Jumelet,
+Hosein Mohebbi, Aaron Mueller, and Hanjie Chen, editors,Proceedings of the 7th BlackboxNLP
+Workshop: Analyzing and Interpreting Neural Networks for NLP, pages 232–237, Miami, Florida, US,
+November 2024. Association for Computational Linguistics. doi: 10.18653/v1/2024.blackboxnlp-1.
+15. URLhttps://aclanthology.org/2024.blackboxnlp-1.15/.
+Hangzhan Jin, Sitao Luan, Sicheng Lyu, Guillaume Rabusseau, Reihaneh Rabbany, Doina Pre-
+cup, and Mohammad Hamdaqa. Rl fine-tuning heals ood forgetting in sft.arXiv preprint
+arXiv:2509.12235, 2025a.
+Hangzhan Jin, Sicheng Lv, Sifan Wu, and Mohammad Hamdaqa. Rl is neither a panacea nor a
+mirage: Understanding supervised vs. reinforcement learning fine-tuning for llms.arXiv preprint
+arXiv:2508.16546, 2025b.
+Feiyang Kang, Michael Kuchnik, Karthik Padthe, Marin Vlastelica, Ruoxi Jia, Carole-Jean Wu, and
+Newsha Ardalani. Quagmires in SFT-RL post-training: When high SFT scores mislead and what
+to use instead. InThe Fourteenth International Conference on Learning Representations, 2026. URL
+https://openreview.net/forum?id=uLM3BfKo19.
+Diederik P Kingma. Adam: A method for stochastic optimization.arXiv preprint arXiv:1412.6980,
+2014.
+Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, Joseph
+Gonzalez, Hao Zhang, and Ion Stoica. Efficient memory management for large language model
+serving with pagedattention. InProceedings of the 29th Symposium on Operating Systems Principles,
+SOSP ’23, page 611–626, New York, NY, USA, 2023. Association for Computing Machinery. ISBN
+9798400702297. doi: 10.1145/3600006.3613165. URL https://doi.org/10.1145/3600006.
+3613165.
+14
+===== [PAGE 15] =====
+Aitor Lewkowycz, Anders Andreassen, David Dohan, Ethan Dyer, Henryk Michalewski, Vinay
+Ramasesh, Ambrose Slone, Cem Anil, Imanol Schlag, Theo Gutman-Solo, Yuhuai Wu, Behnam
+Neyshabur, Guy Gur-Ari, and Vedant Misra. Solving quantitative reasoning problems with
+language models. In S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh, editors,
+Advances in Neural Information Processing Systems, volume 35, pages 3843–3857. Curran Associates,
+Inc., 2022. URL https://proceedings.neurips.cc/paper_files/paper/2022/file/
+18abbeef8cfe9203fdf9053c9c4fe191-Paper-Conference.pdf.
+Xinran Li, Guangda Huzhang, Siqi Shen, Qing-Guo Chen, Zhao Xu, Weihua Luo, Kaifu Zhang, and
+Jun Zhang. Getting your LLMs ready for reinforcement learning with lightweight SFT. InThe
+Fourteenth International Conference on Learning Representations, 2026. URL https://openreview.
+net/forum?id=yezWGJmODg.
+Ziniu Li, Congliang Chen, Tian Xu, Zeyu Qin, Jiancong Xiao, Zhi-Quan Luo, and Ruoyu Sun.
+Preserving diversity in supervised fine-tuning of large language models. InThe Thirteenth Inter-
+national Conference on Learning Representations, 2025. URL https://openreview.net/forum?
+id=NQEe7B7bSw.
+Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harrison Edwards, Bowen Baker, Teddy Lee, Jan
+Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. Let’s verify step by step. InThe Twelfth
+International Conference on Learning Representations, 2024. URL https://openreview.net/
+forum?id=v8L0pN6EOi.
+Alexis Limozin, Eduard Durech, Torsten Hoefler, Imanol Schlag, and Valentina Pyatkin. Sft-then-rl
+outperforms mixed-policy methods for llm reasoning.arXiv preprint arXiv:2604.23747, 2026.
+Mingjie Liu, Shizhe Diao, Ximing Lu, Jian Hu, Xin Dong, Yejin Choi, Jan Kautz, and Yi Dong. ProRL:
+Prolonged reinforcement learning expands reasoning boundaries in large language models. In
+The Thirty-ninth Annual Conference on Neural Information Processing Systems, 2025a. URL https:
+//openreview.net/forum?id=YPsJha5HXQ.
+Mingyang Liu, Gabriele Farina, and Asuman E. Ozdaglar. UFT: Unifying supervised and reinforce-
+ment fine-tuning. InThe Thirty-ninth Annual Conference on Neural Information Processing Systems,
+2025b. URLhttps://openreview.net/forum?id=usOkGv1S7M.
+Runze Liu, Jiakang Wang, Yuling Shi, Zhihui Xie, Chenxin An, Kaiyan Zhang, Jian Zhao, Xiaodong
+Gu, Lei Lin, Wenping Hu, Xiu Li, Fuzheng Zhang, Guorui Zhou, and Kun Gai. Attention as
+a compass: Efficient exploration for process-supervised rl in reasoning models.arXiv preprint
+arXiv:2509.26628, 2025c.
+Tao Liu, Taiqiang Wu, Runming Yang, Shaoning Sun, Junjie Wang, and Yujiu Yang. Profit: Leveraging
+high-value signals in sft via probability-guided token selection.arXiv preprint arXiv:2601.09195,
+2026.
+Yihao Liu, Shuocheng Li, Lang Cao, Yuhang Xie, Mengyu Zhou, Haoyu Dong, Xiaojun Ma, Shi Han,
+and Dongmei Zhang. Superrl: Reinforcement learning with supervision to boost language model
+reasoning.arXiv preprint arXiv:2506.01096, 2025d.
+Xingtai Lv, Yuxin Zuo, Youbang Sun, Hongyi Liu, Yuntian Wei, Zhekai Chen, Xuekai Zhu, Kaiyan
+Zhang, Bingning Wang, Ning Ding, et al. Towards a unified view of large language model
+post-training.arXiv preprint arXiv:2509.04419, 2025.
+Lu Ma, Hao Liang, Meiyi Qiang, Lexiang Tang, Xiaochen Ma, Zhen Hao Wong, Junbo Niu, Chengyu
+Shen, Runming He, Yanhao Li, Wentao Zhang, and Bin CUI. Learning what reinforcement learning
+can’t: Interleaved online fine-tuning for hardest questions. InThe Fourteenth International Conference
+on Learning Representations, 2026. URLhttps://openreview.net/forum?id=LzCBLrNoyM.
+15
+===== [PAGE 16] =====
+MAA. American mathematics contest 12 (amc 12), November 2023. URL https:
+//artofproblemsolving.com/wiki/index.php/AMC_12_Problems_and_Solutions.
+Accessed: 2026-04-30.
+Paul Michel, Omer Levy, and Graham Neubig. Are sixteen heads really better than one?
+In H. Wallach, H. Larochelle, A. Beygelzimer, F. d'Alché-Buc, E. Fox, and R. Garnett,
+editors,Advances in Neural Information Processing Systems, volume 32. Curran Associates,
+Inc., 2019. URL https://proceedings.neurips.cc/paper_files/paper/2019/file/
+2c601ad9d2ff9bc8b282670cdd54f69f-Paper.pdf.
+Pavlo Molchanov, Stephen Tyree, Tero Karras, Timo Aila, and Jan Kautz. Pruning convolutional neu-
+ral networks for resource efficient inference. InInternational Conference on Learning Representations,
+2017. URLhttps://openreview.net/forum?id=SJGCiw5gl.
+OpenAI. Learning to reason with llms, 2024. URL https://openai.com/index/
+learning-to-reason-with-llms. Accessed: 2026-04-30.
+Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong
+Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, John Schulman, Jacob Hilton, Fraser
+Kelton, Luke Miller, Maddie Simens, Amanda Askell, Peter Welinder, Paul F Christiano, Jan
+Leike, and Ryan Lowe. Training language models to follow instructions with human feed-
+back. In S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh, editors,Ad-
+vances in Neural Information Processing Systems, volume 35, pages 27730–27744. Curran Associates,
+Inc., 2022. URL https://proceedings.neurips.cc/paper_files/paper/2022/file/
+b1efde53be364a73914f58805a001731-Paper-Conference.pdf.
+Zhenting Qi, Fan Nie, Alexandre Alahi, James Zou, Himabindu Lakkaraju, Yilun Du, Eric P . Xing,
+Sham M. Kakade, and Hanlin Zhang. EvoLM: In search of lost language model training dynamics.
+InThe Thirty-ninth Annual Conference on Neural Information Processing Systems, 2025. URL https:
+//openreview.net/forum?id=B6bE2GC71a.
+Chongli Qin and Jost Tobias Springenberg. Supervised fine tuning on curated data is reinforcement
+learning (and can be improved).arXiv preprint arXiv:2507.12856, 2025.
+David Rein, Betty Li Hou, Asa Cooper Stickland, Jackson Petty, Richard Yuanzhe Pang, Julien Dirani,
+Julian Michael, and Samuel R. Bowman. GPQA: A graduate-level google-proof q&a benchmark.
+InFirst Conference on Language Modeling, 2024. URL https://openreview.net/forum?id=
+Ti67584b98.
+Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang,
+Mingchuan Zhang, YK Li, Y Wu, et al. Deepseekmath: Pushing the limits of mathematical
+reasoning in open language models.arXiv preprint arXiv:2402.03300, 2024.
+Guangming Sheng, Chi Zhang, Zilingfeng Ye, Xibin Wu, Wang Zhang, Ru Zhang, Yanghua Peng,
+Haibin Lin, and Chuan Wu. Hybridflow: A flexible and efficient rlhf framework. InProceedings of
+the Twentieth European Conference on Computer Systems, EuroSys ’25, page 1279–1297, New York, NY,
+USA, 2025. Association for Computing Machinery. ISBN 9798400711961. doi: 10.1145/3689031.
+3696075. URLhttps://doi.org/10.1145/3689031.3696075.
+Mohammad Shoeybi, Mostofa Patwary, Raul Puri, Patrick LeGresley, Jared Casper, and Bryan Catan-
+zaro. Megatron-lm: Training multi-billion parameter language models using model parallelism.
+arXiv preprint arXiv:1909.08053, 2019.
+Hao Wang, Hao Gu, Hongming Piao, Kaixiong Gong, Yuxiao Ye, Xiangyu Yue, Sirui Han, Yike Guo,
+and Dapeng Wu. Learning while staying curious: Entropy-preserving supervised fine-tuning via
+adaptive self-distillation for large reasoning models.arXiv preprint arXiv:2602.02244, 2026.
+16
+===== [PAGE 17] =====
+Jiakang Wang, Runze Liu, Lei Lin, Wenping Hu, Xiu Li, Fuzheng Zhang, Guorui Zhou, and Kun
+Gai. Aspo: Asymmetric importance sampling policy optimization.arXiv preprint arXiv:2510.06062,
+2025a.
+Jiakang Wang, Runze Liu, Fuzheng Zhang, Xiu Li, and Guorui Zhou. Stabilizing knowledge,
+promoting reasoning: Dual-token constraints for rlvr.arXiv preprint arXiv:2507.15778, 2025b.
+Shenzhi Wang, Le Yu, Chang Gao, Chujie Zheng, Shixuan Liu, Rui Lu, Kai Dang, Xiong-Hui Chen,
+Jianxin Yang, Zhenru Zhang, Yuqiong Liu, An Yang, Andrew Zhao, Yang Yue, Shiji Song, Bowen
+Yu, Gao Huang, and Junyang Lin. Beyond the 80/20 rule: High-entropy minority tokens drive
+effective reinforcement learning for LLM reasoning. InThe Thirty-ninth Annual Conference on
+Neural Information Processing Systems, 2025c. URL https://openreview.net/forum?id=
+yfcpdY4gMP.
+Yubo Wang, Xueguang Ma, Ge Zhang, Yuansheng Ni, Abhranil Chandra, Shiguang Guo,
+Weiming Ren, Aaran Arulraj, Xuan He, Ziyan Jiang, Tianle Li, Max Ku, Kai Wang, Alex
+Zhuang, Rongqi Fan, Xiang Yue, and Wenhu Chen. Mmlu-pro: A more robust and
+challenging multi-task language understanding benchmark. In A. Globerson, L. Mackey,
+D. Belgrave, A. Fan, U. Paquet, J. Tomczak, and C. Zhang, editors,Advances in Neural In-
+formation Processing Systems, volume 37, pages 95266–95290. Curran Associates, Inc., 2024.
+doi: 10.52202/079017-3018. URL https://proceedings.neurips.cc/paper_files/
+paper/2024/file/ad236edc564f3e3156e1b2feafb99a24-Paper-Datasets_and_
+Benchmarks_Track.pdf.
+Mitchell Wortsman, Gabriel Ilharco, Samir Ya Gadre, Rebecca Roelofs, Raphael Gontijo-Lopes, Ari S
+Morcos, Hongseok Namkoong, Ali Farhadi, Yair Carmon, Simon Kornblith, and Ludwig Schmidt.
+Model soups: averaging weights of multiple fine-tuned models improves accuracy without
+increasing inference time. In Kamalika Chaudhuri, Stefanie Jegelka, Le Song, Csaba Szepesvari,
+Gang Niu, and Sivan Sabato, editors,Proceedings of the 39th International Conference on Machine
+Learning, volume 162 ofProceedings of Machine Learning Research, pages 23965–23998. PMLR, 17–23
+Jul 2022. URLhttps://proceedings.mlr.press/v162/wortsman22a.html.
+Yongliang Wu, Yizhou Zhou, Zhou Ziheng, Yingzhe Peng, Xinyu Ye, Xinting Hu, Wenbo Zhu, Lu Qi,
+Ming-Hsuan Yang, and Xu Yang. On the generalization of SFT: A reinforcement learning perspec-
+tive with reward rectification. InThe Fourteenth International Conference on Learning Representations,
+2026. URLhttps://openreview.net/forum?id=Lv7PjbcaMi.
+Jianhao Yan, Yafu Li, Zican Hu, Zhi Wang, Ganqu Cui, Xiaoye Qu, Yu Cheng, and Yue Zhang. Learn-
+ing to reason under off-policy guidance. InThe Thirty-ninth Annual Conference on Neural Information
+Processing Systems, 2025. URLhttps://openreview.net/forum?id=vO8LLoNWWk.
+An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li,
+Dayiheng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin
+Yang, Jiaxi Yang, Jingren Zhou, Junyang Lin, Kai Dang, Keming Lu, Keqin Bao, Kexin Yang,
+Le Yu, Mei Li, Mingfeng Xue, Pei Zhang, Qin Zhu, Rui Men, Runji Lin, Tianhao Li, Tingyu Xia,
+Xingzhang Ren, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yu Wan, Yuqiong Liu, Zeyu
+Cui, Zhenru Zhang, and Zihan Qiu. Qwen2.5 technical report.arXiv preprint arXiv:2412.15115,
+2024.
+An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang
+Gao, Chengen Huang, Chenxu Lv, Chujie Zheng, Dayiheng Liu, Fan Zhou, Fei Huang, Feng Hu,
+Hao Ge, Haoran Wei, Huan Lin, Jialong Tang, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin
+Yang, Jiaxi Yang, Jing Zhou, Jingren Zhou, Junyang Lin, Kai Dang, Keqin Bao, Kexin Yang, Le Yu,
+17
+===== [PAGE 18] =====
+Lianghao Deng, Mei Li, Mingfeng Xue, Mingze Li, Pei Zhang, Peng Wang, Qin Zhu, Rui Men,
+Ruize Gao, Shixuan Liu, Shuang Luo, Tianhao Li, Tianyi Tang, Wenbiao Yin, Xingzhang Ren,
+Xinyu Wang, Xinyu Zhang, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yinger Zhang,
+Yu Wan, Yuqiong Liu, Zekun Wang, Zeyu Cui, Zhenru Zhang, Zhipeng Zhou, and Zihan Qiu.
+Qwen3 technical report.arXiv preprint arXiv:2505.09388, 2025.
+Shunyu Yao, Noah Shinn, Pedram Razavi, and Karthik R Narasimhan. τ-bench: A benchmark for
+tool-agent-user interaction in real-world domains. InThe Thirteenth International Conference on
+Learning Representations, 2025. URLhttps://openreview.net/forum?id=roNSXZpUDN.
+Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, YuYue, Weinan Dai, Tiantian
+Fan, Gaohong Liu, Juncai Liu, LingJun Liu, Xin Liu, Haibin Lin, Zhiqi Lin, Bole Ma, Guangming
+Sheng, Yuxuan Tong, Chi Zhang, Mofan Zhang, Ru Zhang, Wang Zhang, Hang Zhu, Jinhua Zhu,
+Jiaze Chen, Jiangjie Chen, Chengyi Wang, Hongli Yu, Yuxuan Song, Xiangpeng Wei, Hao Zhou,
+Jingjing Liu, Wei-Ying Ma, Ya-Qin Zhang, Lin Yan, Yonghui Wu, and Mingxuan Wang. DAPO: An
+open-source LLM reinforcement learning system at scale. InThe Thirty-ninth Annual Conference
+on Neural Information Processing Systems, 2025. URL https://openreview.net/forum?id=
+2a36EMSSTp.
+Yang Yue, Zhiqi Chen, Rui Lu, Andrew Zhao, Zhaokai Wang, Yang Yue, Shiji Song, and Gao Huang.
+Does reinforcement learning really incentivize reasoning capacity in LLMs beyond the base
+model? InThe Thirty-ninth Annual Conference on Neural Information Processing Systems, 2025. URL
+https://openreview.net/forum?id=4OsgYD7em5.
+Dylan Zhang, Yufeng Xu, Haojin Wang, Qingzhi Chen, and Hao Peng. Good sft optimizes for sft,
+better sft prepares for reinforcement learning.arXiv preprint arXiv:2602.01058, 2026a.
+Kaiyan Zhang, Yuxin Zuo, Bingxiang He, Youbang Sun, Runze Liu, Che Jiang, Yuchen Fan, Kai Tian,
+Guoli Jia, Pengfei Li, Yu Fu, Xingtai Lv, Yuchen Zhang, Sihang Zeng, Shang Qu, Haozhan Li, Shijie
+Wang, Yuru Wang, Xinwei Long, Fangfu Liu, Xiang Xu, Jiaze Ma, Xuekai Zhu, Ermo Hua, Yihao
+Liu, Zonglin Li, Huayu Chen, Xiaoye Qu, Yafu Li, Weize Chen, Zhenzhao Yuan, Junqi Gao, Dong
+Li, Zhiyuan Ma, Ganqu Cui, Zhiyuan Liu, Biqing Qi, Ning Ding, and Bowen Zhou. A survey of
+reinforcement learning for large reasoning models.arXiv preprint arXiv:2509.08827, 2025a.
+Kaiyan Zhang, Kai Tian, Runze Liu, Sihang Zeng, Xuekai Zhu, Guoli Jia, Yuchen Fan, Xingtai Lv,
+Yuxin Zuo, Che Jiang, Yuru wang, Jianyu Wang, Ermo Hua, Xinwei Long, Junqi Gao, Youbang Sun,
+Zhiyuan Ma, Ganqu Cui, Ning Ding, Biqing Qi, and Bowen Zhou. MARTI: A framework for multi-
+agent LLM systems reinforced training and inference. InThe Fourteenth International Conference on
+Learning Representations, 2026b. URLhttps://openreview.net/forum?id=E7jZqo0A50.
+Wenhao Zhang, Yuexiang Xie, Yuchang Sun, Yanxi Chen, Guoyin Wang, Yaliang Li, Bolin Ding,
+and Jingren Zhou. On-policy RL meets off-policy experts: Harmonizing supervised fine-tuning
+and reinforcement learning via dynamic weighting. InThe Fourteenth International Conference on
+Learning Representations, 2026c. URLhttps://openreview.net/forum?id=dCm9bBrk5d.
+Zhenru Zhang, Chujie Zheng, Yangzhen Wu, Beichen Zhang, Runji Lin, Bowen Yu, Dayiheng
+Liu, Jingren Zhou, and Junyang Lin. The lessons of developing process reward models in
+mathematical reasoning. In Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Moham-
+mad Taher Pilehvar, editors,Findings of the Association for Computational Linguistics: ACL 2025,
+pages 10495–10516, Vienna, Austria, July 2025b. Association for Computational Linguistics. ISBN
+979-8-89176-256-5. doi: 10.18653/v1/2025.findings-acl.547. URL https://aclanthology.
+org/2025.findings-acl.547/.
+18
+===== [PAGE 19] =====
+Jian Zhao, Runze Liu, Kaiyan Zhang, Zhimu Zhou, Junqi Gao, Dong Li, Jiafei Lyu, Zhouyi Qian,
+Biqing Qi, Xiu Li, and Bowen Zhou. Genprm: Scaling test-time compute of process reward
+models via generative reasoning.Proceedings of the AAAI Conference on Artificial Intelligence, 40
+(41):34932–34940, Mar. 2026. doi: 10.1609/aaai.v40i41.40797. URL https://ojs.aaai.org/
+index.php/AAAI/article/view/40797.
+Lianmin Zheng, Liangsheng Yin, Zhiqiang Xie, Chuyue Sun, Jeff Huang, Cody Hao Yu, Shiyi Cao,
+Christos Kozyrakis, Ion Stoica, Joseph E. Gonzalez, Clark Barrett, and Ying Sheng. Sglang:
+Efficient execution of structured language model programs. In A. Globerson, L. Mackey,
+D. Belgrave, A. Fan, U. Paquet, J. Tomczak, and C. Zhang, editors,Advances in Neural Infor-
+mation Processing Systems, volume 37, pages 62557–62583. Curran Associates, Inc., 2024a. doi:
+10.52202/079017-2000. URL https://proceedings.neurips.cc/paper_files/paper/
+2024/file/724be4472168f31ba1c9ac630f15dec8-Paper-Conference.pdf.
+Yaowei Zheng, Richong Zhang, Junhao Zhang, Yanhan Ye, and Zheyan Luo. LlamaFactory:
+Unified efficient fine-tuning of 100+ language models. In Yixin Cao, Yang Feng, and Deyi
+Xiong, editors,Proceedings of the 62nd Annual Meeting of the Association for Computational Lin-
+guistics (Volume 3: System Demonstrations), pages 400–410, Bangkok, Thailand, August 2024b.
+Association for Computational Linguistics. doi: 10.18653/v1/2024.acl-demos.38. URL https:
+//aclanthology.org/2024.acl-demos.38/.
+He Zhu, Junyou Su, Peng Lai, Ren Ma, Wenjia Zhang, Linyi Yang, and Guanhua Chen. Anchored
+supervised fine-tuning. InThe Fourteenth International Conference on Learning Representations, 2026a.
+URLhttps://openreview.net/forum?id=PORko7QT64.
+Wenhong Zhu, Ruobing Xie, Rui Wang, Xingwu Sun, Di Wang, and Pengfei Liu. Proximal supervised
+fine-tuning. InThe Fourteenth International Conference on Learning Representations, 2026b. URL
+https://openreview.net/forum?id=hQtwQqYikp.
+Zilin Zhu, Chengxing Xie, Xin Lv, and slime Contributors. slime: An llm post-training framework
+for rl scaling. https://github.com/THUDM/slime, 2025. GitHub repository. Corresponding
+author: Xin Lv. Accessed: 2026-04-30.
+19
+===== [PAGE 20] =====
+A Full Algorithm
+Algorithm 1Rejuvenation: Plasticity Recovery for Over-Trained SFT Models
+Input:Base modelθ Base, over-trained modelθ over, fusion weightα, reset ratioρ
+1:Apply global model fusion via equation 1
+2:Compute DLA scores for neurons using over-confident tokens
+3: For each selected target token, select the global top-ρ neurons by most positively contributing
+attribution score
+4:LetSbe the union of selected neurons over all calibration tokens
+5:Reset selected neurons inθ fuse to their base values
+Output:recovered modelθ rec
+B Experimental Details
+Mathematical SFT Training Details.For EvoLM-4B, we conduct SFT with LlamaFactory (Zheng
+et al., 2024b) on a 100k subset sampled from a 500k mathematical SFT corpus. The base checkpoint
+is the EvoLM-4B pre-trained model trained with controlled mixing of FineWeb and FineMath data
+(without contamination from the evaluation benchmarks). All variants share the same data, the same
+context window, and the same data ordering, so any difference betweenModSFT and OverSFT is
+purely a function of training duration. We use AdamW (Kingma, 2014) with β1 = 0.9, β2 = 0.999,
+a constant learning rate of 3.0×10 −6, andnolearning-rate warmup, decay, or weight decay. We
+deliberately disable schedules and weight decay so that excessive SFT can manifest its full effect on
+parameter drift, weight magnitude, and token entropy. ModSFT is the checkpoint after 2 epochs and
+OverSFT is the checkpoint after 32 epochs over the same SFT subset. For the DFT baseline, we keep
+the same data, the same total epochs (32), and the same optimizer settings as OverSFT, and only
+replace the cross-entropy loss with the probability-reweighted DFT objective (Wu et al., 2026). This
+isolates the effect of the loss formulation from the effect of the SFT trajectory length.
+Agentic SFT Training Details.For Qwen3-8B, the SFT stage is performed with slime (Zhu et al.,
+2025) on the τ-bench Retail training split, where supervision trajectories are generated from a
+stronger Qwen3-30B-A3B teacher and saved as multi-turn assistant-tool conversations. We use
+AdamW with β1 = 0.9, β2 = 0.999, a constant learning rate of 3.0×10 −6, weight decay 0.1, a global
+batch size of 16, and a maximum response length of 4,096 tokens. We train for 32 epochs with the
+Qwen3 chat template (enable_thinking=False) and the Qwen3 tool-aware loss mask, so that loss
+is only computed on assistant turns. The corresponding ModSFT and OverSFT checkpoints follow
+the same epoch-based convention as in the math setting. The DFT baseline is constructed in the
+same way as in the math setting, by replacing the cross-entropy loss with the DFT objective while
+keeping all other hyper-parameters identical.
+Mathematical RL Training Details.We use verl (Sheng et al., 2025) with GRPO (Shao et al.,
+2024) as the RL backbone. The actor is initialized from the corresponding SFT checkpoint, and the
+reference policy is the same SFT model frozen at step 0. The training prompt batch size is 512 with
+a mini-batch size of 128, and we sample 8 responses per prompt with temperature 1.0 and top- p
+1.0. The maximum prompt length is 512 and the maximum response length is 1,024 tokens. For
+optimization, we use AdamW with a constant learning rate of 1×10 −6 and a global gradient clip of
+1.0. We keep the GRPO clipping range symmetric (εlow =ε high = 0.2), use KL loss with coefficient
+20
+===== [PAGE 21] =====
+0.001, and adopt the seq-mean-token-mean loss aggregation. Rewards are computed by the
+Math-Verify3 verifier on the boxed final answer, with the reward function returning 1 for correct
+answers and -1 otherwise. Validation is run every 50 steps with temperature 0.6 and top-p 1.0. Each
+run uses 1 node of 8×NVIDIA H800 GPUs, FSDP2 sharding, and dynamic batching. Rollouts are
+served by vLLM (Kwon et al., 2023).
+Agentic RL Training Details.For agentic RL, we use slime (Zhu et al., 2025) with Megatron-
+LM (Shoeybi et al., 2019) backend for training and SGLang (Zheng et al., 2024a) for inference. For
+each iteration we sample 12 prompts from the τ-bench Retail training set with 8 trajectories per
+prompt and a global batch size of 96, with maximum response length 1,024 tokens and temperature
+1.0. To produce realistic multi-turn behavior, we deploy a separate Qwen3-4B-Instruct-2507 (Yang
+et al., 2025) as the user simulator, served locally via SGLang, and call it through an OpenAI-
+compatible API. We use AdamW with learning rate 1×10 −6, constant LR schedule, and CPU
+optimizer offloading. We use GRPO algorithm and set the KL loss coefficient and the entropy
+coefficient both to 0, and use clipping ranges with εlow = 0.2 and εhigh = 0.28. Tensor-model-parallel
+size is 2, sequence parallelism is enabled, and we use full activation recomputation with dynamic
+batching (up to 2,048 tokens per GPU). We train for up to 200 rollouts, save and evaluate every 20
+rollouts, and balance trajectories across data-parallel ranks with the standard non-zero-reward-std
+dynamic filter. Each run uses 6 GPUs for the policy and the user simulator combined, with the user
+simulator pinned to a separate set of GPUs.
+For both math and agentic RL, the only difference between baselines and Rejuvenation
+is theinitializationof the actor: baselines start from ModSFT, OverSFT, or the DFT checkpoint,
+whereas Rejuvenation starts from the rejuvenated checkpoint produced by Algorithm 1. All RL
+hyper-parameters, data, prompts, and seeds are kept identical across initializations to ensure a fair
+comparison.
+Evaluation Details.For ID and OOD evaluation we use the same inference backends as in training:
+vLLM for EvoLM-4B and SGLang for Qwen3-8B. We use a sampling temperature of 0.6 and top-
+p of 1.0 for all benchmarks. For benchmarks with limited problem counts, we average Pass@1
+over multiple samples per problem (K=32 for AMC23 and AIME-style sets, K=4 for MATH-500,
+Minerva, OlympiadBench, GPQA, ARC, K=2 for GSM8K). Mathematical answers are graded with
+the same Math-Verify verifier used during RL training, and multiple-choice OOD benchmarks
+(GPQA, ARC, MMLU-Pro) are graded by the official answer-matching scripts shipped with each
+dataset.
+C Additional Results
+Logit Distribution.Figure 6 contrasts the next-token logit distribution between ModSFT and
+OverSFT on the same set of held-out prompts. Under teacher forcing on the gold response,OverSFT
+concentrates almost the entire probability mass on a single token, while ModSFT still allocates non-
+trivial mass to plausible alternatives. We additionally inspect the per-position entropy along full
+responses and observe that the entropy gap between the two checkpoints is largest on tokens
+that involve numerical answers, formula formatting, and chain-of-thought connectors, which is
+consistent with our DLA-based attribution analysis.
+3https://github.com/huggingface/Math-Verify
+21
+===== [PAGE 22] =====
+(a)ModSFT
+ (b)OverSFT
+Figure 6: Token logit comparison between normal SFT models and over-trained models: (a) ModSFT;
+(b)OverSFT.
+Logit Attribution.The attribution scores are highly uneven across both modules and neurons.
+At the module level, only a small number of modules contribute disproportionately large positive
+values to the over-confident target logits, while most modules have much smaller contributions, as
+shown in Figure 7. This indicates that the excessive logit sharpening induced by over-training is
+not uniformly distributed across the network, but is concentrated in a limited set of components.
+A similar pattern appears at the neuron level: within the high-contribution modules, only a small
+subset of neurons dominates the positive contribution to the gold-token logit, whereas the majority
+of neurons contribute little or even negatively. This heavy-tailed attribution structure explains why
+resetting a small fraction of high-scoring neurons is sufficient to relax the over-confident logits and
+recover plasticity, without broadly disrupting the SFT-acquired behavior stored in the rest of the
+model.
+Selected Tokens in Logit Attribution.We visualize the selected tokens of logit attribution in
+Figure 8. We can observe that the selected tokens are mainly logical connectives instead of basic
+knowledge or computation process. As pointed out by previous work (Wang et al., 2025c), RL
+mainly optimizes tokens related to reasoning behaviors (e.g., logical connectives). Rejuvenation
+recovers the entropy of these critical tokens, which better incentivizes the learnability of the policy
+during RL.
+22
+===== [PAGE 23] =====
+0 2 4 6 8 10
+Contribution
+L16.mlp
+L0.mlp
+L17.mlp
+L19.mlp
+L22.attn
+L19.attn
+L21.attn
+L18.mlp
+L22.mlp
+L24.attn
+L25.attn
+L24.mlp
+L26.attn
+L21.mlp
+L25.mlp
+L27.attn
+L23.mlp
+L23.attn
+L26.mlp
+L27.mlp
+Module
++0.1484
++0.1504
++0.1699
++0.2061
++0.2080
++0.2324
++0.2539
++0.3105
++0.3477
++0.3789
++0.3809
++0.4453
++0.6641
++0.6680
++1.2422
++1.4453
++1.4766
++1.7031
++3.1250
++9.3125
+(a) module level
+0.0 0.5 1.0 1.5 2.0
+Contribution
+L20.k_proj.n509
+L23.v_proj.n153
+L22.k_proj.n496
+L25.k_proj.n316
+L26.k_proj.n303
+L26.up_proj.n2177
+L27.v_proj.n348
+L23.v_proj.n147
+L26.gate_proj.n2177
+L26.up_proj.n951
+L26.gate_proj.n951
+L27.up_proj.n5473
+L26.down_proj.n951
+L27.gate_proj.n5473
+L27.v_proj.n223
+L27.down_proj.n5473
+L0.v_proj.n110
+L27.up_proj.n7421
+L27.down_proj.n7421
+L27.gate_proj.n7421
+Neuron
++0.4071
++0.4090
++0.4169
++0.4507
++0.4965
++0.5850
++0.6015
++0.6168
++0.6850
++0.7050
++0.7396
++0.7677
++0.7695
++0.7938
++0.8538
++0.9453
++1.0454
++1.7487
++1.9062
++1.9380 (b) neuron level
+Figure 7: Logit attribution ranking: (a) module level; (b) neuron level.
+Figure 8: Wordcloud of selected tokens in logit attribution.
+How token entropy recovers?To better understand how neuron reset restores output diversity,
+we visualize the token-level entropy before and after applying the reset operation in Figure 9. Before
+reset,OverSFTproduces extremely low entropy on many selected target positions, indicating that
+the policy assigns most probability mass to a single token and leaves little room for alternative
+reasoning continuations. After resetting the high-attribution neurons to their base-model values, the
+entropy of these positions increases noticeably, while the distribution does not become uniformly
+random. This suggests that the reset operation does not simply inject noise into the model. Instead,
+it selectively relaxes the over-confident logits associated with a small set of abnormal neurons. As
+a result, the recovered checkpoint preserves the main SFT-acquired behavior but reopens alterna-
+tive token choices that are useful for exploration during RL. This entropy recovery provides an
+output-space explanation for why Rejuvenation improves subsequent RL optimization and OOD
+generalization.
+23
+===== [PAGE 24] =====
+(a) Before neuron reset
+ (b) After neuron reset
+Figure 9: Comparison of token entropy: (a) Before neuron reset; (b) After neuron reset.
+Selected neurons/modules.Figure 10 visualizes the distribution of reset neurons over the whole
+model. Reset neurons are not uniformly distributed: they cluster in a few specific layers and
+modules that are most aligned with over-confident logit production, especially the k_proj and
+v_proj modules in the last several layers. We also observe that reset neurons aggregated from
+different calibration prompts overlap substantially, indicating that the over-confidence ofOverSFT
+is governed by a stable, prompt-agnostic subset of parameters rather than per-prompt artifacts. This
+stability is what makes the reset operation effective with a single calibration pass.
+Computational Cost. Rejuvenation is a one-shot, post-hoc operation and introduces negligible
+overhead compared with the SFT or RL stages. The fusion step is a single element-wise interpolation
+between two checkpoints. The neuron reset step requires one forward pass over a small calibration
+set to compute DLA scores and a single masked copy from the base weights into the fused checkpoint.
+Both steps are run on a single NVIDIA H800 GPU and finish in 3 minutes for EvoLM-4B and within
+5 minutes for Qwen3-8B, which is orders of magnitude smaller than the cost of either re-running
+SFT from a different stopping point or relaunching RL from multiple SFT checkpoints.
+Parameter Changes.To complement the per-module visualization in Section 3.1, we provide
+additional layer-wise visualizations of the parameter shift induced by SFT and the subsequent RL
+stage. Figure 11 and Figures 12-13 cover representative attention projections across early and late
+layers. The patterns are consistent with those reported in the main text: OverSFT introduces sparse
+but extreme spikes that are concentrated in a small subset of parameters, while ModSFT produces
+relatively smooth and small-magnitude updates. Subsequent RL on OverSFT is unable to undo
+these spikes, confirming that excessive SFT places the model in a region from which standard policy
+optimization cannot escape.
+24
+===== [PAGE 25] =====
+q_proj k_proj v_proj o_proj up_proj gate_proj down_proj
+Module
+L0
+L1
+L2
+L3
+L4
+L5
+L6
+L7
+L8
+L9
+L10
+L11
+L12
+L13
+L14
+L15
+L16
+L17
+L18
+L19
+L20
+L21
+L22
+L23
+L24
+L25
+L26
+L27
+Layer
+0.0022
+9/4096
+0.0273
+14/512
+0.0625
+32/512
+0.0000
+0/4096
+0.0009
+7/7792
+0.0014
+11/7792
+0.0000
+0/7792
+0.0000
+0/4096
+0.0273
+14/512
+0.0312
+16/512
+0.0000
+0/4096
+0.0012
+9/7792
+0.0019
+15/7792
+0.0000
+0/7792
+0.0010
+4/4096
+0.1504
+77/512
+0.1250
+64/512
+0.0000
+0/4096
+0.0006
+5/7792
+0.0010
+8/7792
+0.0000
+0/7792
+0.0022
+9/4096
+0.1406
+72/512
+0.2383
+122/512
+0.0000
+0/4096
+0.0006
+5/7792
+0.0009
+7/7792
+0.0000
+0/7792
+0.0007
+3/4096
+0.0488
+25/512
+0.0293
+15/512
+0.0000
+0/4096
+0.0000
+0/7792
+0.0000
+0/7792
+0.0000
+0/7792
+0.0000
+0/4096
+0.0176
+9/512
+0.0488
+25/512
+0.0000
+0/4096
+0.0001
+1/7792
+0.0004
+3/7792
+0.0000
+0/7792
+0.0002
+1/4096
+0.0293
+15/512
+0.0410
+21/512
+0.0000
+0/4096
+0.0000
+0/7792
+0.0006
+5/7792
+0.0000
+0/7792
+0.0002
+1/4096
+0.0156
+8/512
+0.0391
+20/512
+0.0000
+0/4096
+0.0001
+1/7792
+0.0005
+4/7792
+0.0000
+0/7792
+0.0002
+1/4096
+0.0254
+13/512
+0.0176
+9/512
+0.0000
+0/4096
+0.0004
+3/7792
+0.0009
+7/7792
+0.0000
+0/7792
+0.0002
+1/4096
+0.0605
+31/512
+0.0547
+28/512
+0.0000
+0/4096
+0.0000
+0/7792
+0.0003
+2/7792
+0.0000
+0/7792
+0.0000
+0/4096
+0.0742
+38/512
+0.0996
+51/512
+0.0000
+0/4096
+0.0005
+4/7792
+0.0010
+8/7792
+0.0000
+0/7792
+0.0007
+3/4096
+0.0977
+50/512
+0.0371
+19/512
+0.0000
+0/4096
+0.0003
+2/7792
+0.0004
+3/7792
+0.0000
+0/7792
+0.0010
+4/4096
+0.0527
+27/512
+0.0391
+20/512
+0.0000
+0/4096
+0.0000
+0/7792
+0.0009
+7/7792
+0.0000
+0/7792
+0.0010
+4/4096
+0.0879
+45/512
+0.0840
+43/512
+0.0000
+0/4096
+0.0004
+3/7792
+0.0006
+5/7792
+0.0000
+0/7792
+0.0000
+0/4096
+0.0371
+19/512
+0.0605
+31/512
+0.0000
+0/4096
+0.0003
+2/7792
+0.0009
+7/7792
+0.0000
+0/7792
+0.0000
+0/4096
+0.0742
+38/512
+0.0391
+20/512
+0.0000
+0/4096
+0.0009
+7/7792
+0.0023
+18/7792
+0.0000
+0/7792
+0.0015
+6/4096
+0.0547
+28/512
+0.1074
+55/512
+0.0000
+0/4096
+0.0010
+8/7792
+0.0013
+10/7792
+0.0000
+0/7792
+0.0024
+10/4096
+0.0918
+47/512
+0.1133
+58/512
+0.0000
+0/4096
+0.0023
+18/7792
+0.0044
+34/7792
+0.0000
+0/7792
+0.0020
+8/4096
+0.1094
+56/512
+0.1152
+59/512
+0.0000
+0/4096
+0.0017
+13/7792
+0.0045
+35/7792
+0.0000
+0/7792
+0.0024
+10/4096
+0.1016
+52/512
+0.1523
+78/512
+0.0000
+0/4096
+0.0023
+18/7792
+0.0046
+36/7792
+0.0000
+0/7792
+0.0161
+66/4096
+0.1973
+101/512
+0.1719
+88/512
+0.0000
+0/4096
+0.0027
+21/7792
+0.0067
+52/7792
+0.0000
+0/7792
+0.0110
+45/4096
+0.1797
+92/512
+0.1738
+89/512
+0.0000
+0/4096
+0.0047
+37/7792
+0.0110
+86/7792
+0.0004
+3/7792
+0.0127
+52/4096
+0.2305
+118/512
+0.3516
+180/512
+0.0000
+0/4096
+0.0077
+60/7792
+0.0151
+118/7792
+0.0003
+2/7792
+0.0247
+101/4096
+0.3086
+158/512
+0.3184
+163/512
+0.0000
+0/4096
+0.0109
+85/7792
+0.0191
+149/7792
+0.0015
+12/7792
+0.0198
+81/4096
+0.2324
+119/512
+0.1816
+93/512
+0.0027
+11/4096
+0.0085
+66/7792
+0.0149
+116/7792
+0.0019
+15/7792
+0.0039
+16/4096
+0.0801
+41/512
+0.0762
+39/512
+0.0015
+6/4096
+0.0082
+64/7792
+0.0140
+109/7792
+0.0046
+36/7792
+0.0132
+54/4096
+0.1289
+66/512
+0.0293
+15/512
+0.0005
+2/4096
+0.0055
+43/7792
+0.0085
+66/7792
+0.0047
+37/7792
+0.0049
+20/4096
+0.0566
+29/512
+0.0508
+26/512
+0.0037
+15/4096
+0.0130
+101/7792
+0.0176
+137/7792
+0.0193
+150/7792
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Replacement Ratio
+Figure 10: Per layer and per module visualization of neuron reset ratio in EvoLM-4B.
+25
+===== [PAGE 26] =====
+SFT - Base
+Delta
+0.5 Epochs
+(Under-Trained)
+2 Epochs
+(Moderately Trained)
+8 Epochs
+(Over-Trained)
+32 Epochs
+(Severely Over-Trained)
+RL - SFT
+Delta
+RL - Base
+Delta
+ 0.0010
+0.0005
+0.0000
+0.0005
+0.0010
+Figure 11: Parameter changes of layers.0.self_attn.k_proj.weight induced by SFT and
+RL.
+SFT - Base
+Delta
+0.5 Epochs
+(Under-Trained)
+2 Epochs
+(Moderately Trained)
+8 Epochs
+(Over-Trained)
+32 Epochs
+(Severely Over-Trained)
+RL - SFT
+Delta
+RL - Base
+Delta
+0.00100
+0.00075
+0.00050
+0.00025
+0.00000
+0.00025
+0.00050
+0.00075
+0.00100
+Figure 12: Parameter changes of layers.27.self_attn.v_proj.weight induced by SFT and
+RL.
+26
+===== [PAGE 27] =====
+SFT - Base
+Delta
+0.5 Epochs
+(Under-Trained)
+2 Epochs
+(Moderately Trained)
+8 Epochs
+(Over-Trained)
+32 Epochs
+(Severely Over-Trained)
+RL - SFT
+Delta
+RL - Base
+Delta
+0.0015
+0.0010
+0.0005
+0.0000
+0.0005
+0.0010
+0.0015
+Figure 13: Parameter changes of layers.27.self_attn.k_proj.weight induced by SFT and
+RL.
+27

@@ -203,3 +203,13 @@ drew units. The completed run above is the only one that reached the end.
   distributions at cap 3072, 256 completions each
 - Restarted Stage A on Qwen2.5-7B-Instruct, cap 1536, config hash e33527592dd9
 - Units before/after: TO FILL BY HAND
+
+## 2026-08-18 — exp2 7B Phase 1 Stage A COMPLETE (Instruct, cap 1536)
+- GPU: Colab A100-SXM4-80GB High-RAM (3rd VM of the day; SKU verified before spending)
+- Config: exp2_colab_config_mvp_instruct.json, hash e33527592dd9
+- Result: 100/100 updates, completion_status=complete, wall 19783 s = 5 h 29 m
+- Throughput ~198 s/update; ckpts 0/50/100 all written and recovered to the Mac
+- Same-day cost also includes: base Stage A 7/100 (19 m, stopped on clipping gate),
+  two generation-only completion-length measurements (~35 m each), one lost run
+  of 53/100 (~2 h 50 m) reclaimed for browser inactivity
+- Units before/after: TO FILL BY HAND

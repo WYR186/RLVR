@@ -1,0 +1,34 @@
+{
+ "model": "Qwen/Qwen2.5-0.5B",
+ "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+ "seed": 42,
+ "task": "GSM8K",
+ "train_questions": 512,
+ "algorithm": "GRPO",
+ "max_steps": 200,
+ "checkpoint_steps": [
+  0,
+  25,
+  50,
+  100,
+  200
+ ],
+ "learning_rate": 1e-06,
+ "per_device_train_batch_size": 8,
+ "gradient_accumulation_steps": 8,
+ "num_generations": 8,
+ "beta": 0.0,
+ "temperature": 0.7,
+ "top_p": 1.0,
+ "max_prompt_length": 512,
+ "max_completion_length": 512,
+ "eval_every": 25,
+ "execution": {
+  "backend": "pytorch_cpu",
+  "device": "cpu",
+  "dtype": "float32",
+  "torch_threads": 12,
+  "gradient_checkpointing": false,
+  "reason": "PyTorch MPS unavailable on macOS 26.5.1"
+ }
+}

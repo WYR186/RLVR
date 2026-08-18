@@ -1,0 +1,41 @@
+{
+ "created_utc": "2026-07-07T17:52:17.785312+00:00",
+ "config_hash": "eac028bfcc87",
+ "python": "3.13.9 | packaged by Anaconda, Inc. | (main, Oct 21 2025, 19:11:29) [Clang 20.1.8 ]",
+ "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+ "gpu": null,
+ "git_sha": null,
+ "versions": {
+  "torch": "2.12.0",
+  "trl": "1.6.0",
+  "transformers": "5.13.0",
+  "datasets": "5.0.0",
+  "accelerate": "1.14.0",
+  "numpy": "2.3.5",
+  "scipy": "1.16.3",
+  "pandas": "2.3.3",
+  "matplotlib": "3.10.6"
+ },
+ "tracked_input_sha256": {
+  "pilot_config.json": "ac2278a87c63d8e33fc6dc8c3cdb7a27ea37e196ef3ef1b0dbf22c4e3e9fc8df",
+  "requirements.txt": "ee1af3381227c231fa80fda700ae9b0919691b7278b8eb647291ae534c2d3d97",
+  "LOCAL_EXPERIMENT_PLAN.md": "67101a9b961f3b3b4c50e779067f2ae30af6a07d67dd02f44f451057db5c04d8",
+  "01_grpo_gsm8k.ipynb": "d2f7cfcb1654e57a2abde35e4e7c29a9d9ecf6ba25d07199972aad03a9363f03",
+  "02_measure_Q.ipynb": "518f20c94691246b3fa94a989535149be3d1ba5df615e7ad8a9a8344ccd6fa2d",
+  "03_svamp_adaptation.ipynb": "0eadf81b234af7fa5ebf1babaa0aac4298199f145cef801afb411e9345a915cb",
+  "04_analysis.ipynb": "d8a5707aebdb965c1e8fd2c10dd36692c14dd5bf5fe62a58bc5138f0300e68c7",
+  "src/metrics.py": "feb9eb1ac3635fa1e9957244f2f7859e9fccf75aebc642b9c7869b241f0a7f0a",
+  "src/reward.py": "7d75cb578ae259922c85b2621c355eb55f4a472c792cac8da5f651accaea6a60",
+  "src/data.py": "a10108d83f405e6d5c06e57ca1881642398b7c57a5e32f68bf402c0ac26a582e",
+  "src/callbacks.py": "41a038dc24fab1937f8e9cf8d21f4535a8721cb0f9c71dac715d6c7149c027f1",
+  "src/evaluate.py": "419d4e91d0c7d5b177e6499dc9b910353e71c4c353fa63139a3fe465cb63f169",
+  "src/adaptation.py": "4b43d1bec91d52f085c5e49b6e0794ec16d92e3caa13b8de1e67265d050ce3d5",
+  "src/analysis.py": "3168f36e290a17d30cd4ec57fc35f2d34d9e23cd523ebfd99b9996aaa4647517",
+  "src/preflight.py": "f44b4d63598e69f928716f8f8fbf695a5b0a1c2ef28411128af0843ff982ac07",
+  "src/repro.py": "8408558da7eb071df386a13dce3d2d888f523bc9daf81a5d5b36d04b27819e22",
+  "scripts/run_local_pipeline.py": "97513f106beff2194fb777c8a35034860ac07c6f51f64da2f5a14407930f0b59",
+  "data/gsm8k_splits.json": "1fe1fc4b9dd859eea2c31e4da64d04aaad4bcaf912aecf1d14dcee2051cdf108",
+  "data/svamp_splits.json": "71da7298596ca18afcda047a1acd002a9ad6414bb9426189deb79d97cbd6c827",
+  "data/probe_set_ids.json": "bcd94be9366e2958d53a9e22248ba1bc9e4dfeb0ce98e7496fa41716598c46eb"
+ }
+}

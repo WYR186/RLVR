@@ -1,0 +1,1984 @@
+
+===== [PAGE 1] =====
+Can Scale Save Us From Plasticity Loss in Large
+Language Models?
+J. Fernando Hernandez-Garcia *, Tomas Figliolia *, Beren Millidge
+Zyphra
+San Francisco, CA
+*Corresponding authors:fernando@zyphra.com,tom@zyphra.com
+Abstract—The loss of plasticity – the ability of a network to learn
+new information after having already learned older information – is a
+fundamental challenge in creating artificial neural networks capable
+of continual learning. Although this phenomenon has been known for
+decades, it has mostly been studied in older, relatively small architec-
+tures and rarely in natural-language domains. To determine whether
+loss of plasticity remains a problem in the modern transformer-based
+LLM paradigm, we study plasticity loss in GPT-style Transformer
+models trained on a multilingual continual learning problem. Consis-
+tent with prior work, we find evidence of plasticity loss across models
+ranging from 5M to 314M non-embedding parameters, as measured
+by deterioration on a held-out Vietnamese probing task. We further
+find that the onset of plasticity loss follows a predictable scaling
+law, growing sublinearly with model size. These results suggest that
+larger models may delay the measurable effects of plasticity loss,
+but that increasing parameter count alone is likely to be insufficient
+to completely prevent it. We also find evidence of plasticity loss
+under stationary multilingual training, challenging the view that the
+phenomenon is exclusive to continual learning with abrupt task
+changes. Overall, our results suggest that even large Transformer
+language models trained on natural-language will eventually lose the
+ability to efficiently adapt to new data after sufficiently long training,
+in both continual and stationary settings.
+I. INTRODUCTION
+Neural networks trained for extended periods on chang-
+ing data can gradually lose their ability to learn from new
+observations—a phenomenon known asloss of plasticity(Ash
+& Adams, 2020; Lyle et al., 2022; Nikishin et al., 2022;
+Dohare et al., 2024). In this work, we operationalize plasticity
+loss as a degradation in a model’s ability to improve on a target
+distribution under a fixed training budget. This phenomenon
+represents a fundamental challenge for developing systems
+capable of continual learning, since such systems must be
+capable of incorporating new information without losing the
+ability to adapt. Importantly, loss of plasticity differs from
+catastrophic forgetting in that plasticity loss is about the
+network becoming incapable of learning new information,
+rather than forgetting old information.
+Continual learning is a fundamental frontier for language
+models, whose usefulness depends on their ability to adapt to
+new facts, domains, languages, codebases, and user needs. For
+example, continual learning could help mitigate knowledge
+cutoffs and allow coding agents to adapt to new reposito-
+ries without relying entirely on in-context learning via long
+prompts. Because of this promise, understanding and prevent-
+ing plasticity loss has become an increasingly active area
+of research (Kumar et al., 2024; Lyle et al., 2024b; Chung
+et al., 2024; Elsayed et al., 2024; Elsayed & Mahmood, 2024;
+Lewandowski et al., 2024; Lyle et al., 2024a; Liu & Mou,
+2026; Lillo & Cheney, 2026).
+While research on plasticity loss has expanded to include
+a wider range of domains and architectures, there are still
+few studies of the phenomenon in natural-language settings
+with large Transformer models, especially at scale. Previous
+work involving Transformer architectures has either focused
+on vision domains (Lyle et al., 2023; Lee et al., 2024;
+Hernandez-Garcia et al., 2025; Lewandowski et al., 2025)
+or used synthetic text data (Farias & Jozefiak, 2025), often
+with networks containing fewer than 20 million parameters.
+In natural-language settings with large Transformer models,
+existing evaluations have considered relatively few tasks, mak-
+ing it difficult to characterize the onset and progression of
+plasticity loss (Cho et al., 2026). Thus, it remains unclear
+whether GPT-style models trained on realistic text streams
+exhibit plasticity loss, how this effect changes with model
+scale, and whether it is a practical problem in real-world
+applications.
+In this paper, we investigate plasticity loss in GPT-style
+decoder-only Transformer models trained on natural-language
+data. Unlike the original Transformer architecture of Vaswani
+et al. (2017), which used post-layer normalization, our mod-
+els use the pre-layer-normalization architecture common in
+modern language models (Radford et al., 2019; Brown et al.,
+2020; DeepSeek-AI et al., 2025). To measure loss of plasticity,
+we introduce a multilingual next-token prediction problem
+in which languages are presented one at a time for a fixed
+number of tokens, and the process cycles through a sequence
+of languages so that training can be extended indefinitely. We
+then periodically evaluate how efficiently each model adapts
+to a held-out Vietnamese probing task that is not included in
+the continual pretraining sequence.
+Our experiments show evidence of plasticity loss in models
+ranging from 5M to 314M non-embedding parameters, with
+smaller models exhibiting measurable deterioration earlier. We
+find that the onset of plasticity loss follows a predictable
+sublinear, power-law scaling with model size, suggesting
+diminishing returns from increasing parameter count alone
+as a mitigation strategy. We also find evidence of plasticity
+loss under stationary multilingual training, indicating that
+arXiv:2606.24752v1  [cs.AI]  23 Jun 2026
+===== [PAGE 2] =====
+abrupt task changes, which are common in the plasticity loss
+literature but uncommon in practice, are not necessary for the
+phenomenon to emerge. Finally, we measure several correlates
+of plasticity loss, including parameter growth, dormant units,
+and collapsed or lazy attention heads, which provide clues for
+designing methods that maintain plasticity over long training
+horizons. However, we do not yet manage to find a ’smoking
+gun’ to diagnose and counteract plasticity loss in LLMs.
+II. BACKGROUND
+The finding that artificial neural networks can lose their
+ability to learn after training dates back more than two
+decades (Smith et al., 2000; Ellis & Lambon Ralph, 2000).
+Recent work has shown that this phenomenon is not merely a
+pathology of early neural networks, but also arises in modern
+deep learning systems trained for extended periods (Lyle et al.,
+2022; Nikishin et al., 2022; Dohare et al., 2023; Abbas et al.,
+2023). These observations have motivated a growing body of
+work aimed at characterizing when plasticity loss occurs, how
+broadly it appears across architectures and domains, and how
+it might be prevented.
+Loss of plasticity has been observed in feedforward net-
+works (Dohare et al., 2024; Lyle et al., 2023; Kumar
+et al., 2024; Elsayed & Mahmood, 2024), convolutional net-
+works (Abbas et al., 2023; Nikishin et al., 2022; Lee et al.,
+2023), residual networks (Dohare et al., 2024; Lyle et al.,
+2023; Lee et al., 2024), and Transformer architectures (Lyle
+et al., 2023; Lee et al., 2024; Hernandez-Garcia et al., 2025;
+Farias & Jozefiak, 2025; Cho et al., 2026; Liu & Mou,
+2026). In addition, the phenomenon has been observed across
+multiple learning problems, such as supervised learning, re-
+inforcement learning, and self-supervised learning (Springer
+et al., 2025)—though the authors named the phenomenon over-
+training. Thus, the generality of plasticity loss has been slowly
+recognized by the community.
+Investigations into plasticity loss have provided insight into
+the conditions under which the phenomenon is most likely to
+occur. Dohare et al. (2024) showed, using synthetic experi-
+ments based on MNIST, that plasticity loss tends to emerge
+after extended training on non-stationary data. Moreover,
+these experiments showed that the onset of the phenomenon
+occurs earlier in smaller networks. Similarly, Lyle et al.
+(2023) showed that larger networks are more robust to the
+phenomenon in synthetic tasks based on the CIFAR-10 and
+MNIST datasets. Although insightful, these investigations have
+been limited to synthetic problems based on vision datasets
+using feedforward or convolutional networks, and thus provide
+little evidence for the phenomenon in more realistic models
+and at scale.
+Previous work has also investigated plasticity loss in the
+language domain, but existing studies leave open whether the
+phenomenon appears in GPT-style Transformer models trained
+on realistic natural-language streams for many tasks. Farias
+& Jozefiak (2025) found severe plasticity loss in a GPT-style
+model; however, the learning problem used synthetic text data,
+and the model contained fewer than a million parameters.
+Similarly, Liu & Mou (2026) found loss of plasticity in a
+single-layer T5 model (Raffel et al., 2020) on a synthetic
+language problem. Cho et al. (2026) presented an algorithm for
+maintaining plasticity and preventing forgetting when learning
+from text data using models with more than a billion parame-
+ters. However, their evaluations of plasticity loss included only
+eight different tasks, which, even in synthetic problems with
+small networks, may be insufficient to reliably observe the
+onset of plasticity loss. Lastly, Springer et al. (2025) presented
+the most comprehensive study of plasticity loss in language
+models, but focused on the downstream effects of extended
+pretraining rather than the evolution of the phenomenon in a
+continual learning setting.
+This paper addresses these gaps by studying plasticity
+loss in continual learning with realistic natural-language data.
+We study a range of GPT-style Transformer model sizes,
+complementing the stationary-learning results of Springer et al.
+(2025) with experiments in a non-stationary continual learning
+regime. Lastly, we train on a large number of tokens and tasks
+to test whether plasticity loss emerges in natural-language
+Transformer training and whether its onset changes predictably
+with model size. Moreover, we believe that our naturalistic
+multilingual training and evaluation framework provides a
+useful task to elicit loss of plasticity for future works to build
+upon.
+III. LEARNINGPROBLEM
+Our study of plasticity loss follows the continual learning
+setting in which a model is trained on a sequence of learning
+problems, or tasks (Wang et al., 2024). Letτ∈ {1,2, . . . , k}
+denote the sequence of tasks encountered during training. Each
+taskτhas a corresponding space of observationsX τ , targets
+Yτ , and a probability distribution over observation-target pairs,
+(x,y)∼ D τ . The goal of the learning system is to predict the
+targetycorresponding to an observationx.
+We focus on learning systems based on deep neural net-
+works, represented by functionsf θ parameterized byθ∈R w,
+wherew∈N. For a taskτ, the objective is to find parameters
+that minimize the expected loss
+Lτ(θ)
+.
+=E (x,y)∼Dτ [ℓ(fθ(x),y)]
+whereℓmeasures the discrepancy between the model’s pre-
+dictions and the target. In practice, we do not have access to
+the full data distribution. Instead, for each taskτ, the model
+is trained on a finite datasetD τ = (xi,y i)Nτ
+i=1 by minimizing
+the empirical loss using mini-batch gradient descent.
+A fundamental challenge in continual learning is how
+to incorporate information from new observations without
+losing previously acquired knowledge, a tension known as
+the stability-plasticity dilemma (Mermillod et al., 2013; Abel
+et al., 2026). Stability refers to the ability to retain performance
+on previously encountered tasks, while plasticity refers to the
+ability to learn from new data. Stability has been extensively
+studied resulting in a large literature dedicated in preventing
+catastrophic forgetting in neural networks (McCloskey &
+Cohen, 1989; French, 1999; Kirkpatrick et al., 2017). In this
+2
+===== [PAGE 3] =====
+paper, we focus on plasticity: whether a model trained for an
+extended period retains the ability to improve on a new target
+distribution under a fixed training budget.
+Plasticity can be measured in different ways. One approach
+is to measure learning online, as the model encounters each
+new task in the training sequence (Dohare et al., 2024).
+Another approach is to periodically evaluate the model on
+a held-out probing task that is not part of the training se-
+quence (Lyle et al., 2023). We adopt the latter approach since
+the former requires tasks to be equally difficult to accurately
+assess plasticity loss. Thus, at selected points during training,
+we train on a held-out task and evaluate how efficiently the
+current model adapts to the new distribution. A degradation in
+performance over time indicates that the model has lost some
+of its ability to learn from new observations.
+IV. EXPERIMENTALSETUP
+A. Multilingual Continual Learning Problem
+We looked for three desiderata in designing a continual
+learning problem suitable for studying plasticity loss with large
+language models:
+1) The data should be natural-language, overcoming the
+shortcomings of previous studies using synthetic datasets.
+2) The sequence of tasks should be extendable indefinitely to
+enable the training length required to observe measurable
+effects of plasticity loss.
+3) The tasks should be naturalistic and challenging enough
+for scale to result in meaningful improvements in perfor-
+mance.
+Guided by these desiderata, we created a multilingual next-
+token prediction problem based on sequences of languages
+from the CulturaX dataset curated by Nguyen et al. (2024).
+The dataset comprises 167 languages and 6.3 trillion tokens.
+We selected a subset of eight languages from the CulturaX
+dataset and then created training and evaluation datasets of
+100 billion and 1 billion tokens, respectively, for each selected
+language. We trained networks on the following sequence
+of languages: English, written Chinese, French, Japanese,
+Spanish, German, Portuguese, and Russian, in that order. Each
+time a language appeared in the sequence, the model was
+trained on a fresh task instance consisting of 5 billion tokens
+sampled from the corresponding language’s training set. We
+call a complete sequence of eight task instances acycle, and
+trained networks for several cycles. We refer to training on
+this non-stationary sequence of task instances ascontinual
+pretraining.
+For the purpose of assessing plasticity loss, we created
+a separate training and validation set from the Vietnamese
+language consisting of 20 billion training tokens and 1 billion
+evaluation tokens, respectively. At the end of each cycle,
+we conducted a probing task consisting of 5 billion training
+tokens randomly subsampled from the Vietnamese 20 billion-
+token training set. Probing was performed on a copy of
+the model checkpoint, and the resulting parameter updates
+were discarded before continual pretraining resumed. Thus,
+Fig. 1: Multilingual continual learning problem. Models are
+trained on repeated cycles of eight language-modeling task
+instances. At the end of each cycle, plasticity is assessed using
+a held-out Vietnamese probing task.
+Vietnamese data were used only to measure the model’s ability
+to learn new information and did not become part of the
+continual pretraining sequence. We illustrate the continual
+pretraining and probing process in Figure 1.
+The language sequence was selected to reduce similarity
+between consecutive languages. Similarly, the probing lan-
+guage Vietnamese, as the only austroasiatic language in the
+training set, was selected to reduce similarity between the
+probing distribution and the continual pretraining data, limiting
+transfer and ensuring that probing contained genuinely new
+information. Since Vietnamese was not included in any cycle,
+the Vietnamese probing task contained data that had not
+been observed by model during continual pretraining, and for
+which we expect transfer from other languages to be low.
+Consequently, performance by training on the new language
+indicates how well the model can learn from new observations.
+During the probing task, we trained for 5B tokens on the
+new Vietnamese language data, and measured the validation
+loss using 1,280 randomly sampled sequences of length 2,048
+every 95 training steps. To assess how efficiently the model
+learned during probing, we used the area under the validation-
+loss curve as a function of probe-training steps. Lower AUC
+values indicate that validation loss decreased earlier during
+probing, corresponding to faster adaptation.
+3
+===== [PAGE 4] =====
+B. Architectures and Training Details
+We trained several GPT-style pre-norm decoder-only Trans-
+former models (Radford et al., 2018) of varying sizes. All
+models use causal self-attention, absolute positional embed-
+dings, pre-layer normalization, an MLP expansion factor of
+4, GeLU activations, tied input and output embeddings, and a
+trained embedding table. When choosing the model configu-
+rations, we aimed to minimize architectural variation across
+scales so that changes in performance could be attributed
+primarily to model size rather than to differences in width-
+depth trade-offs. We therefore fixed the aspect ratio of all
+models, defined asd model/L, to 80, whered model is the
+Transformer hidden dimension andLis the number of layers.
+For the same reason, we kept the attention-head dimension
+fixed at 64, preventing larger models from gaining additional
+per-head capacity as model size increased.
+We trained models at eight different sizes: 5M, 12M,
+27M, 39M, 53M, 83M, 106M, and 314M non-embedding
+parameters. We report model size using non-embedding pa-
+rameters because the embedding table size is dominated by the
+tokenizer vocabulary and does not scale in the same way as
+the Transformer stack. This choice makes model size a better
+proxy for the capacity of the Transformer layers whose width
+and depth vary across experiments. For tokenization, we used
+the pretrained Qwen3 tokenizer (Yang et al., 2025), which has
+reasonable coverage across a wide variety of languages and
+a vocabulary size of 151,680. For total parameter counts and
+additional architectural details, see Appendix A.
+All models were trained with a sequence length of 2,048
+using AdamW (Loshchilov & Hutter, 2019), withβ 1 = 0.9,
+β2 = 0.95, a weight decay of 0.1, and a batch size of 0.5M
+tokens. We used a learning rate schedule with linear warm-
+up for the first 5% of the total training steps, followed by a
+constant learning rate. Each task consisted of 9,537 training
+steps.
+We tuned the learning rate using grid searches on the
+smallest and largest models, training the 5M and 314M models
+on 5 billion English-language tokens. For each of these two
+models, we selected the learning rate that minimized the loss
+under this fixed token budget. The best learning rates for
+the 5M and 314M models were3×10 −3 and1×10 −3,
+respectively. We then interpolated between these two endpoints
+to determine the learning rates for the intermediate model sizes
+(see Appendix A). To validate this procedure, we compared
+the losses obtained using the interpolated learning rates with
+the losses obtained during additional grid searches for inter-
+mediate model sizes. The interpolated learning rates produced
+lower loss than the values tested in those grid searches.
+The optimizer was reset at the start of each task; this
+procedure has been shown to prevent training instabilities
+caused by sudden changes in the loss landscape (Asadi et al.,
+2023), and also implies that the plasticity degradations we
+observed were due to inherent plasticity loss in the weights
+rather than simply stale optimizer states. To further smooth
+transitions between tasks, we restarted the learning rate warm-
+up at the beginning of each task. For further details on
+hyperparameter selection and values, see Appendix A.
+V. EXPERIMENTALRESULTS
+A. Emergence and Scaling of Plasticity Loss in Continual
+Pretraining
+At the start of our study, we asked a simple question:is
+there evidence of plasticity loss in continual learning problems
+based on natural-language?To answer this question, we
+trained each model on our Multilingual Continual Learning
+Problem for several cycles and probed at the end of each cycle.
+We measured learning efficiency using the area under the
+validation-loss curve (AUC) as the model learned the probing
+task, with lower AUC indicating faster or more effective
+adaptation.
+In this setting, a decrease in probing AUC across cycles
+indicates improved probing performance, consistent with ben-
+eficial transfer from continual pretraining to the probing task—
+i.e. from learning other languages to learning Vietnamese. In
+contrast, an increasing trend in probing AUC indicates that the
+model is becoming less able to learn from new data—a loss
+of plasticity. Since models vary in their absolute performance
+on Vietnamese due to inherent differences in capacity, we
+normalize each model’s probing performance relative to its
+performance after the first cycle. Specifically, letAUCk denote
+the AUC measured on the probing task after cyclek. For each
+model, each point in Figure 2 corresponds to
+100× AUCk −AUC 1
+AUC1
+= 100×
+AUCk
+AUC1
+−1
+
+(1)
+The ratioAUC k/AUC1 measures the relative change in
+probing AUC after cyclekwith respect to the first cycle, while
+subtracting one centers the first-cycle performance at zero.
+Multiplying by 100 expresses this change as a percentage.
+Thus, positive values indicate higher AUC than in the first
+cycle, corresponding to worse probing performance, whereas
+negative values indicate lower AUC and improved probing
+performance.
+All the models show evidence of plasticity loss on the
+probing task. Models up to 314M parameters eventually show
+an increasing trend in AUC as the number of cycles increases.
+Moreover, the onset of this trend occurs earlier in smaller
+models. For example, the 5M and 12M models show an
+increasing trend in AUC immediately after the first cycle,
+whereas the 83M model shows an increasing trend only after
+the seventh cycle. The results also show that beneficial transfer
+is more pronounced in larger models: the 53M model achieves
+a 0.5% reduction in AUC over time, whereas the 314M model
+achieves more than a 1.5% reduction.
+We conclude from these results that pre-norm GPT-style
+Transformer models can lose plasticity when trained on the
+Multilingual Continual Learning Problem. However, for a
+fixed training duration, the effect of plasticity loss diminishes
+with model size: it is more severe in the 5M model than in the
+314M model. Moreover, while continual pretraining initially
+4
+===== [PAGE 5] =====
+-1.0 %
+-0.5 %
+0.0 %
+0.5 %
+1.0 %
+0 6 12 18 24 30 36 42 48
+-1.5 %
+106M
+83M
+39M
+27M
+53M
+314M
+5M
+12M
+Cycle
+% change in AUC relative to first cycle
+Fig. 2: Percentage change in validation-loss AUC on the probing task relative to the first cycle for models ranging from 5M to
+314M non-embedding parameters from the second to 48th cycle. All the models eventually exhibit an increasing trend in AUC,
+indicating a reduced ability to learn the probing task and providing evidence of plasticity loss. However for larger models we
+observe plasticity loss to occur after considerably more cycles.
+improves performance on the probing language, excessive
+continual pretraining eventually has a detrimental effect.
+This observation motivates our next research question:is it
+possible to predict the onset of plasticity loss based on the
+size of the model?; i.e., is it possible to derive ascaling law
+for the onset of the loss of plasticity.
+To predict the onset of plasticity loss, we first identified
+the task after which continual pretraining began to have a
+detrimental effect on probing performance. In other words,
+we estimated the minimum of each curve in Figure 2. Since
+we probed only once per cycle in the experiments above,
+we lacked the granularity to precisely identify the task after
+which the trend began to increase, resulting in multiple models
+sharing the same minimum. Consequently, we performed
+additional probing tasks within each cycle.
+This higher-frequency probing introduced another issue:
+each language has a different level of transfer to Vietnamese,
+which adds noise to the evaluations. For example, pretraining
+on English consistently resulted in better downstream perfor-
+mance on Vietnamese than pretraining on any other language,
+whereas pretraining on Japanese consistently resulted in worse
+performance. These discrepancies due to different levels of
+transfer often obscured the relatively small effect of plasticity
+loss. To reduce noise due to different levels of transfer, we
+probed only after languages with levels of transfer to Viet-
+namese similar to Russian: Chinese and German. We explain
+in more detail how we chose these languages in Appendix B.
+After increasing the probing frequency within each cycle, we
+further smoothed each curve using a moving average with a
+window size of three probe measurements. For each model,
+we identified the minimum of the smoothed curve and used
+this point as an estimate of the onset of plasticity loss.
+From this data, we then fit a log-log model relating the
+estimated onset to model size, resulting in the power law
+T= 1.3×10 −5 ·P 0.8269 (2)
+whereTdenotes the task-instance number at which we expect
+to observe measurable effects of plasticity loss andPdenotes
+the number of non-embedding parameters in the model. In
+Figure 3, we show the fitted line along with the observed
+data. In Appendix B, we report fits for linear, log-linear, and
+exponential models. All three alternatives produced higher root
+mean-squared error than the log-log model under leave-one-
+out cross-validation, providing some evidence that a power-law
+fit is most natural.
+The log-log model has an important implication for address-
+ing plasticity loss solely through model scaling. Equation 2
+predicts that the number of task instances needed to observe
+plasticity loss scales sublinearly with the number of parame-
+ters. Consequently, increasing model size to prevent plasticity
+loss has diminishing returns and may be an inefficient ap-
+proach to addressing the problem.
+This scaling relationship also provides a useful point of
+comparison with recent results on larger language models.
+Springer et al. (2025) provided evidence that the effects
+of plasticity loss may already be observable in one-billion-
+parameter models, finding that these models had lower fine-
+tuning performance after pretraining for longer than 2 trillion
+tokens. Extrapolating our log-log model to this scale predicts
+that a model with one billion non-embedding parameters
+would show signs of plasticity loss after 360 task instances, or
+1.8 trillion training tokens, since each task instance consists of
+5 billion tokens. Furthermore, they reported no consistent ev-
+idence of plasticity loss after training seven-billion-parameter
+5
+===== [PAGE 6] =====
+107 108
+5M 12M
+27M
+39M
+106M
+53M 83M
+314M
+Observed
+Fitted Line
+101
+102
+Model size
+Onset of plasticity loss (task-instance number)
+Fig. 3: Log-log model predicting the onset of plasticity loss,
+measured in number of task instances, as a function of model
+size. The onset of plasticity loss scales asT= 1.3×10 −5 ·
+P 0.8269, wherePis the number of non-embedding parameters.
+We observe a qualitatively decent but not perfect fit with
+several arguable outliers at 12M and 53M.
+models for 2 trillion tokens. This is also consistent with our
+extrapolation, which predicts that a model of that size would
+show evidence of plasticity loss after approximately 9 trillion
+training tokens.
+Although these extrapolations are consistent with the over-
+training results reported by Springer et al. (2025), the learning
+problems are substantially different. Springer et al. (2025)
+evaluated models pretrained on stationary datasets, whereas
+our results so far are based on a non-stationary learning
+problem with abrupt task changes. This comparison motivates
+our next question:does plasticity loss also emerge under
+stationary training?
+B. Plasticity Loss Under Stationary Training and Network-
+Level Correlates
+To investigate this question, we trained the 5M, 12M, and
+27M models on a stationary mixture of all eight training
+languages, which we refer to as the Multilingual Stationary
+Learning Problem. After every 5 billion training tokens, we
+performed a probing task by training a copy of the current
+model checkpoint on Vietnamese for 5 billion tokens and
+measuring the AUC of the validation loss. As in the continual
+setting, the parameter updates from probing were discarded.
+We used the same hyperparameters as in the Multilingual
+Continual Learning Problem, including the number of warm-
+up steps for the learning rate.
+The results in the Multilingual Stationary Learning Problem
+show a pattern similar to that observed in the continual
+learning setting. Figure 4 shows the percentage change in AUC
+relative to the first probing task. All three models eventually
+show an increasing trend in AUC, indicating a decrease in the
+5M
+12M
+0.0 %
+-0.2 %
+-0.4 %
+-0.6 %
+-0.8 %
+-1.0 %
+0.2 %
+0.4 %
+0 B 100 B 200 B 400 B 300 B 500 B
+27M
+Training tokens
+% change in AUC
+Fig. 4: Percentage change in validation-loss AUC on the
+probing task relative to the first probing task during training on
+the Multilingual Stationary Learning Problem. As the number
+of training tokens increases, the AUC of all three models
+eventually increases, indicating a reduced ability to learn from
+new information as training progresses.
+ability to learn from new data. Moreover, the onset of plasticity
+loss is, once again, delayed with model size: the 5M model
+shows plasticity loss sooner than the 27M model. However, the
+rate at which the models lose plasticity appears to be different.
+This is most evident in the 27M model, which crosses the zero
+line after 475B tokens of training in the stationary setting and
+after 320B tokens in the continual setting. Nevertheless, these
+results suggest that models trained on stationary data are not
+exempt from plasticity loss and thus plasticity loss is unlikely
+to be explained solely by abrupt task changes common in
+continual learning problems.
+Having observed plasticity loss in both continual and sta-
+tionary learning problems, the next natural question is:what
+factors are associated with this phenomenon?The causes
+of plasticity loss have been widely debated, and there is
+currently no clear consensus in the literature (Lyle et al., 2023;
+Lewandowski et al., 2024). Fully characterizing the correlates
+or causes of plasticity loss is beyond the scope of this paper.
+Nevertheless, we measure several correlates of plasticity loss
+that may provide insight into the changes occurring inside
+the network as its ability to learn deteriorates. Understanding
+these correlates may also suggest approaches for mitigating
+plasticity loss.
+In this section, we focus on models with 12M, 53M, and
+106M non-embedding parameters trained on the Multilingual
+Continual Learning Problem. Additional measurements for
+other model sizes are included in Appendix C.
+We recorded metrics previously observed to correlate with
+plasticity loss. First, we measured the average absolute mag-
+nitude of the model parameters, excluding embedding layers.
+The average is computed over all non-embedding parameters
+in the network, including both weights and biases; it is
+not computed separately per layer before averaging. Average
+parameter magnitude has repeatedly been observed to correlate
+with plasticity loss (Kumar et al., 2024; Dohare et al., 2024;
+Hernandez-Garcia et al., 2025), making it a useful diagnos-
+tic for the deterioration in probing performance observed
+in Figure 2. The top row of Figure 5 shows the average
+6
+===== [PAGE 7] =====
+parameter magnitude measured at the end of each cycle for
+the 12M, 53M, and 106M models. The red marker in each
+plot corresponds to the cycle after which the model’s probing
+performance began to deteriorate.
+We found that average parameter magnitude tended to in-
+crease with the number of cycles. However, this pattern did not
+consistently track the observed deterioration in probing perfor-
+mance. For example, although the 106M model starts showing
+deterioration in performance on the eighth cycle (Figure 5c,
+top row), its average parameter magnitude decreases steadily
+between the eighth and twentieth cycles. Conversely, for the
+53M model, probing performance improves between the first
+and seventh cycles, even though average parameter magnitude
+steadily increases during the same period (Figure 5b, top row).
+Thus, it appears that the average parameter magnitude alone
+does not fully account for the plasticity loss observed in these
+models.
+To further investigate correlates of plasticity loss, we mea-
+sured the percentage of dormant units in the network’s MLP
+layers. We follow the definition of dormant units from Sokar
+et al. (2023), adapting it to the sequence-modeling setting. Let
+hl
+i(x, j)denote the activation of MLP unitiin layerlat token
+positionjfor sequencex. Given a datasetDof sequences of
+lengthm, let the average absolute activation of this unit be
+¯hl
+i = 1
+|D| ·m
+X
+x∈D
+mX
+j=1
+hl
+i(x, j)
+ (3)
+We then define the normalized absolute activation as
+sl
+i =
+¯hl
+i
+1
+N l
+PN l
+k=1
+¯hl
+k
+(4)
+whereN l is the number of units in layerl. A unitiin layer
+lis said to beϵ-dormant ifs l
+i ≤ϵ, for some small positive
+thresholdϵ. A high fraction of dormant units suggests that
+a large portion of the layer has low activity relative to other
+units in the same layer. In networks with smooth activations
+such as GeLU, dormancy should not be interpreted as exact
+inactivity, but rather as a diagnostic indicating that some units
+contribute comparatively little to the layer’s representation.
+In our experiments, we measured the percentage of dormant
+units in the network at the end of each cycle. We measured
+average absolute activations on 256 sequences of length 2,048
+sampled from the Vietnamese validation dataset, which the
+model had not observed during continual pretraining. We set
+the threshold toϵ= 0.01. The bottom row of Figure 5 shows
+the results for the 12M, 53M, and 106M models.
+In the 53M and 106M models, we observed an increasing
+trend in the percentage of dormant units in the network. These
+dormant units were not evenly distributed across layers. In
+the 53M model, more than 95% of the units in the eighth
+layer were dormant (Figure 6a). Similarly, in the 106M model,
+nearly 80% of the units in the tenth layer were dormant
+(Figure 6b). Nevertheless, dormant units alone cannot fully
+explain plasticity loss, since we did not observe an increasing
+percentage of dormant units in the 12M model (bottom row
+of Figure 5a) from cycle 5 onward, even though this model
+exhibited the most severe plasticity loss and the performance
+continued to deteriorate after cycle 5.
+Having observed increasing dormancy in MLP layers over
+the course of training, we turned our attention to the attention
+layers. Specifically, we measured the entropy of attention
+heads in the network. For a single query position, letp∈R s
+denote the normalized attention weights overskeys. The
+entropy of this attention distribution is defined as
+Entropy(p) =−
+sX
+i=1
+pi log(pi).
+In attention heads, entropy measures how attention is dis-
+tributed across elements in the sequence. High entropy cor-
+responds to a diffuse distribution of attention weights, as-
+signing nearly equal weight to many elements. High-entropy
+attention can indicate underutilized attention heads, which
+may be detrimental to model performance (Sanyal et al.,
+2026). Intuitively, when attention is nearly uniform over a
+long sequence, the head primarily averages information across
+many positions, limiting its ability to provide query-specific
+information. Conversely, low entropy indicates that attention
+is concentrated on a small number of elements in the sequence.
+This phenomenon, known as entropy collapse, has been linked
+to training instabilities in Transformer architectures (Zhai
+et al., 2023). One possible contributor to low-entropy attention
+is the emergence of attention sinks (Xiao et al., 2024b; Gu
+et al., 2025), in which certain tokens, often special tokens such
+as theBOStoken, receive a disproportionately large amount
+of attention mass.
+We measured the entropy of attention heads at the end of
+each cycle using the Russian-language validation dataset. For
+each cycle, we sampled 512 sequences of length 2,048 and
+computed the attention distribution for query positions 256
+through 2,048. We then computed the entropy of each attention
+distribution and averaged across sequences and query positions
+to obtain the average entropy per head, per layer, and per cycle.
+The maximum achievable average entropy over these query
+positions is
+Hmax = 1
+1793
+2048X
+k=256
+ln(k)≈6.9215(5)
+We categorized heads aslazyif their average entropy was
+above 9
+10 ·H max, indicating attention patterns that are close to
+uniform across most available context positions. Conversely,
+we categorized heads ascollapsedif their average entropy was
+below 1
+10 ·H max, indicating attention patterns concentrated on
+very few positions.
+We report the percentage of lazy and collapsed heads per
+cycle for the 12M, 53M, and 106M models in Figure 7.
+The red markers correspond to the cycle after which probing
+performance started to deteriorate. As before, the percentage
+of lazy or collapsed heads does not perfectly correlate with
+plasticity loss. For instance, in the 53M model, the percentage
+of collapsed heads increases with the number of cycles (top
+7
+===== [PAGE 8] =====
+Cycle
+2 4 6 8 10 12 14 16
+2%
+4%
+6%
+8%
+Cycle
+2 4 6 8 10 12 14 16
+0.0500
+0.0505
+0.0510
+0.0515
+a
+ 12M Model
+Percentage of Dormant Units Average Weight Magnitude
+53M Modelb
+Cycle
+355 20 10 25 15 30 40 45
+0.02658
+0.02662
+0.02666
+0.02670
+106M Modelc
+Cycle
+355 20 10 25 15 30 40 45
+10 %
+8 %
+6 %
+4 %
+2 %
+0 %
+0.0334
+0.0338
+0.0342
+Cycle
+24124 168 20 28 32
+Cycle
+24124 168 20 28 32
+20 %
+15 %
+10 %
+5 %
+0 %
+Fig. 5: Average parameter magnitude and percentage of dormant units for the (a) 12M model, (b) 53M model, and (c) 106M
+model trained on the Multilingual Continual Learning Problem. As the number of cycles increases, average parameter magnitude
+and the percentage of dormant units tend to increase across most models. However, these trends do not consistently track the
+deterioration in probing performance due to plasticity loss. The red marker indicates the cycle after which the model’s probing
+performance began to deteriorate.
+a 53M Model
+Cycle
+4 8 12 24 28 32 3616 20
+0 %
+20 %
+40 %
+60 %
+80 %
+100 %Percentage of Dormant Units
+Layer
+1
+2
+3
+4
+5
+6
+7
+8
+9
+b
+Percentage of Dormant Units
+Cycle
+0 6 12 18 30 36 42 4824
+0 %
+20 %
+40 %
+60 %
+80 %
+106M Model
+Layer
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+Fig. 6: Percentage of dormant units per layer in the (a) 53M
+and (b) 106M models trained on the Multilingual Continual
+Learning Problem. In both models, one layer accumulates a
+disproportionately large fraction of dormant units, suggesting
+that many units in that layer have low activity relative to other
+units in the same layer.
+row of Figure 7b), whereas it decreases for the 106M model
+(top row of Figure 7c). For the 106M model, the increase in
+the percentage of lazy heads precedes the onset of plasticity
+loss (bottom row of Figure 7c), whereas in the 12M model the
+increase occurs after the onset of plasticity loss (bottom row
+of Figure 7a). In one case, the percentage of collapsed heads
+follows the opposite trend from the deterioration in probing
+performance (top row of Figure 7c).
+Neither the percentage of collapsed heads nor the percentage
+of lazy heads fully explains plasticity loss. Nevertheless, these
+metrics point to pathological changes occurring inside the
+network. In some cases, they reveal layer-wide changes in
+attention behavior. In the 12M model, the first layer increas-
+ingly collapses as the number of cycles increases (Figure 7d).
+In the 53M model, the ninth layer collapses for several cycles,
+though it later recovers (Figure 7e). Lastly, the eleventh layer
+of the 106M model becomes lazy after the first few cycles
+(Figure 7f). These examples suggest that entire attention layers
+can enter regimes in which their attention patterns become ei-
+ther overly concentrated or overly diffuse, potentially reducing
+their contribution to the model’s performance.
+Although the main text focuses on three model sizes, the
+additional measurements reported in Appendix C show a
+similar qualitative picture. None of the three metrics perfectly
+tracks the onset or severity of plasticity loss across all models.
+However, taken together, they suggest that continued training
+changes the networks in ways consistent with reduced effective
+capacity and slower adaptation. In the MLP layers, this appears
+as an accumulation of low-activity units. In the attention
+layers, it appears as an increase in heads whose attention
+patterns become either overly diffuse or overly concentrated.
+In parallel, average parameter magnitude tends to increase,
+which, in the presence of layer normalization, may contribute
+to slower learning, as pointed out by Lyle et al. (2024a).
+Together, these effects may contribute to the reduced ability
+to learn from new data.
+8
+===== [PAGE 9] =====
+106M Modelc
+a 12M Model
+Percentage of Collapsed Heads
+10 %
+15 %
+20 %
+25 %
+30 %
+35 %
+Cycle
+2 4 6 8 10 12 14 16
+Percentage of Lazy Heads
+0 %
+2 %
+4 %
+6 %
+8 %
+10 %
+12 %
+14 %
+Cycle
+2 4 6 8 10 12 14 16
+Cycle
+0 10 20 40 30
+0 %
+10 %
+20 %
+30 %
+Cycle
+0 10 20 40 30
+20 %
+30 %
+40 %
+53M Modelb
+Cycle
+0 5 10 15 20 25 30 35
+10 %
+0 %
+20 %
+30 %
+10 %
+20 %
+30 %
+Cycle
+0 5 10 15 20 25 30 35
+Cycle
+2 4 6 8 10 12 14 16
+Average Entropy
+12M Model: Layer 1d
+Lazy Head Threshold (6.2294 Nats)
+Collapsed Threshold (0.6922 Nats)
+0
+1
+2
+3
+4
+5
+6
+7
+0
+1
+2
+3
+4
+5
+6
+Cycle
+5 10 15 20 25 30 35
+Collapsed Threshold
+Lazy Head Threshold
+53M Model: Layer 9e
+Cycle
+10 20 4030 45352515 5
+0
+1
+2
+3
+4
+5
+6
+7
+106M Model: Layer 11
+Collapsed Threshold
+Lazy Head Threshold
+f
+Fig. 7: Top panels: Percentage of collapsed and lazy attention heads for the (a) 12M model, (b) 53M model, and (c) 106M
+model trained on the Multilingual Continual Learning Problem. Bottom panels: entropy of attention heads for (d) the first
+layer of the 12M model, (e) the ninth layer of the 53M model, and (f) the eleventh layer of the 106M model. Neither the
+percentage of collapsed heads nor the percentage of lazy heads fully explains plasticity loss. Nevertheless, these metrics reveal
+pathological changes in the attention layers. In extreme cases, entire layers collapse or become lazy.
+This account is necessarily partial. Our measurements are
+correlational and do not provide a mechanistic explanation
+for why low-activity units, lazy attention heads, collapsed
+attention heads, or increased parameter magnitude emerge over
+training. Nevertheless, these diagnostics suggest possible di-
+rections for designing learning systems that maintain plasticity
+over longer training horizons.
+One simple approach is to limit parameter growth. In
+our experiments, we used a weight decay of 0.1, a value
+commonly used in language-model training. However, recent
+work by Han et al. (2026) has shown that higher values of
+weight decay can improve model plasticity despite resulting in
+higher pretraining loss. Relatedly, previous work has suggested
+clipping parameter values near zero as an effective way to
+prevent plasticity loss (Elsayed et al., 2024). Both approaches
+directly target the increase in average parameter magnitude
+observed in the top row of Figure 5.
+A second approach is to mitigate potential capacity loss
+caused by the accumulation of dormant units. For example,
+Continual Backpropagation measures the activity of units
+and periodically reinitializes units with low average activ-
+ity (Dohare et al., 2021, 2024). Other algorithms, such as
+ReDo (Sokar et al., 2023), Self-Normalized Resets (Farias &
+Jozefiak, 2025), and GraMa (Liu et al., 2026), also reinitialize
+neurons but use different criteria for selecting which units to
+reset. Alternatively, one can design activation functions that
+are less prone to producing dormant units (Abbas et al., 2023;
+Lillo & Cheney, 2026).
+The increase in lazy or collapsed attention heads has not
+been directly studied in the plasticity-loss literature. Nev-
+ertheless, existing methods suggest possible interventions.
+Shrink-and-Perturb (Ash & Adams, 2020) and Utility-based
+Perturbed Gradient Descent (Elsayed & Mahmood, 2024), for
+example, add noise to network parameters and may help move
+attention heads out of overly diffuse or overly concentrated
+regimes. Similarly, Selective Weight Reinitialization operates
+directly on the network’s weights rather than on individual
+units (Hernandez-Garcia et al., 2025), and may help counter-
+act the accumulation of pathological attention patterns. For
+overly diffuse attention, previous work has proposed adding
+learnable tokens that act as attention sinks, collecting attention
+mass without affecting the predictions of real sequence ele-
+ments (Xiao et al., 2024a; Darcet et al., 2024). Whether these
+methods can prevent the attention-pathology patterns observed
+here remains an open empirical question.
+VI. CONCLUSION
+In this paper, we studied loss of plasticity in GPT-style
+Transformer models trained on natural-language data. Whereas
+previous studies of plasticity loss have largely focused on
+smaller models, synthetic problems, or non-language domains,
+our results show that GPT-style models with more than 100
+9
+===== [PAGE 10] =====
+million non-embedding parameters can lose the ability to
+efficiently adapt to new data even when trained on real, large-
+scale natural-language datasets.
+Beyond demonstrating plasticity loss in this setting, we
+are the first to fit a model predicting the onset of plasticity
+loss as a function of model size. To make this comparison
+more controlled, we kept the aspect ratio and attention-head
+dimension fixed across model sizes, reducing architectural
+variation beyond scale. The resulting model is a classical
+power-law ‘scaling-law’ between the number of parameters
+and the number of tokens until the onset of plasticity loss.
+Our law predicts that plasticity loss scales sublinearly with the
+number of non-embedding parameters, implying diminishing
+returns from increasing model size alone as a strategy for pre-
+venting plasticity loss. This prediction speaks to the question
+posed in the title of this paper: scale alone cannot save us from
+plasticity loss.
+Our result is even more striking given that we also observed
+evidence of plasticity loss under stationary multilingual train-
+ing. This means that plasticity loss is not simply caused by
+our original, somewhat artificially nonstationary task where we
+cycle through languages. Rather, plasticity loss also seems to
+affect models which have undergone regular pretraining for a
+long period on a stationary dataset. Overall, then, we can ten-
+tatively conclude that scaling will delay plasticity loss, often
+for a substantial number of tokens, but cannot fully defeat it,
+and secondly that we should expect plasticity loss to eventually
+affect standard language models which have been trained using
+standard methods. This implies that loss of plasticity is not an
+artifact of small networks, outdated architectures, or unusual
+training setups, but rather a fundamental and extremely general
+property of neural network training.
+Lastly, we measured several correlates of plasticity loss
+inside the network. As models lost plasticity, they tended
+to accumulate low-activity MLP units, lazy attention heads,
+collapsed attention heads, and larger parameter magnitudes.
+These effects did not appear uniformly across all models, and
+none of them alone fully explains the observed deterioration in
+probing performance. Nevertheless, they provide useful diag-
+nostics and suggest possible directions for mitigation, ranging
+from stronger constraints on parameter growth to methods that
+track unit activity or reinitialize underused components. We
+hope these results help guide the design of learning systems
+that maintain plasticity over long training horizons in both
+stationary and continual learning settings.
+REFERENCES
+Zaheer Abbas, Rosie Zhao, Joseph Modayil, Adam White,
+and Marlos C. Machado. Loss of plasticity in continual
+deep reinforcement learning. In2nd Conference on Lifelong
+Learning Agents, 2023.
+David Abel, Michael Bowling, Andre Barreto, Will Dabney,
+Shi Dong, Steven Stenberg Hansen, Anna Harutyunyan,
+Khimya Khetarpal, Clare Lyle, Razvan Pascanu, Georgios
+Piliouras, Doina Precup, Jonathan Richens, Mark Rowland,
+Tom Schaul, and Satinder Singh. Plasticity as the mirror
+of empowerment. InThe Thirty-ninth Annual Conference
+on Neural Information Processing Systems, 2026. URL
+https://openreview.net/forum?id=eOZFqyE9Ok.
+Kavosh Asadi, Rasool Fakoor, and Shoham Sabach. Reset-
+ting the optimizer in deep RL: An empirical study. In
+Thirty-seventh Conference on Neural Information Process-
+ing Systems, 2023. URL https://openreview.net/forum?id=
+AnFUgNC3Yc.
+Jordan Ash and Ryan P Adams. On warm-starting neural
+network training. InAdvances in Neural Information
+Processing Systems 33, pp. 3884–3894, 2020.
+Tom Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah,
+Jared D Kaplan, Prafulla Dhariwal, Arvind Neelakantan,
+Pranav Shyam, Girish Sastry, Amanda Askell, et al. Lan-
+guage models are few-shot learners.Advances in neural
+information processing systems, 2020.
+Dongkyu Cho, Taesup Moon, Rumi Chunara, Kyunghyun Cho,
+and Sungmin Cha. Forget forgetting: Continual learning in a
+world of abundant memory. InThe F ourteenth International
+Conference on Learning Representations, 2026. URL https:
+//openreview.net/forum?id=fvL8IIEPxG.
+Wesley Chung, Lynn Cherif, Doina Precup, and David Meger.
+Parseval regularization for continual reinforcement learning.
+InThe Thirty-eighth Annual Conference on Neural Informa-
+tion Processing Systems, 2024. URL https://openreview.net/
+forum?id=RB1F2h5YEx.
+Timothée Darcet, Maxime Oquab, Julien Mairal, and Pi-
+otr Bojanowski. Vision transformers need registers. In
+The Twelfth International Conference on Learning Rep-
+resentations, 2024. URL https://openreview.net/forum?id=
+2dnO3LLiJ1.
+DeepSeek-AI, Aixin Liu, Bei Feng, Bing Xue, Bingxuan
+Wang, Bochao Wu, Chengda Lu, Chenggang Zhao, Chengqi
+Deng, Chenyu Zhang, Chong Ruan, Damai Dai, Daya Guo,
+Dejian Yang, Deli Chen, Dongjie Ji, Erhang Li, Fangyun
+Lin, Fucong Dai, Fuli Luo, Guangbo Hao, Guanting Chen,
+Guowei Li, H. Zhang, Han Bao, Hanwei Xu, Haocheng
+Wang, Haowei Zhang, Honghui Ding, Huajian Xin, Huazuo
+Gao, Hui Li, Hui Qu, J. L. Cai, Jian Liang, Jianzhong
+Guo, Jiaqi Ni, Jiashi Li, Jiawei Wang, Jin Chen, Jingchang
+Chen, Jingyang Yuan, Junjie Qiu, Junlong Li, Junxiao Song,
+Kai Dong, Kai Hu, Kaige Gao, Kang Guan, Kexin Huang,
+Kuai Yu, Lean Wang, Lecong Zhang, Lei Xu, Leyi Xia,
+Liang Zhao, Litong Wang, Liyue Zhang, Meng Li, Miaojun
+Wang, Mingchuan Zhang, Minghua Zhang, Minghui Tang,
+Mingming Li, Ning Tian, Panpan Huang, Peiyi Wang, Peng
+Zhang, Qiancheng Wang, Qihao Zhu, Qinyu Chen, Qiushi
+Du, R. J. Chen, R. L. Jin, Ruiqi Ge, Ruisong Zhang, Ruizhe
+Pan, Runji Wang, Runxin Xu, Ruoyu Zhang, Ruyi Chen,
+S. S. Li, Shanghao Lu, Shangyan Zhou, Shanhuang Chen,
+Shaoqing Wu, Shengfeng Ye, Shengfeng Ye, Shirong Ma,
+Shiyu Wang, Shuang Zhou, Shuiping Yu, Shunfeng Zhou,
+Shuting Pan, T. Wang, Tao Yun, Tian Pei, Tianyu Sun, W. L.
+Xiao, Wangding Zeng, Wanjia Zhao, Wei An, Wen Liu,
+Wenfeng Liang, Wenjun Gao, Wenqin Yu, Wentao Zhang,
+X. Q. Li, Xiangyue Jin, Xianzu Wang, Xiao Bi, Xiaodong
+10
+===== [PAGE 11] =====
+Liu, Xiaohan Wang, Xiaojin Shen, Xiaokang Chen, Xi-
+aokang Zhang, Xiaosha Chen, Xiaotao Nie, Xiaowen Sun,
+Xiaoxiang Wang, Xin Cheng, Xin Liu, Xin Xie, Xingchao
+Liu, Xingkai Yu, Xinnan Song, Xinxia Shan, Xinyi Zhou,
+Xinyu Yang, Xinyuan Li, Xuecheng Su, Xuheng Lin, Y . K.
+Li, Y . Q. Wang, Y . X. Wei, Y . X. Zhu, Yang Zhang, Yanhong
+Xu, Yanhong Xu, Yanping Huang, Yao Li, Yao Zhao,
+Yaofeng Sun, Yaohui Li, Yaohui Wang, Yi Yu, Yi Zheng,
+Yichao Zhang, Yifan Shi, Yiliang Xiong, Ying He, Ying
+Tang, Yishi Piao, Yisong Wang, Yixuan Tan, Yiyang Ma,
+Yiyuan Liu, Yongqiang Guo, Yu Wu, Yuan Ou, Yuchen Zhu,
+Yuduan Wang, Yue Gong, Yuheng Zou, Yujia He, Yukun
+Zha, Yunfan Xiong, Yunxian Ma, Yuting Yan, Yuxiang Luo,
+Yuxiang You, Yuxuan Liu, Yuyang Zhou, Z. F. Wu, Z. Z.
+Ren, Zehui Ren, Zhangli Sha, Zhe Fu, Zhean Xu, Zhen
+Huang, Zhen Zhang, Zhenda Xie, Zhengyan Zhang, Zhewen
+Hao, Zhibin Gou, Zhicheng Ma, Zhigang Yan, Zhihong
+Shao, Zhipeng Xu, Zhiyu Wu, Zhongyu Zhang, Zhuoshu Li,
+Zihui Gu, Zijia Zhu, Zijun Liu, Zilin Li, Ziwei Xie, Ziyang
+Song, Ziyi Gao, and Zizheng Pan. Deepseek-v3 technical
+report, 2025. URL https://arxiv.org/abs/2412.19437.
+Shibhansh Dohare, Richard S Sutton, and A Rupam Mahmood.
+Continual Backprop: Stochastic gradient descent with per-
+sistent randomness, 2021. Preprint at https://arxiv.org/abs/
+2108.06325.
+Shibhansh Dohare, J Fernando Hernandez-Garcia, Parash Rah-
+man, A Rupam Mahmood, and Richard S Sutton. Maintain-
+ing plasticity in deep continual learning, 2023. Preprint at
+https://arxiv.org/abs/2306.13812.
+Shibhansh Dohare, J Fernando Hernandez-Garcia, Qingfeng
+Lan, Parash Rahman, A Rupam Mahmood, and Richard S
+Sutton. Loss of plasticity in deep continual learning.Nature,
+632(8026):768–774, 2024.
+Andrew W Ellis and Matthew A Lambon Ralph. Age of
+acquisition effects in adult lexical processing reflect loss of
+plasticity in maturing systems: insights from connectionist
+networks.Journal of Experimental Psychology: Learning,
+memory, and cognition, 26(5):1103, 2000.
+Mohamed Elsayed and A. Rupam Mahmood. Addressing
+loss of plasticity and catastrophic forgetting in continual
+learning. In12th International Conference on Learning
+Representations, 2024. URL https://openreview.net/forum?
+id=sKPzAXoylB.
+Mohamed Elsayed, Qingfeng Lan, Clare Lyle, and A. Rupam
+Mahmood. Weight clipping for deep continual and rein-
+forcement learning.RLJ, 5:2198–2217, 2024.
+Vivek Farias and Adam Daniel Jozefiak. Self-normalized re-
+sets for plasticity in continual learning. InThe Thirteenth In-
+ternational Conference on Learning Representations, 2025.
+URL https://openreview.net/forum?id=G82uQztzxl.
+Robert M. French. Catastrophic forgetting in connectionist
+networks.Trends in Cognitive Sciences, 3(4):128–135,
+1999. ISSN 1364-6613.
+Xiangming Gu, Tianyu Pang, Chao Du, Qian Liu, Fengzhuo
+Zhang, Cunxiao Du, Ye Wang, and Min Lin. When atten-
+tion sink emerges in language models: An empirical view.
+InInternational Conference on Learning Representations,
+2025.
+Tessa Han, Sebastian Bordt, Hanlin Zhang, and Sham Kakade.
+Weight decay improves language model plasticity. In
+Proceedings of the 43rd International Conference on Ma-
+chine Learning, ICML ’26, New York, NY , USA, 2026.
+Association for Computing Machinery.
+J. Fernando Hernandez-Garcia, Shibhansh Dohare, Jun Luo,
+and Richard S. Sutton. Reinitializing weights vs units for
+maintaining plasticity in neural networks. In4th Conference
+on Lifelong Learning Agents, 2025.
+James Kirkpatrick, Razvan Pascanu, Neil Rabinowitz, Joel
+Veness, Guillaume Desjardins, Andrei A Rusu, Kieran
+Milan, John Quan, Tiago Ramalho, Agnieszka Grabska-
+Barwinska, et al. Overcoming catastrophic forgetting in
+neural networks.Proceedings of the national academy of
+sciences, 114(13):3521–3526, 2017.
+Saurabh Kumar, Henrik Marklund, and Benjamin Van Roy.
+Maintaining plasticity in continual learning via regenerative
+regularization. In3rd Conference on Lifelong Learning
+Agents, 2024.
+Hojoon Lee, Hanseul Cho, Hyunseung Kim, Daehoon Gwak,
+Joonkee Kim, Jaegul Choo, Se-Young Yun, and Chulhee
+Yun. Plastic: Improving input and label plasticity for
+sample efficient reinforcement learning.Advances in Neural
+Information Processing Systems, 36:62270–62295, 2023.
+Hojoon Lee, Hyeonseo Cho, Hyunseung Kim, Donghu Kim,
+Dugki Min, Jaegul Choo, and Clare Lyle. Slow and steady
+wins the race: Maintaining plasticity with hare and tortoise
+networks. In41st International Conference on Machine
+Learning, 2024.
+Alex Lewandowski, Haruto Tanaka, Dale Schuurmans, and
+Marlos C. Machado. Curvature explains loss of plasticity,
+2024. Preprint available at https://openreview.net/forum?id=
+SkF7NZGVr5.
+Alex Lewandowski, Michał Bortkiewicz, Saurabh Kumar, An-
+drás György, Dale Schuurmans, Mateusz Ostaszewski, and
+Marlos C. Machado. Learning continually by spectral reg-
+ularization. InThe Thirteenth International Conference on
+Learning Representations, 2025. URL https://openreview.
+net/forum?id=Hcb2cgPbMg.
+Lute Lillo and Nick Cheney. Activation function design sus-
+tains plasticity in continual learning. InThe F ourteenth In-
+ternational Conference on Learning Representations, 2026.
+URL https://openreview.net/forum?id=XZf6wObHX4.
+Jiashun Liu, Zihao Wu, Johan Obando-Ceron, Pablo Samuel
+Castro, Aaron Courville, and Ling Pan. Measure gradients,
+not activations! enhancing neuronal activity in deep rein-
+forcement learning. InThe Thirty-ninth Annual Conference
+on Neural Information Processing Systems, 2026. URL
+https://openreview.net/forum?id=FjNHmO39pp.
+Tianhui Liu and Lili Mou. Do neural networks lose plasticity
+in a gradually changing world?, 2026. Preprint available at
+https://arxiv.org/abs/2602.09234.
+Ilya Loshchilov and Frank Hutter. Decoupled weight decay
+regularization. InInternational Conference on Learning
+11
+===== [PAGE 12] =====
+Representations, 2019. URL https://openreview.net/forum?
+id=Bkg6RiCqY7.
+Clare Lyle, Mark Rowland, and Will Dabney. Understanding
+and preventing capacity loss in reinforcement learning. In
+10th International Conference on Learning Representations,
+2022.
+Clare Lyle, Zeyu Zheng, Evgenii Nikishin, Bernardo
+Avila Pires, Razvan Pascanu, and Will Dabney. Under-
+standing plasticity in neural networks. In Andreas Krause,
+Emma Brunskill, Kyunghyun Cho, Barbara Engelhardt,
+Sivan Sabato, and Jonathan Scarlett (eds.),Proceedings of
+the 40th International Conference on Machine Learning,
+volume 202 ofProceedings of Machine Learning Research,
+pp. 23190–23211. PMLR, 23–29 Jul 2023. URL https:
+//proceedings.mlr.press/v202/lyle23b.html.
+Clare Lyle, Zeyu Zheng, Khimya Khetarpal, James Martens,
+Hado van Hasselt, Razvan Pascanu, and Will Dabney.
+Normalization and effective learning rates in reinforcement
+learning, 2024a. Preprint available at https://arxiv.org/abs/
+2407.01800.
+Clare Lyle, Zeyu Zheng, Khimya Khetarpal, Hado van Hasselt,
+Razvan Pascanu, James Martens, and Will Dabney. Disen-
+tangling the causes of plasticity loss in neural networks. In
+3rd Conference on Lifelong Learning Agents, 2024b.
+Michael McCloskey and Neal J Cohen. Catastrophic inter-
+ference in connectionist networks: The sequential learning
+problem.Psychology of Learning and Motivation, 24:109–
+165, 1989.
+Martial Mermillod, Aurélia Bugaiska, and Patrick Bonin. The
+stability-plasticity dilemma: Investigating the continuum
+from catastrophic forgetting to age-limited learning effects,
+2013.
+Thuat Nguyen, Chien Van Nguyen, Viet Dac Lai, Hieu Man,
+Nghia Trung Ngo, Franck Dernoncourt, Ryan A. Rossi,
+and Thien Huu Nguyen. CulturaX: A cleaned, enormous,
+and multilingual dataset for large language models in 167
+languages. In Nicoletta Calzolari, Min-Yen Kan, Veronique
+Hoste, Alessandro Lenci, Sakriani Sakti, and Nianwen
+Xue (eds.),Proceedings of the 2024 Joint International
+Conference on Computational Linguistics, Language Re-
+sources and Evaluation (LREC-COLING 2024), pp. 4226–
+4237, Torino, Italia, May 2024. ELRA and ICCL. URL
+https://aclanthology.org/2024.lrec-main.377.
+Evgenii Nikishin, Max Schwarzer, Pierluca D’Oro, Pierre-Luc
+Bacon, and Aaron Courville. The primacy bias in deep
+reinforcement learning. In39th International Conference
+on Machine Learning, pp. 16828–16847, 2022.
+Alec Radford, Karthik Narasimhan, Tim Salimans,
+Ilya Sutskever, et al. Improving language
+understanding by generative pre-training, 2018. Preprint
+available at https://cdn.openai.com/research-covers/
+language-unsupervised/language_understanding_paper.pdf.
+Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario
+Amodei, and Ilya Sutskever. Language models are unsuper-
+vised multitask learners. Technical report, OpenAI, 2019.
+Colin Raffel, Noam Shazeer, Adam Roberts, Katherine Lee,
+Sharan Narang, Michael Matena, Yanqi Zhou, Wei Li, and
+Peter J. Liu. Exploring the limits of transfer learning with
+a unified text-to-text transformer.J. Mach. Learn. Res., 21
+(1), January 2020. ISSN 1532-4435.
+Sunny Sanyal, Ravid Shwartz-Ziv, Alex Dimakis, and sujay
+sanghavi. When attention collapses: How degenerate layers
+in LLMs enable smaller, stronger models.Transactions on
+Machine Learning Research, 2026. ISSN 2835-8856. URL
+https://openreview.net/forum?id=2zQn0bUoPf.
+Mark Smith, Garrison Cottrell, and Karen Anderson. The
+early word catches the weights. In T. Leen, T. Diet-
+terich, and V . Tresp (eds.),Advances in Neural Informa-
+tion Processing Systems, volume 13. MIT Press, 2000.
+URL https://proceedings.neurips.cc/paper_files/paper/2000/
+file/90599c8fdd2f6e7a03ad173e2f535751-Paper.pdf.
+Ghada Sokar, Rishabh Agarwal, Pablo Samuel Castro, and
+Utku Evci. The dormant neuron phenomenon in deep
+reinforcement learning. In40th International Conference
+on Machine Learning, pp. 32145–32168, 2023.
+Jacob Mitchell Springer, Sachin Goyal, Kaiyue Wen, Tanishq
+Kumar, Xiang Yue, Sadhika Malladi, Graham Neubig, and
+Aditi Raghunathan. Overtrained language models are harder
+to fine-tune. InF orty-second International Conference
+on Machine Learning, 2025. URL https://openreview.net/
+forum?id=YW6edSufht.
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit,
+Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia
+Polosukhin. Attention is all you need.Advances in neural
+information processing systems, 30, 2017.
+Liyuan Wang, Xingxing Zhang, Hang Su, and Jun Zhu.
+A comprehensive survey of continual learning: Theory,
+method and application.IEEE Transactions on Pattern
+Analysis and Machine Intelligence, 46(8):5362–5383, 2024.
+doi: 10.1109/TPAMI.2024.3367329.
+Guangxuan Xiao, Yuandong Tian, Beidi Chen, Song Han,
+and Mike Lewis. Efficient streaming language models with
+attention sinks. InThe Twelfth International Conference on
+Learning Representations, 2024a. URL https://openreview.
+net/forum?id=NG7sS51zVF.
+Guangxuan Xiao, Yuandong Tian, Beidi Chen, Song Han, and
+Mike Lewis. Efficient streaming language models with
+attention sinks. InInternational Conference on Learning
+Representations, 2024b.
+An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan
+Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang,
+Chenxu Lv, et al. Qwen3 technical report, 2025. Preprint
+available at https://arxiv.org/abs/2505.09388.
+Shuangfei Zhai, Tatiana Likhomanenko, Etai Littwin, Dan
+Busbridge, Jason Ramapuram, Yizhe Zhang, Jiatao Gu,
+and Josh Susskind. Stabilizing transformer training by
+preventing attention entropy collapse. InProceedings of
+the 40th International Conference on Machine Learning,
+ICML’23. JMLR.org, 2023.
+12
+===== [PAGE 13] =====
+APPENDIXA
+FURTHERDETAILS ONPARAMETERCOUNTS,
+ARCHITECTURALCHOICES,ANDHYPERPARAMETER
+SELECTION
+Table I reports the architectural configurations and param-
+eter counts for the models used in our experiments. Across
+model sizes, we kept the aspect ratiod/L, wheredis the
+hidden dimension andLis the number of layers, as close
+to 80 as possible. We also fixed the attention-head dimension,
+d/Heads, to 64 for all models. The name of each model refers
+to the number of non-embedding parameters.
+Figure 8 shows the specific Transformer architecture used
+in our study of plasticity loss. Notably, the architecture uses
+absolute positional encoding with tied embeddings, layer nor-
+malization before the attention and feedforward blocks (pre-
+norm), and GeLU activations.
+The learning rate,η, was tuned for the 5M and 314M models
+using a grid search over final validation loss after 5 billion
+tokens of training on English. We tested values of
+η∈
+
+1×10 −4,3×10 −4,5×10 −4,8×10 −4,(6)
+1×10 −3,3×10 −3,5×10 −3	
+(7)
+The best learning rates were3×10 −3 for the 5M model and
+1×10 −3 for the 314M model. We then interpolated learning
+rates for the intermediate-size models by modeling the learning
+rate as a power law in the hidden dimension, similar in spirit
+to the scaling rule used inµP:
+η314M =η 5M
+ d5M
+d314M
+α
+,
+α= log(η314M/η5M)
+log(d5M/d314M) = log(1/3)
+log(1/4) ≈0.79248.
+We verified that this interpolation was sensible by com-
+paring the interpolated learning rates with additional grid-
+search results for the 12M, 27M, 53M, and 106M models. In
+every case, the interpolated learning rate yielded a lower final
+validation loss on English than the other grid-search values
+tested. The learning rates obtained from this interpolation,
+together with the grid-search results for each model, are listed
+in Table II.
+APPENDIXB
+FINDING THEMINIMUM OF THEPLASTICITYLOSSCURVE
+ANDCREATING APREDICTIVEMODEL
+To create the predictive model presented in the main text,
+we first identified, for each model, the task after which
+the trend in Figure 2 began to increase. Initially, we only
+probed after Russian, the last language in the cycle. This
+approach was ideal for demonstrating plasticity loss because
+any deterioration in performance could be attributed solely
+to a loss of learning ability. However, this probing approach
+provided a coarse level of granularity, preventing us from
+more precisely determining the start of the increasing trend
+in performance.
+Input
+Max Sequence Length = 2,048
+Embeddings
+Token Embedding
+151,680 x hidden dimension
+Absolute Positional Embedding
+2,048 x hidden dimension+
+Final Layer Norm
+scale parameter: hidden dimension
+bias term: hidden dimension
+Tied Token Embedding
+hidden dimension x 151,680
+Output
+Vocabulary Size: 151,680
+x Number of Layers
+Transformer Block 
+Layer Norm
+scale parameter: hidden dimension
+bias term: hidden dimension
+Multi-Head Self-Attention
+QKV Projection: 3 x hidden dimension x 64 x number of heads
+QKV Bias: 3 x 64 x number of heads
+Output Projection: 64 x number of heads x hidden dimension
+Output Bias: hidden dimension 
+Feedforward Block: GeLU Activations
+Input Projection: hidden dimension x 4 x hidden dimension
+Input Bias: 4 x hidden dimension
+Output Projection: 4 x hidden dimension x hidden dimension
+Output Bias: hidden dimension 
+Layer Norm
+scale parameter: hidden dimension
+bias term: hidden dimension
+Fig. 8: Diagram of the specific Transformer architecture used
+in our experiments.
+To increase the granularity in our probing, we decided
+to perform more probing tasks within each cycle. However,
+probing after each language resulted in noisy data because
+performance on Vietnamese was heavily influenced by the
+preceding language. To illustrate this, we show in Table III
+the AUC of the validation loss on the Vietnamese language
+after pretraining, individually, on each of the eight different
+languages in the cycle. We found that some languages con-
+sistently resulted in better transfer than others. For example,
+pretraining on English consistently resulted in the lowest AUC
+across the 5M, 12M, and 27M models. On the other hand,
+pretraining on Japanese consistently resulted in higher AUC
+than the average across languages.
+To reduce noise from the pretraining language preceding
+13
+===== [PAGE 14] =====
+Model Layers Hidden Attn.d/L d/HeadsEff. Params Total Params
+LDim.dHeads
+5M 4 320 5 80.0 64 4,932,480 54,125,440
+12M 5 448 7 89.6 64 12,072,256 80,942,400
+27M 7 576 9 82.3 64 27,922,752 116,470,080
+39M 8 640 10 80.0 64 39,389,440 137,775,360
+53M 9 704 11 78.2 64 53,610,304 161,834,816
+83M 10 832 13 83.2 64 83,176,704 211,078,400
+106M 11 896 14 81.5 64 106,101,632 243,841,920
+314M 16 1280 20 80.0 64 314,841,600 511,613,440
+TABLE I: Model configurations used in our experiments. All models use an attention-head dimension,d/Heads, of 64. The
+aspect ratio,d/L, was kept as close to 80 as possible. Eff. Params excludes embedding layers, whereas Total Params includes
+all parameters in the network.
+ModeldInterpolation Grid Search
+η×10 3 Lossη×10 3 Loss
+5M 320 3.00 3.9941 3.00 3.9941
+12M 448 2.30 3.7973 3.00 3.8088
+27M 576 1.88 3.6303 1.00 3.6394
+39M 640 1.73 3.5767 – –
+53M 704 1.61 3.5100 1.00 3.5130
+83M 832 1.41 3.4436 – –
+106M 896 1.33 3.4006 1.00 3.4037
+314M 1280 1.00 3.2575 1.00 3.2575
+TABLE II: Learning rates per model size, scaled asη=η 5M ·
+(d5M/d)0.79248. The loss column was computed by averaging
+the last 10 validation-loss measurements. Each validation-loss
+measurement was computed using 2.5 million tokens.
+probing, we selected languages with similar levels of transfer.
+Thus, we selected Chinese, German, and Russian for extended
+probing, corresponding to the second, sixth, and eighth lan-
+guage in a cycle, respectively. We also considered including
+Japanese, but the difference in transfer between Japanese and
+German once again introduced too much noise.
+After extensive probing, we normalized the AUC line by
+dividing it by the area under the validation loss curve when
+training on Vietnamese alone. The blue lines in the plots in
+Figure 9 correspond to the change in AUC relative to training
+on Vietnamese alone, i.e., the change in AUC due to continual
+pretraining. Note that we only extended probing in cycles near
+the minimum of the line to minimize computational cost.
+To further account for the effect of the pretraining language
+immediately before probing, we computed a moving average
+with a window size of three. Lastly, we used the minimum
+point of the moving average line as the onset of plasticity
+loss. The yellow lines in the plots in Figure 9 correspond to
+the moving average line with a point indicating the minimum
+point. Table IV shows the task after which the trend in
+AUC increased—the onset of plasticity loss—along with the
+parameter count of the model.
+We used the data in Table IV to fit four models for
+predicting the onset of plasticity loss, each encoding a different
+Pretraining
+Language
+AUC on Vietnamese Language
+5M Model 12M Model 27M Model
+English 3.0288 2.8189 2.6496
+Chinese 3.0634 2.8602 2.6925
+French 3.0498 2.8440 2.6718
+Japanese 3.0661 2.8746 2.7019
+Spanish 3.0502 2.8423 2.6710
+German 3.0560 2.8519 2.6842
+Portuguese 3.0562 2.8506 2.6712
+Russian 3.0793 2.8641 2.6932
+Average 3.0562 2.8508 2.6794
+TABLE III: Performance on Vietnamese after pretraining on
+different languages for the 5M, 12M, and 27M models. The
+area under the curve (AUC) of the validation loss measured
+while training on Vietnamese varies depending on the pre-
+training language. Pretraining on English consistently results
+in better transfer than pretraining on any other language.
+Highlighted rows correspond to the languages selected for
+extended probing.
+Model Effective Size
+P
+Onset of Plasticity Loss
+T
+5M 4,932,480 6
+12M 12,072,256 6
+27M 27,922,752 16
+39M 39,389,440 18
+53M 53,610,304 54
+83M 83,176,704 54
+106M 106,101,632 62
+314M 314,841,600 118
+TABLE IV: Onset of plasticity loss, in number of tasks,
+for each model size. The onset was obtained by taking the
+minimum of the change in AUC plots after applying a moving
+average of window size 3.
+belief about how the onset,T, scales with model size,P. To
+encode the belief that onset increases by a constant amount per
+14
+===== [PAGE 15] =====
+Percentage Change in AUC 
+Due to Pretraining
+-4 %
+Cycle
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 180
+-3 %
+-2 %
+-1 %
+0 %
+1 %
+2 %
+5M Model
+Moving Average of Window Size 3
+Onset of Plasticity Loss
+Cycle
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 170
+-7.4 %
+-7.0 %
+-6.6 %
+Percentage Change in AUC 
+Due to Pretraining
+39M Model
+Moving Average of Window Size 3
+Onset of 
+Plasticity Loss
+Cycle
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 170
+-6.6 %
+-6.2 %
+-5.8 %
+-5.4 %
+27M Model
+Moving Average of Window Size 3
+Onset of 
+Plasticity Loss
+Cycle
+5 10 15 20 25 30 35 40 45
+-9.0 %
+-8.5 %
+-8.0 %
+-7.5 %
+Moving Average of Window Size 3
+Onset of 
+Plasticity Loss
+83M Model
+Cycle
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 170
+-4 %
+-3 %
+-2 %
+-1 %
+0 %
+-5 %
+Moving Average of Window Size 3
+Onset of 
+Plasticity Loss
+12M Model
+Cycle
+5 10 15 20 25 30 35
+-8.0 %
+-7.6 %
+-7.2 %
+-6.8 %
+Moving Average of Window Size 3
+Onset of 
+Plasticity Loss
+53M Model
+Cycle
+5 10 15 20 25 30 35 40 45
+Moving Average of Window Size 3Onset of 
+Plasticity Loss
+-9.8 %
+-9.6 %
+-9.4 %
+-9.2 %
+-9.0 %
+106M Model
+Percentage Change in AUC 
+Due to Pretraining
+Cycle
+5 10 15 20 25 30 35 40 45
+Moving Average of Window Size 3
+Onset of 
+Plasticity Loss
+-12.8 %
+-12.4 %
+-12.0 %
+-13.2 %
+314M Model
+Fig. 9: Extended probing in the Multilingual Continual Learning Problem. Each point is the AUC of the validation loss during
+the probing task divided by the AUC when training on the Vietnamese language alone. The yellow line corresponds to a
+moving average with a window size of 3. The red dot corresponds to the onset of plasticity loss used for building predictive
+models as a function of model size. The onset of plasticity loss occurs later with increasing model size.
+parameter, we fitted a linear model:T=a+b·P. To encode
+the belief that the onset increases by a constant amount per
+order-of-magnitude increase in parameters, we fitted a linear-
+log model:T=a+b·lnP. We fitted the exponential model:
+T=a·e b·P , which encodes the belief that each additional
+parameter has a compounding effect on the onset.
+Finally, we fitted the log-log model:lnT=a+b·lnP,
+which suggests the onset grows multiplicatively with model
+size, i.e., multiplyingPby a scalar changesTby a constant
+factor.
+We compared the four models using theR 2 value, the
+root-mean-squared error computed on the data (in-sample
+RMSE), and the RMSE computed using a leave-one-out
+cross-validation (out-of-sample RMSE). The coefficients and
+comparison metrics are given in Table V. Figure 10 shows
+the fitted line of each model. Of all the models, the log-log
+models scored the best.
+APPENDIXC
+CORRELATES OFPLASTICITYLOSS IN THEMULTILINGUAL
+LEARNINGPROBLEMS
+In this appendix, we present extended results about the
+correlates of plasticity loss. In Figure 11, we show the
+correlates of loss of plasticity in the Continual Multilingual
+Learning Problem for the models omitted in the main text:
+5M, 27M, 39M, 83M, and 314M. The results are consistent
+with the discussion in the main text. While average weight
+magnitude tends to increase and the models often accumulate
+dormant units, lazy heads, and collapsed heads, these effects
+do not exactly match the deterioration in performance due to
+plasticity loss.
+Figure 12 shows the correlates of plasticity loss for the
+models trained in the Multilingual Stationary Learning Prob-
+lem. Yet again, we saw an accumulation of dormant units and
+collapsed heads as the models lost plasticity. The percentage of
+lazy heads increased only in the 27M models, while the 5M
+and 12M models remained at zero percent collapsed heads.
+The lack of accumulation of collapsed heads is consistent
+with the results in the continual learning setting, where the
+5M and 12M models had close to zero percent of collapsed
+heads during the first two cycles, i.e., the first 80 billion tokens
+of training. The average weight magnitude also increased
+over time, but did not seem to match the effect of loss of
+plasticity, as it continued to increase while performance was
+still improving in the probing tasks.
+Figures 11 and 12 emphasize the unreliability of the corre-
+lates of loss of plasticity. Nevertheless, they signal potential
+pathological changes happening inside the network that could
+be addressed through the approaches discussed in the main
+text.
+15
+===== [PAGE 16] =====
+Model Coefficients R2 In-Sample
+RMSE
+Out-of-Sample
+RMSEName Formula Name Value STE
+LinearT=a+b·P a12.9086 6.3401 0.8914 11.827 31.113b3.5937×10 −7 5.12×10 −8
+Linear-logT=a+b·lnP a−431.4626 88.0119 0.8288 14.852 24.615b26.9574 5.0018
+Exponential T=a·e b·P a24.459 6.830 0.7844 16.668 588.914b5.0992×10 −9 1.07×10 −9
+Log-loglnT=a+b·lnP a−11.2501 1.8077 0.8969 11.524 17.864b0.8269 0.1027
+TABLE V: Comparison of four functional forms for predicting the onset of plasticity loss,T, as a function of effective
+parameter count,P. Coefficients are reported with their standard errors (STE). The in-sample root-mean-squared error (RMSE)
+was measured on the data points used to fit the model, whereas the out-of-sample RMSE was computed using leave-one-out
+cross-validation.
+Model Size
+Onset of Plasticity Loss
+ (Task-Instance Number)
+Linear-Log
+107 108
+5M 12M
+27M
+39M
+106M
+53M 83M
+314M
+Observed
+Fitted Line
+101
+102
+Log-LogExponential
+107 108
+101
+102
+Observed
+Fitted Line
+5M 12M
+27M
+39M
+106M
+53M 83M
+314M
+107 108
+5M 12M
+27M
+39M
+106M
+53M 83M
+314M
+101
+102
+100
+10-1
+Observed
+Fitted Line
+107 108
+101
+102
+Observed
+Fitted Line
+5M 12M
+27M
+39M
+106M
+53M 83M
+314M
+Linear
+Model Size Model Size Model Size
+Fig. 10: Comparison between different models for predicting the onset of plasticity loss.
+Average Weight Magnitude
+0.056
+4M Model
+0.060
+0.064
+Cycle
+2 4 6 8 10 12 14 16 18
+Percentage of Dormant Units
+0 %
+10 %
+20 %
+30 %
+20 %
+Percentage of Collapsed Heads
+24 %
+28 %
+32 %
+20 %
+15 %
+10 %
+5 %
+0 %
+Percentage of Lazy Heads
+27M Model
+Cycle
+2 4 6 8 10 12 14 16
+5 %
+Cycle
+2 4 6 8 10 12 14 16
+Cycle
+2 4 6 8 10 12 14 16
+Cycle
+2 4 6 8 10 12 14 16
+10 %
+15 %
+20 %
+10 %
+0 %
+20 %
+10 %
+0 %
+0.0404
+0.0406
+0.0408
+0.0410
+0.0412
+83M Model
+Cycle
+10 20 30 40
+Cycle
+10 20 30 40
+Cycle
+20 30 4010
+Cycle
+10 20 30 40
+30 %
+40 %
+50 %
+0 %
+4 %
+8 %
+12 %
+20 %
+15 %
+10 %
+5 %
+0 %
+0.0287
+0.0288
+0.0289
+0.0290
+0.0291
+Cycle
+2 4 6 8 10 12 14 16 18
+Cycle
+2 4 6 8 10 12 14 16 18
+Cycle
+2 4 6 8 10 12 14 16 18
+39M Model
+Cycle
+2 4 6 8 10 12 14 16
+Cycle
+2 4 6 8 10 12 14 16
+Cycle
+2 4 6 8 10 12 14 16
+15 %
+20 %
+25 %
+30 %
+0 %
+4 %
+8 %
+12 %
+2 %
+6 %
+10 %
+0.0367
+0.0371
+0.0369
+2 4 6 8 10 12 14 16
+Cycle
+ Cycle
+10 20 30 40
+0.01818
+0.01816
+0.01814
+0.01812
+0.01810
+Cycle
+10 20 30 40
+1 %
+0 %
+2 %
+3 %
+Cycle
+10 20 30 40
+0 %
+10 %
+20 %
+30 %
+Cycle
+10 20 30 40
+5 %
+15 %
+25 %
+35 %
+314M Model
+Fig. 11: Average weight magnitude, percentage of dormant units, percentage of collapsed heads, and percentage of lazy heads
+for the 5M, 27M, 39M, and 83M models.
+16
+===== [PAGE 17] =====
+Average Weight MagnitudePercentage of Dormant UnitsPercentage of Collapsed HeadsPercentage of Lazy Heads
+4M Model
+0.060
+Pretraining Tokens
+10B 20B 30B 40B 50B 60B 70B 80B
+0.058
+0.056
+Pretraining Tokens
+10B 20B 30B 40B 50B 60B 70B 80B
+8 %
+6 %
+4 %
+2 %
+0 %
+Pretraining Tokens
+10B 20B 30B 40B 50B 60B 70B 80B
+20 %
+22 %
+24 %
+26 %
+28 %
+30 %
+32 %
+34 %
+Pretraining Tokens
+10B 20B 30B 40B 50B 60B 70B 80B
+-4 %
+0 %
+4 %
+100B
+Pretraining Tokens
+200B 300B 400B 500B
+0.0404
+0.0408
+0.0412
+0.0416
+27M Model
+100B
+Pretraining Tokens
+200B 300B 400B 500B
+1 %
+3 %
+5 %
+7 %
+100B
+Pretraining Tokens
+200B 300B 400B 500B
+16 %
+20 %
+24 %
+100B
+Pretraining Tokens
+200B 300B 400B 500B
+0 %
+10 %
+20 %
+30 %
+Pretraining Tokens
+10B 20B 30B 40B 50B 60B 70B 80B
+0.0465
+0.0475
+0.0485
+0.0495
+12M Model
+Pretraining Tokens
+10B 20B 30B 40B 50B 60B 70B 80B
+0 %
+5 %
+10 %
+15 %
+20 %
+25 %
+Pretraining Tokens
+10B 20B 30B 40B 50B 60B 70B 80B
+20 %
+25 %
+30 %
+4 %
+Pretraining Tokens
+10B 20B 30B 40B 50B 60B 70B 80B
+-4 %
+0 %
+15 %
+Fig. 12: Correlates of loss of plasticity for the 5M, 12M, and 27M models trained on the Multilingual Stationary Learning
+Problem. The metrics followed a similar trend to the Multilingual Continual Learning Problem, but none of them exactly
+matched the trend in plasticity loss.
+17

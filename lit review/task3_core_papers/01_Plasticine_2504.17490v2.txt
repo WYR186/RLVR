@@ -1,0 +1,726 @@
+
+===== [PAGE 1] =====
+Plasticine: Accelerating Research in Plasticity-Motivated
+Deep Reinforcement Learning
+Mingqi Yuan1∗, Qi Wang2∗, Guozheng Ma 4∗, Caihao Sun 5∗, Bo Li 1, Xin Jin 3,
+Yunbo Wang2, Xiaokang Yang2, Wenjun Zeng3, Dacheng Tao4, Jiayu Chen 56
+1HK PolyU 2SJTU 3EIT, Ningbo 4NTU 5HKU 6INFIFORCE
+Abstract
+Developing lifelong learning agents is crucial for artificial general intelligence (AGI). How-
+ever, deep reinforcement learning (RL) systems often suffer from plasticity loss, where
+neural networks gradually lose their ability to adapt during training. Despite its signif-
+icance, this field lacks unified benchmarks and evaluation protocols. We introduce Plas-
+ticine, the first open-source framework for benchmarking plasticity optimization in deep
+RL. Plasticine provides single-file implementations of over 13 mitigation methods, 6 evalu-
+ation metrics, and learning scenarios with increasing non-stationarity levels from standard
+to continually varying environments. This framework enables researchers to systematically
+quantify plasticity loss, evaluate mitigation strategies, and analyze plasticity dynamics
+across different contexts. Our documentation, examples, and source code are available at
+https://github.com/RLE-Foundation/Plasticine.
+Keywords:Deep RL, Plasticity, Lifelong Learning, Benchmark, PyTorch
+1 Introduction
+Developing agents that never stop learning and evolving in dynamic real-world environ-
+ments represents a critical frontier for advancing artificial intelligence and a fundamental
+prerequisite for continuously improving systems (Abel et al., 2023). Reinforcement learning
+(RL), with its inherent properties of learning from experience, continual online improve-
+ment, and iterative strategic exploration, emerges as the ideal framework for pursuing this
+objective (Silver and Sutton, 2025). Despite its promise, recent research has increasingly
+revealed a critical limitation: plasticity loss, a phenomenon in which neural networks in RL
+agents gradually lose their ability to adapt and incorporate new information as training pro-
+gresses (Dohare et al., 2024; Klein et al., 2024), thus significantly impeding the development
+of truly lifelong learning agents (Lyle and Pascanu, 2024).
+This phenomenon emerges specifically when switching from classical tabular RL meth-
+ods to deep neural architectures (Klein et al., 2024), which explains why it has only recently
+become a priority in the research community. Additionally, while related to the stability-
+plasticity trade-off studied in continual (un)supervised learning scenarios, plasticity loss
+presents a more acute challenge for RL systems due to the pronounced non-stationarity in
+both data distributions and learning objectives, combined with the bootstrapping mecha-
+nisms inherent to RL algorithms (Nikishin et al., 2022). Furthermore, compared to pre-
+∗. These authors contributed equally.
+©2026 Plasticine Team.
+License: CC-BY 4.0, seehttps://creativecommons.org/licenses/by/4.0/.
+arXiv:2504.17490v2  [cs.LG]  10 Feb 2026
+===== [PAGE 2] =====
+Yuan, W ang, Ma, Sun, Li, Jin, W ang, Yang, Zeng, Tao, and Chen
+
+
+Plasticine
+Methods
+CleanRL
+Workﬂow
+PPO
+C51
+···
+PlasticineAgent
+(
+torch.nn.Module
+)
+Sample
+ReDo
+Shrink &
+Perturb
+TRAC
+
+
+Plasticine
+Metrics
+Ratio of Dormant Units
+Stable Rank
+Eﬀective Rank
+Fraction of Active Units
+···
+
+
+Plasticine
+Environments
+ALE
+(
+Vis.
+Discrete
+Control
+)
+Continual
+Procgen
+(
+Vis.
+Discrete
+Control
+)
+Continual
+DMC
+(
+Continuous
+Control
+)
+···
+Plasticine
+···
+(a) Architecture of the Plasticine framework.Vis.is short for Visual.
+(b) Code implementation of the Plasticine-
+enhanced agent.
+(c) Invocation of the Plasticine methods in
+theCleanRLworkflow.
+Figure 1: Overview of the Plasticine framework. Plasticine strikes a balance between
+“single-file” and “modularized” implementations, facilitating related research and re-
+development while effectively controlling the project size.
+venting catastrophic forgetting, maintaining plasticity is considerably more critical for de-
+veloping truly lifelong learnable agents (Abel et al., 2023).
+Despite the clear importance of mitigating plasticity loss in deep RL, this field lacks uni-
+fied methodological frameworks and evaluation protocols. This lack of established bench-
+marks hampers fair comparisons, methodological consistency, and precise problem formula-
+tion. Numerous fundamental questions remain inadequately addressed in current research:
+•How can we reliably measure and quantify plasticity loss through empirical means?•To
+what degree do existing mitigation approaches effectively resolve this issue?•In what ways
+does plasticity loss vary across different task domains and learning scenarios? To address
+these gaps, we introducePlasticine, the first open-source benchmark for plasticity research
+in deep RL. The following section presents the framework architecture. Detailed method
+descriptions, experimental configurations, and results appear in the Appendices.
+2 Architecture of Plasticine
+Figure 1 illustrates the overall architecture of thePlasticineframework, which contains
+three core parts:Methods,Metrics, andEnvironments. To maximize the convenience
+for researchers, we adopt the “single-file” implementation style that has been widely rec-
+ognized by the RL community (Huang et al., 2022; Tarasov et al., 2023). However, as most
+plasticity enhancement methods are relatively small techniques that intervene in the agent’s
+network, adopting a purely single-file implementation style would lead to excessive project
+2
+===== [PAGE 3] =====
+Plasticine: Accelerating Research in Plasticity-Motivated Deep RL
+volume and management difficulties. Therefore, we strike a balance between single-file and
+modular design. As shown in Figure 1(a) and??, all plasticity methods are integrated
+into the agent implementation, which is then combined with CleanRL’s single-file RL algo-
+rithm (Huang et al., 2022). This approach allows researchers to focus on plasticity methods
+and facilitates redevelopment, while effectively controlling the project size. The following
+sections detail the design insights.
+2.1 Plasticity Loss Mitigation Methods
+Plasticity loss occurs when neural networks gradually develop optimization pathologies dur-
+ing non-stationary RL training processes, causing them to lose their inherent learnabil-
+ity (Nikishin, 2024). Therefore, targeted improvements in various aspects of neural network
+design have the potential to mitigate plasticity loss. In this benchmark, we have categorized
+existing mitigation methods based on their primary focus and implemented representative
+methods for evaluation. The details of each method can be found in Appendix C.
+1.Reset-based Intervention: Re-initializing portions of the network represents the
+most direct approach to regain plasticity (Nikishin et al., 2022), whether through
+manually selecting specific layers or automatically identifying neurons experiencing
+severe performance plateaus (Sokar et al., 2023; Galashov et al., 2024).
+2.Normalization: Normalization techniques, exemplified by Layer Norm, have been
+shown to be highly effective in mitigating plasticity loss (Nauman et al., 2024). Build-
+ing on this, more advanced normalization approaches have emerged targeting plastic
+training, including NaP (Lyle et al., 2024a) and hyperspherical norm (Lee et al., 2025).
+3.Regularization: Constraining parameter norms or feature rank effectively prevents
+unbounded growth of weight/feature norms and avoids representation collapse, factors
+considered highly correlated with plasticity (Kumar et al., 2023; Lyle et al., 2022).
+4.Activation Function: Alternative activation functions beyond standard ReLU sig-
+nificantly impact neuron activity patterns, helping prevent dead neurons and maintain
+network capacity throughout non-stationary training (Park et al., 2025).
+5.Optimizer: Specialized optimization approaches like Fast TRAC (Muppidi et al.,
+2024) and Kron (Castanyer et al., 2025) help navigate complex loss landscapes during
+non-stationary training, thereby maintaining plasticity.
+2.2 Comprehensive Evaluation Metrics
+Accurately quantifying neural network plasticity remains an open research question (Lyle
+et al., 2024b). Current methodologies typically involve monitoring multiple plasticity-
+related indicators from various perspectives and analyzing them holistically (Lee et al.,
+2024; Ceron et al., 2023). Our benchmark incorporates key metrics directly into the training
+pipeline, enabling systematic comparison of plasticity dynamics across different approaches.
+These metrics include the ratio of dormant to active neurons, which indicates possible neu-
+ronal pathologies (Sokar et al., 2023; Ma et al., 2024); multiple feature rank measurements
+(such as Stable Rank and Effective Rank) that track representation capacity and potential
+collapse (Lyle et al., 2022); and weight/gradient norm calculations that capture problems
+such as growth of unbounded parameters and vanishing gradients. This multidimensional
+3
+===== [PAGE 4] =====
+Yuan, W ang, Ma, Sun, Li, Jin, W ang, Yang, Zeng, Tao, and Chen
+evaluation framework helps researchers pinpoint which specific aspects of neural network
+behavior are most significantly influenced by different plasticity optimization methods.
+2.3 Progressive Evaluation Scenarios
+Plasticity loss represents a critical barrier to achieving truly lifelong RL applications, with
+its severity increasing proportionally to environmental non-stationarity. To comprehensively
+evaluate both the magnitude of plasticity loss and the effectiveness of mitigation methods,
+we provide a progressive framework of increasingly non-stationary task scenarios, enabling
+systematic analysis of how plasticity dynamics evolve across complexity thresholds and
+quantifying the preservation of learning capabilities as environmental demands intensify.
+2.3.1 Standard Online RL
+Standard online RL naturally exhibits non-stationarity as policies evolve and through boot-
+strapping processes. In these environments, agents must maintain plasticity throughout
+training to achieve optimal performance instead of being stuck at suboptimal levels. This
+setting offers a foundation for measuring plasticity during natural distribution shifts in pol-
+icy optimization without introducing explicit task changes. Our baseline evaluation includes
+the Arcade Learning Environment (ALE; Bellemare et al., 2013) as the benchmark, which
+has been increasingly employed to study plasticity loss in deep RL (Kumar et al., 2021,
+2022; Sokar et al., 2023; Castanyer et al., 2025).
+2.3.2 Continual RL
+Continual RL scenarios create more challenging plasticity demands by introducing explicit
+distribution shifts beyond those naturally occurring in standard RL. Following the practice
+in (Muppidi et al., 2024; Tang et al., 2025), we consider two scenarios: one in which visual
+features change within the same task, and another that requires adaptation across entirely
+different tasks. These environments test an agent’s ability to maintain plasticity across both
+sudden task switches and gradual dynamics changes, providing a more challenging testbed
+than standard online RL. With clearly defined non-stationarity boundaries, we can directly
+observe how models behave before and after distribution shifts, gaining valuable insights
+into plasticity degradation patterns across different task distributions.
+3 Conclusion
+Maintaining plasticity is essential for building agents that learn continually throughout
+their lifetimes, a central goal as reinforcement learning enters the era of experience. We
+present Plasticine, an open-source framework designed to accelerate research in this direc-
+tion. Plasticine offers three key advantages: (1)ease of usethrough single-file imple-
+mentations built on familiar RL workflows; (2)broad coveragespanning on-policy and
+off-policy algorithms, state-based and vision-based domains, and evaluation scenarios from
+standard online RL to continual settings; and (3)comprehensive analysis toolsfor diag-
+nosing plasticity dynamics across methods and environments. We will continue to expand
+Plasticine with new methods and environments, and hope it serves as a useful foundation
+for future research in this rapidly evolving field.
+4
+===== [PAGE 5] =====
+Plasticine: Accelerating Research in Plasticity-Motivated Deep RL
+Appendix A. Supplementary Material
+We provide comprehensive supplementary materials to support thePlasticineframework:
+•Appendix B lists the code file structure of the whole project;
+•Appendix C provides the workflow and implementation details of all the implemented
+methods for plasticity loss mitigation;
+•Appendix D provides formally mathematical definitions of the plasticity-related met-
+rics;
+•Appendix E introduces the implementation details of the training environments for
+the two learning scenarios (standard and continual RL);
+•Appendix F introduces the included backbone RL algorithms;
+•Appendix G provides experimental configurations and results.
+5
+===== [PAGE 6] =====
+Yuan, W ang, Ma, Sun, Li, Jin, W ang, Yang, Zeng, Tao, and Chen
+Appendix B. Project Structure
+Plasticine/
+plasticine/ (Main algorithm implementation)
+ppo continual procgen base.py (torch.nn.Module-based agent integrated
+with diverse plasticity loss-mitigation techniques)
+ppo continual procgen plasticine.py (Combination of the Plasticine agent
+and the CleanRL workflow)
+...
+utils.py (Auxiliary functions)
+...
+plasticine envs/ (Environments for algorithm evaluation)
+procgen wrappers.py (Continual Procgen benchmark)
+dmc wrappers.py (Continual DMC benchmark)
+...
+plasticine metrics/ (Plasticity-related evaluation metrics)
+metrics.py
+...
+requirements/ (Dependencies for environments)
+requirements-ale.txt
+requirements-prcogen.txt
+...
+scripts/ (Training scripts)
+experimental/ (Experimental code files)
+assets/ (Miscellaneous files)
+6
+===== [PAGE 7] =====
+Plasticine: Accelerating Research in Plasticity-Motivated Deep RL
+Appendix C. Details of Implemented Plasticity Optimization Methods
+C.1 Reset-based Intervention
+C.1.1 Shrink and Perturb
+Shrink and perturb (SnP) (Ash and Adams, 2020) periodically scales the magnitude of all
+weights in the network by a factor and then adds a small amount of noise. For a set of
+parameters Θ, SnP adjusts them by
+Θ =αΘ current +βΘ init,(1)
+whereα= 1−βand Θ init is sampled from the initialization distribution of parameters.
+We provide two options for the SnP operation: The user can choose to invoke it at
+specific intervals or after each gradient descent step (Soft SnP).
+C.1.2 Plasticity Injection
+Plasticity injection (PI) (Nikishin et al., 2023) replaces the final layer of a network with a
+new function that is a sum of the final layer’s output and the output of a newly initialized
+layer subtracted by itself. The gradient is then blocked in both the original layer and the
+subtracted new layer. In practice, the PI operation is only applied to the final layers of the
+network.
+C.1.3 ReDo
+This technique resets individual neurons within the network based on a dormancy criterion
+at fixed intervals (Sokar et al., 2023). At each intervention point, we check all the neurons
+in the network using a mini-batch of training data and reset the dormant neurons as defined
+in Eq. (5).
+C.1.4 Resetting Layer
+This method involves periodically replacing the weights of the layers in the network with
+newly initialized values (Nikishin et al., 2022). We also provide two options for this oper-
+ation: At each intervention point, the user can choose to replace the weights of the final
+layers or all the layers in the network.
+C.2 Normlization
+C.2.1 Layer Normalization
+A torch.nn.LayerNorm function (Ba et al., 2016) is set before the activation at each layer.
+For convolutional layers, it is applied to the channel dimension.
+C.2.2 Normalize-and-Project
+The normalize-and-project (NaP) operation follows a two-step workflow: normalization and
+projection (Lyle et al., 2024a). For normalization, layer normalization (or RMSNorm) is
+inserted before every nonlinearity in the network to stabilize pre-activation statistics and
+enable gradient mixing, which helps revive dormant ReLU units by correlating gradients
+7
+===== [PAGE 8] =====
+Yuan, W ang, Ma, Sun, Li, Jin, W ang, Yang, Zeng, Tao, and Chen
+across units. For projection, we periodically rescale the weights of each layer to their initial
+norms during training, decoupling parameter norm growth from the effective learning rate
+(ELR). This prevents ELR decay caused by unchecked norm growth while maintaining the
+benefits of normalization. Optionally, scale/offset parameters are either normalized jointly
+(for homogeneous activations) or regularized toward initial values to avoid drift. The process
+ensures stable training dynamics in nonstationary tasks without compromising performance
+on stationary benchmarks.
+C.3 Regularization
+C.3.1 L2 Regularization
+This method (Lyle et al., 2023) adds an additional loss term to the model update, which
+corresponds to the L2 norm of the weights of the network. This loss is scaled by a coefficient
+α.
+C.3.2 Regenerative Regularization
+This method (Kumar et al., 2023) adds an additional loss term to the model update, which
+is the L2 norm of the difference between the current parameters of the network and the
+initial network parameters. This loss is scaled by a coefficientα.
+C.3.3 Parseval Regularization
+This method (Chung et al., 2024) adds an additional loss term to the model update. For
+each weight matrixW, the Parseval regularization loss is defined as
+LParseval(W) =λ∥WW T −sI∥ F ,(2)
+whereλ >0 controls the regularization strength,s >0 is a scaling coefficient,Iis the
+identity matrix of appropriate dimension and∥ · ∥ F denotes the Frobenius norm.
+C.4 Activation Function
+C.4.1 CReLU Activation
+This method replaces ReLU activations with the CReLU activation function (Abbas et al.,
+2023):
+f(x) = Concatenate(ReLU(x),ReLU(−x)),(3)
+which ensures that the gradient is non-zero for all units in a given layer.
+We concatenate the outputs of a linear layer by the feature dimension while concate-
+nating the outputs of a convolution layer by the feature dimension.
+C.4.2 Deep Fourier Features
+This method (Lewandowski et al., 2025) computes deep Fourier features. It replaces stan-
+dard activation functions with concatenated sine and cosine activations
+f(x) = Concatenate(sin(x),cos(x)) (4)
+8
+===== [PAGE 9] =====
+Plasticine: Accelerating Research in Plasticity-Motivated Deep RL
+in every layer to dynamically balance linearity and nonlinearity for sustained plasticity in
+continual learning.
+Similarly, we concatenate the outputs of a linear layer by the feature dimension while
+concatenating the outputs of a convolution layer by the feature dimension.
+C.5 Optimizer
+C.5.1 TRAC
+TRAC (Muppidi et al., 2024) operates as a meta-algorithm layered on top of a base op-
+timizer like gradient descent or Adam. At each time step, TRAC computes the policy
+gradient and uses the base optimizer to obtain a candidate update. Then, it applies a
+set of 1D tuners—each associated with a different discount factor—to evaluate how far to
+trust this candidate update versus staying near a reference point. These tuners use the Erfi
+potential function (Zhang et al., 2024) to dynamically adjust a scaling factor based on past
+gradients, and their outputs are aggregated to determine the final weight update as a con-
+vex combination of the candidate and the reference point. This online and data-dependent
+mechanism ensures stability and adaptability without requiring manual tuning, enabling
+TRAC to generalize across varied tasks and distribution shifts while mitigating both mild
+and extreme forms of plasticity loss.
+C.5.2 KRON
+KRON (Castanyer et al., 2025) is a Kronecker-factored optimizer that addresses gradient
+pathologies in deep RL by providing curvature-aware updates. Unlike first-order optimiz-
+ers like Adam that rely on diagonal preconditioning, Kron approximates the Fisher in-
+formation matrix using Kronecker products, enabling more precise adaptation to the loss
+landscape’s curvature. This is particularly crucial in non-stationary RL settings, where
+policy-dependent data distributions and bootstrapped targets lead to unstable optimiza-
+tion trajectories.
+9
+===== [PAGE 10] =====
+Yuan, W ang, Ma, Sun, Li, Jin, W ang, Yang, Zeng, Tao, and Chen
+Appendix D. Plasticity-Related Evaluation Metrics
+D.1 Ratio of Dormant Units
+Given an input distributionD, leth ℓ
+i(x) denote the activation of neuroniin layerℓunder
+inputx∈ DandH ℓ be the number of neurons in layerℓ. We define the score of a neuron
+i(in layerℓ) via the normalized average of its activation as follows (Sokar et al., 2023):
+sℓ
+i = Ex∈D|hℓ
+i(x)|
+1
+H ℓ
+PH ℓ
+k=1 Ex∈D|hℓ
+k(x)|
+(5)
+We say neuroniin layerℓisτ-dormantifs ℓ
+i ≤τ. Then, the ratio of dormant units (RDU)
+is defined as the percentage of dormant neurons among all the neurons.
+D.2 Fraction of Active Units
+Although the complete mechanisms underlying plasticity loss remain unclear, a reduction
+in the number of active units within the network has been identified as a principal factor
+contributing to this deterioration. Hence, the fraction of active units (FAU) is widely used
+as a metric for measuring plasticity. Specifically, the FAU for neurons located in module
+M, is formally defined as (Ma et al., 2024):
+FAU(M) =
+P
+n∈M 1(a n(x)>0)
+N ,(6)
+wherea n(x) represent the activation of neuronngiven the inputx, andNis the total
+number of neurons within moduleM.
+D.3 Stable Rank
+The stable rank (SR) assesses the rank of the feature matrix, reflecting the diversity and
+richness of the representations learned by the network (Kumar et al., 2022). Denote by
+F∈R n×m the feature matrix withnsamples andmfeatures,σ k are the singular values
+sorted in descending order fork= 1, . . . , qandq= min(n, m), the SR is defined as
+SR(F) = min{k:
+Pk
+i σiPq
+j σj
+>0.99},(7)
+D.4 Effective Rank
+In the case of neural networks, the effective rank of a hidden layer measures the number
+of units that can produce the output of the layer (Roy and Vetterli, 2007). If a hidden
+layer has a low effective rank, then a small number of units can produce the output of
+the layer, meaning that many of the units in the hidden layer are not providing any useful
+information. Similar to SR, the effective rank (ER) is defined as
+ER(F) = exp(H(p 1, . . . , pq)), H(p1, . . . , pq) =−
+qX
+k=1
+pk logp k,(8)
+whereq= min(n, m) andp k = σk
+∥σ∥1
+.
+10
+===== [PAGE 11] =====
+Plasticine: Accelerating Research in Plasticity-Motivated Deep RL
+D.5 Weight Difference
+To quantify how much a model changes during training or across different tasks in continual
+reinforcement learning, we compute the weight difference between two model states. This
+metric is useful for evaluating plasticity and adaptation, as well as detecting abrupt or
+minimal updates in parameter space.
+D.6 Gradient Norm
+The gradient norm (GN) quantifies the magnitude of gradients during optimization and
+reflects the strength of the learning signal (Abbas et al., 2023). In continual reinforcement
+learning, tracking the gradient norm is essential for diagnosing issues such as vanishing
+gradients, overfitting, or under-training. Moreover, it provides insights into how much the
+model updates in response to new data or tasks.
+Given a model parameter setθ={θ 1, . . . , θP }with corresponding gradients∇L(θ p),
+the L2 norm of the gradients is defined as:
+GN =
+
+
+PX
+p=1
+∥∇L(θp)∥2
+2
+
+
+1/2
+.(9)
+11
+===== [PAGE 12] =====
+Yuan, W ang, Ma, Sun, Li, Jin, W ang, Yang, Zeng, Tao, and Chen
+Appendix E. Benchmark Selection
+E.1 ALE
+We first introduce the Arcade Learning Environment (ALE) as the benchmark, which is
+a collection of arcade game environments that require the agent to learn motor control
+directly from image-based observations. This benchmark has been used to examine the
+loss of plasticity in a series of continual RL studies (Kumar et al., 2021, 2022; Sokar et al.,
+2023; Castanyer et al., 2025). As shown in Figure 2, the ALE environments often integrate
+distinct levels or stages. The transitions between these levels introduce significant changes
+in visual appearance, dynamics, or task objectives. Such level-wise shifts further exacerbate
+the non-stationarity of the learning problem, thereby leading to a significant challenge in
+terms of plasticity loss. In our experiments, we stack four consecutive frames to form an
+input state with the data shape of (84,84,4) for all environments.
+Figure 2: The ALE benchmark with visual observations and discrete action space.
+E.2 Continual Procgen
+⋯
+⋯
+Figure 3: Continual Procgen benchmark with visual observations and discrete action space.
+12
+===== [PAGE 13] =====
+Plasticine: Accelerating Research in Plasticity-Motivated Deep RL
+Furthermore, we introduce the Procgen benchmark, which comprises 16 procedurally
+generated environments. Procgen is developed similarly to the ALE benchmark, in which
+agents must learn motor control directly from image-based observations. However, Procgen
+involves much higher dynamics that require the agent to continually learn and adapt to the
+environment. Following the practice in (Muppidi et al., 2024) and (Tang et al., 2025), we
+implement a variant of Procgen to support the comprehensive evaluation of the implemented
+methods. As shown in Figure 3, distribution shifts are introduced by sampling a new
+procedurally generated level of the current game every 2 million time steps, and each level
+is considered a distinct task. In our experiments, all environments use a discrete fifteen-
+dimensional action space and generate (64,64,3) RGB observations, with theeasymode
+employed.
+E.3 Continual DMC
+Stand Run TrotWalkFetch
+ Stand Run
+⋯
+Figure 4: Continual DMC benchmark with proprioceptive observations and continuous
+action space.
+In addition to the discrete-action settings above, we further implement a variant of the
+DeepMind Control Suite (DMC) benchmark (Tassa et al., 2018) following (Tang et al.,
+2025), which contains a series of continuous control tasks. Notably, each environment is
+a continual RL scenario that chains the corresponding individual tasks in a sequence. As
+illustrated in Figure 4, theContinual Dogenvironment chains four individual tasks:Dog
+Stand,Dog Walk,Dog Run, andDog Trot. For each individual task, we train it for 1M
+environment steps.
+13
+===== [PAGE 14] =====
+Yuan, W ang, Ma, Sun, Li, Jin, W ang, Yang, Zeng, Tao, and Chen
+Appendix F. Backbone RL Algorithms
+In this paper, we select two representative RL baselines as the backbone algorithms, which
+span policy-based, value-based, on-policy, and off-policy approaches.
+F.1 Proximal Policy Optimization
+Proximal policy optimization (PPO) (Schulman et al., 2017) is a popular on-policy algorithm
+for learning a continuous or discrete control policyπ θ(a|s). PPO employs policy gradients
+using action-advantages:A t =A π(at,s t) =Q π(at,s t)−V π(st), and minimizes a clipped-
+ratio loss over mini-batches of recent experience (collected underπ θold):
+Lπ(θ) =−E τ∼π [min (ρt(θ)At,clip(ρ t(θ),1−ϵ,1 +ϵ)A t)], ρ t(θ) = πθ(at|st)
+πθold(at|st) .(10)
+Our PPO agents learn a state-value estimator—Vϕ(s), which is regressed against a target of
+discounted returns and used with generalized advantage estimation (Schulman et al., 2015):
+LV (ϕ) =E τ∼π
+
+Vϕ(st)−V target
+t
+2
+.(11)
+F.2 Categorical DQN
+Categorical DQN (C51) (Bellemare et al., 2017) is a distributional RL algorithm that models
+the return distribution rather than its expectation. Instead of directly learning the action-
+value functionQ π
+r (s,a), C51 learns a categorical distribution of the random returnZ(s,a)
+on a fixed support{z i}N
+i=1, where
+zi =V min + (i−1)∆z,∆z= Vmax −V min
+N−1 , i= 1, . . . , N.(12)
+The probability of atomz i isp θ(zi |s,a) = exp(fi(s,a;θ))P
+j exp(fj (s,a;θ)). Here,f i(s,a;θ) denotes
+the logit for atomz i,θis a parametric model. Given a sampled transition (s,a, r,s ′), C51
+forms the distributional Bellman target using the target networkθ −, then projects it back
+onto the fixed support via Φ. We minimize the Kullback–Leibler (KL) divergence between
+the projected target and the predicted distribution:
+L(θ) =D KL
+
+Φ ˆTZ θ−(s,a)∥Z θ(s,a)
+
+=−
+NX
+i=1
+mi logp θ(zi |s,a),(13)
+wherem= Φ ˆTZ θ−(s,a), and ˆTdenotes the distributional Bellman optimality operator.
+14
+===== [PAGE 15] =====
+Plasticine: Accelerating Research in Plasticity-Motivated Deep RL
+Appendix G. Experiments
+In this section, we conduct benchmark experiments for all three learning scenarios and
+compare the performance of the implemented approaches. The details of these experimen-
+tal environments can be found in Appendix E. The following figures only show a part of
+the experiment results, and more detailed benchmark experiment results can be found in
+Plasticine’s Wandb space1.
+G.1 Plasticine+C51+ALE
+Hyperparameter Value Hyperparameter Value
+Number of workers 1 Number of atoms (N) 51
+Environments per worker 1 Support lower bound (V min) -10
+Total timesteps 1e7 Support upper bound (V max) 10
+Learning rate 2.5e-4 Replay buffer size 1e6
+Discount factor 0.99 Batch size 32
+Target network frequency 10000 Start epsilon (ϵ) 1
+Learning starts 80000 End epsilon (ϵ) 0.01
+Train frequency 4 Exploration fraction 0.10
+Table 1: Hyperparameters used for the C51 agent in the standard ALE experiments.
+Figure 5: Performance comparison of the vanilla C51 agent and its combinations with
+several Plasticine methods on theALE - DemonAttackenvironment. The solid line and
+shaded region represent the mean and standard deviation across multiple runs, respectively.
+1. https://wandb.ai/yuanmingqi/Plasticine/reportlist
+15
+===== [PAGE 16] =====
+Yuan, W ang, Ma, Sun, Li, Jin, W ang, Yang, Zeng, Tao, and Chen
+G.2 Plasticine+PPO+Continual Procgen
+Hyperparameter Value Hyperparameter Value
+Number of tasks 10 Level offset 20
+Observation downsampling (84, 84) Optimizer Adam (default)
+Observation normalization / 255. Learning rate 1e-3
+Reward normalization Yes GAE coefficient 0.95
+LSTM No Entropy coefficient 0.01
+Stacked frames 4 Value loss coefficient 0.5
+Environment steps (per round) 2e6 Value clip range 0.2
+Episode steps 1000 Max gradient norm 0.5
+Number of workers 1 Number of mini-batches 8
+Environments per worker 1 Discount factor 0.99
+Table 2: Hyperparameters used for the PPO agent in the continual procgen experiments.
+Figure 6: Performance comparison of the vanilla PPO agent and its combinations with
+several Plasticine methods on theContinual Procgen - StarPilotenvironment. The solid
+line and shaded region represent the mean and standard deviation across multiple runs,
+respectively.
+16
+===== [PAGE 17] =====
+Plasticine: Accelerating Research in Plasticity-Motivated Deep RL
+G.3 Plasticine+PPO+Continual DMC
+Hyperparameter Value Hyperparameter Value
+Learning rate 3e-4 Optimizer Adam (default)
+Reward normalization Yes GAE coefficient 0.95
+LSTM No Entropy coefficient 0.0
+Initial std. 1.0 Value loss coefficient 0.5
+Environment steps (per round) 1e6 Value clip range 0.2
+Episode steps 2048 Max gradient norm 0.5
+Number of workers 1 Number of mini-batches 32
+Environments per worker 1 Discount factor 0.99
+Table 3: Hyperparameters used for the PPO agent in the continual DMC experiments.
+Figure 7: Performance comparison of the vanilla PPO agent and its combinations with
+several Plasticine methods on theContinual DMC - Walkerenvironment. The solid line and
+shaded region represent the mean and standard deviation across multiple runs, respectively.
+17
+===== [PAGE 18] =====
+Yuan, W ang, Ma, Sun, Li, Jin, W ang, Yang, Zeng, Tao, and Chen
+Acknowledgements
+This work is supported, in part, by the Hong Kong SAR Research Grants Council under
+Grant No. PolyU 15224823, the Guangdong Basic and Applied Basic Research Foundation
+under Grant No. 2024A1515011524, the NSFC under Grant No. 62302246, the ZJNSFC
+under Grant No. LQ23F010008, the Ningbo under Grants No. 2023Z237 & 2023CX050011
+& 2024Z284 & 2024Z289 & 2025Z038 & 2025Z059, and the Ningbo Institute of Digital
+Twin (IDT) under Grant No. S203.2.01.32.002. We thank the high-performance computing
+center at INFIFORCE Intelligent Technology Co., Ltd., Eastern Institute of Technology,
+and IDT for providing the computing resources.
+References
+Z. Abbas, R. Zhao, J. Modayil, A. White, and M. C. Machado. Loss of plasticity in continual
+deep reinforcement learning. InConference on Lifelong Learning Agents, pages 620–636.
+PMLR, 2023.
+D. Abel, A. Barreto, B. Van Roy, D. Precup, H. P. van Hasselt, and S. Singh. A definition
+of continual reinforcement learning.Advances in Neural Information Processing Systems,
+36:50377–50407, 2023.
+J. Ash and R. P. Adams. On warm-starting neural network training.Advances in neural
+information processing systems, 33:3884–3894, 2020.
+J. L. Ba, J. R. Kiros, and G. E. Hinton. Layer normalization. InNIPS 2016 Deep Learning
+Symposium, 2016.
+M. G. Bellemare, Y. Naddaf, J. Veness, and M. Bowling. The arcade learning environment:
+An evaluation platform for general agents.Journal of artificial intelligence research, 47:
+253–279, 2013.
+M. G. Bellemare, W. Dabney, and R. Munos. A distributional perspective on reinforcement
+learning. InInternational conference on machine learning, pages 449–458. PMLR, 2017.
+R. C. Castanyer, J. Obando-Ceron, L. Li, P.-L. Bacon, G. Berseth, A. Courville, and P. S.
+Castro. Stable gradients for stable learning at scale in deep reinforcement learning. In
+The Thirty-ninth Annual Conference on Neural Information Processing Systems, 2025.
+URLhttps://openreview.net/forum?id=Vqj65VeDOu.
+J. S. O. Ceron, M. G. Bellemare, and P. S. Castro. Small batch deep reinforcement learning.
+InThirty-seventh Conference on Neural Information Processing Systems, 2023. URL
+https://openreview.net/forum?id=wPqEvmwFEh.
+W. Chung, L. Cherif, D. Precup, and D. Meger. Parseval regularization for continual
+reinforcement learning.Advances in Neural Information Processing Systems, 37:127937–
+127967, 2024.
+S. Dohare, J. F. Hernandez-Garcia, Q. Lan, P. Rahman, A. R. Mahmood, and R. S. Sutton.
+Loss of plasticity in deep continual learning.Nature, 632(8026):768–774, 2024.
+18
+===== [PAGE 19] =====
+Plasticine: Accelerating Research in Plasticity-Motivated Deep RL
+A. Galashov, M. Titsias, A. Gy¨ orgy, C. Lyle, R. Pascanu, Y. W. Teh, and M. Sahani. Non-
+stationary learning of neural networks with automatic soft parameter reset.Advances in
+Neural Information Processing Systems, 37:83197–83234, 2024.
+S. Huang, R. F. J. Dossa, C. Ye, J. Braga, D. Chakraborty, K. Mehta, and J. G.
+Ara´ ujo. Cleanrl: High-quality single-file implementations of deep reinforcement learn-
+ing algorithms.Journal of Machine Learning Research, 23(274):1–18, 2022. URL
+http://jmlr.org/papers/v23/21-1342.html.
+T. Klein, L. Miklautz, K. Sidak, C. Plant, and S. Tschiatschek. Plasticity loss in deep
+reinforcement learning: A survey.arXiv preprint arXiv:2411.04832, 2024.
+A. Kumar, R. Agarwal, D. Ghosh, and S. Levine. Implicit under-parameterization inhibits
+data-efficient deep reinforcement learning. InInternational Conference on Learning Rep-
+resentations, 2021. URLhttps://openreview.net/forum?id=O9bnihsFfXU.
+A. Kumar, R. Agarwal, T. Ma, A. Courville, G. Tucker, and S. Levine. DR3: Value-
+based deep reinforcement learning requires explicit regularization. InInternational Con-
+ference on Learning Representations, 2022. URLhttps://openreview.net/forum?id=
+POvMvLi91f.
+S. Kumar, H. Marklund, and B. Van Roy. Maintaining plasticity in continual learning via
+regenerative regularization.arXiv preprint arXiv:2308.11958, 2023.
+H. Lee, D. Hwang, D. Kim, H. Kim, J. J. Tai, K. Subramanian, P. R. Wurman, J. Choo,
+P. Stone, and T. Seno. Simba: Simplicity bias for scaling up parameters in deep rein-
+forcement learning.arXiv preprint arXiv:2410.09754, 2024.
+H. Lee, Y. Lee, T. Seno, D. Kim, P. Stone, and J. Choo. Hyperspherical normalization for
+scalable deep reinforcement learning.arXiv preprint arXiv:2502.15280, 2025.
+A. Lewandowski, D. Schuurmans, and M. C. Machado. Plastic learning with deep fourier
+features. InThe Thirteenth International Conference on Learning Representations, 2025.
+URLhttps://openreview.net/forum?id=NIkfix2eDQ.
+C. Lyle and R. Pascanu. Switching between tasks can cause ai to lose the ability to learn,
+2024.
+C. Lyle, M. Rowland, and W. Dabney. Understanding and preventing capacity loss in
+reinforcement learning.arXiv preprint arXiv:2204.09560, 2022.
+C. Lyle, Z. Zheng, E. Nikishin, B. A. Pires, R. Pascanu, and W. Dabney. Understanding
+plasticity in neural networks. InInternational Conference on Machine Learning, pages
+23190–23211. PMLR, 2023.
+C. Lyle, Z. Zheng, K. Khetarpal, J. Martens, H. P. van Hasselt, R. Pascanu, and W. Dabney.
+Normalization and effective learning rates in reinforcement learning.Advances in Neural
+Information Processing Systems, 37:106440–106473, 2024a.
+19
+===== [PAGE 20] =====
+Yuan, W ang, Ma, Sun, Li, Jin, W ang, Yang, Zeng, Tao, and Chen
+C. Lyle, Z. Zheng, K. Khetarpal, H. van Hasselt, R. Pascanu, J. Martens, and W. Dab-
+ney. Disentangling the causes of plasticity loss in neural networks.arXiv preprint
+arXiv:2402.18762, 2024b.
+G. Ma, L. Li, S. Zhang, Z. Liu, Z. Wang, Y. Chen, L. Shen, X. Wang, and D. Tao. Revisiting
+plasticity in visual reinforcement learning: Data, modules and training stages. InThe
+Twelfth International Conference on Learning Representations, 2024. URLhttps://
+openreview.net/forum?id=0aR1s9YxoL.
+A. Muppidi, Z. Zhang, and H. Yang. Fast trac: A parameter-free optimizer for lifelong
+reinforcement learning.Advances in Neural Information Processing Systems, 37:51169–
+51195, 2024.
+M. Nauman, M. Ostaszewski, K. Jankowski, P. Mi lo´ s, and M. Cygan. Bigger, regularized,
+optimistic: scaling for compute and sample-efficient continuous control. InAdvances in
+Neural Information Processing Systems, 2024.
+E. Nikishin.Parameter, experience, and compute efficient deep reinforcement learning. PhD
+thesis, Universit´ e de Montr´ eal, 2024.
+E. Nikishin, M. Schwarzer, P. D’Oro, P.-L. Bacon, and A. Courville. The primacy bias
+in deep reinforcement learning. InInternational conference on machine learning, pages
+16828–16847. PMLR, 2022.
+E. Nikishin, J. Oh, G. Ostrovski, C. Lyle, R. Pascanu, W. Dabney, and A. Barreto. Deep re-
+inforcement learning with plasticity injection.Advances in Neural Information Processing
+Systems, 36:37142–37159, 2023.
+S. Park, I. Han, S. Oh, and K.-J. Kim. Activation by interval-wise dropout: A simple way
+to prevent neural networks from plasticity loss.arXiv preprint arXiv:2502.01342, 2025.
+O. Roy and M. Vetterli. The effective rank: A measure of effective dimensionality. In2007
+15th European signal processing conference, pages 606–610. IEEE, 2007.
+J. Schulman, P. Moritz, S. Levine, M. Jordan, and P. Abbeel. High-dimensional contin-
+uous control using generalized advantage estimation.Proceedings of the International
+Conference on Learning Representations, 2015.
+J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov. Proximal policy opti-
+mization algorithms.arXiv preprint arXiv:1707.06347, 2017.
+D. Silver and R. S. Sutton. Welcome to the era of experience, 2025. URL
+https://storage.googleapis.com/deepmind-media/Era-of-Experience%20/The%
+20Era%20of%20Experience%20Paper.pdf. Preprint of a chapter to appear in the book
+”Designing an Intelligence”, published by MIT Press.
+G. Sokar, R. Agarwal, P. S. Castro, and U. Evci. The dormant neuron phenomenon in
+deep reinforcement learning. InInternational Conference on Machine Learning, pages
+32145–32168. PMLR, 2023.
+20
+===== [PAGE 21] =====
+Plasticine: Accelerating Research in Plasticity-Motivated Deep RL
+H. Tang, J. Obando-Ceron, P. S. Castro, A. Courville, and G. Berseth. Mitigating plastic-
+ity loss in continual reinforcement learning by reducing churn. InForty-second Interna-
+tional Conference on Machine Learning, 2025. URLhttps://openreview.net/forum?
+id=EkoFXfSauv.
+D. Tarasov, A. Nikulin, D. Akimov, V. Kurenkov, and S. Kolesnikov. Corl: Research-
+oriented deep offline reinforcement learning library.Advances in Neural Information
+Processing Systems, 36:30997–31020, 2023.
+Y. Tassa, Y. Doron, A. Muldal, T. Erez, Y. Li, D. d. L. Casas, D. Budden, A. Abdolmaleki,
+J. Merel, A. Lefrancq, et al. Deepmind control suite.arXiv preprint arXiv:1801.00690,
+2018.
+Z. Zhang, D. Bombara, and H. Yang. Discounted adaptive online learning: Towards better
+regularization. InInternational Conference on Machine Learning, pages 58631–58661.
+PMLR, 2024.
+21
