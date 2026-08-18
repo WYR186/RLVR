@@ -1,0 +1,17 @@
+{
+ "task": "Math",
+ "algo": "grpo",
+ "peft": "lora",
+ "reward_mode": "exact_plus_boxed_format_0.1",
+ "requested_updates": 100,
+ "actual_updates": 100,
+ "completion_status": "complete",
+ "learning_rate": 2e-05,
+ "seed": 42,
+ "checkpoint_steps": [
+  0,
+  50,
+  100
+ ],
+ "wall_seconds": 19783.488985538483
+}
