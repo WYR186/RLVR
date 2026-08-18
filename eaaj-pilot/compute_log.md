@@ -174,3 +174,16 @@ Reached Gate C0 for the first time. Results in
 
 **Compute units consumed: _____ (fill in by hand.)** Four A100 sessions today;
 this was the only one to produce measurements.
+
+### 2026-08-16 (later) — 7B MVP Phase 0 COMPLETE
+
+| Phase | Hardware | Wall time | Notes |
+|-------|----------|-----------|-------|
+| Phase 0 full pass | Colab **A100-SXM4-80GB** High-RAM | ~45 min end to end | **Every gate PASSED.** GATE 0a pass; Gate C0 peak 40.14/79.25 GiB (49.3% headroom, ~5 min); GATE 0b 12/16 + 4/16 exact on Stage A, 5/8 + 5/8 on Stage B (~17 min); smoke 2/2 both stages (~8 min). No clipping stop. Full detail: `experiment 2/FINDING_7B_PHASE0_COMPLETE.md`. |
+
+**Compute units consumed: _____ (fill in by hand.)**
+
+Note on the day's total draw: six earlier A100 sessions were lost to Colab
+reclaiming the runtime for inactivity before this one completed. Those sessions
+produced the Gate C0 number and the GATE 0a / splits bug findings, but each also
+drew units. The completed run above is the only one that reached the end.
