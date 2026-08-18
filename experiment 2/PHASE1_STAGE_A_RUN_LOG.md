@@ -246,3 +246,62 @@ Note on where these land in the repo: `.gitignore` excludes `*.safetensors` and
 `eaaj-pilot/outputs/`. That split is exactly right here — the scientific record
 is committed, the ~485 MB of adapter weights stay local and are referenced by
 path.
+
+---
+
+## 8. RESULT — Stage A completed 100/100
+
+```json
+{"task": "Math", "algo": "grpo", "peft": "lora",
+ "reward_mode": "exact_plus_boxed_format_0.1",
+ "requested_updates": 100, "actual_updates": 100,
+ "completion_status": "complete",
+ "learning_rate": 2e-05, "seed": 42,
+ "checkpoint_steps": [0, 50, 100],
+ "wall_seconds": 19783.5}
+```
+
+**This is the first completed Stage A in exp2 on either track.** 5 h 29 m on a
+Colab A100-80GB. `completion_status: complete` means `fixed_budget_completion`
+accepted the run — the fixed-budget contract the whole design rests on is
+satisfied, not approximated.
+
+### The adapter actually moved
+
+`update_sentinel.jsonl` — the tripwire added after the WIN4070 v1 run turned out
+to be a numerical no-op:
+
+| step | rel_change_window | rel_change_since_start | updates_effective |
+|---:|---:|---:|:--|
+| 25 | 0.01380 | 0.01380 | true |
+| 50 | 0.00843 | 0.01757 | true |
+| 75 | 0.00505 | 0.01892 | true |
+| 100 | 0.00174 | 0.01916 | true |
+
+Total adapter movement 1.92%, with per-window change shrinking monotonically as
+the LR decays — a converging run, not a stalled or a diverging one.
+
+### Provenance is verifiable, not asserted
+
+The config recovered from the runtime hashes to **`e33527592dd9`** and is
+byte-identical to `experiment 2/exp2_colab_config_mvp_instruct.json`. The recipe
+that ran is provably the registered one.
+
+### Final-stretch numbers
+
+| step | 96 | 97 | 98 | 99 | 100 |
+|---|---:|---:|---:|---:|---:|
+| clip | .141 | .047 | .031 | .109 | **.031** |
+| mean_len | 853 | 966 | 907 | 914 | **818** |
+| reward | .305 | .252 | .253 | .167 | **.394** |
+
+The clipping gate was never in danger after the middle of the run: the longest
+consecutive-breach streak over 100 updates was **3**, against a patience of 5,
+and it broke on its own both times it reached 3.
+
+### Artifacts
+
+| file | where |
+|---|---|
+| dashboard.jsonl (101 rows), summary.json, update_sentinel.jsonl, frozen splits, config, run log | committed to git under `eaaj-pilot/outputs/exp2_colab_guru_math7b_instruct_group8_e33527592dd9/stage_a/` |
+| ckpt-0 / ckpt-50 / ckpt-100 adapters (~154 MB each) | same directory, **local only** — `.gitignore` excludes `*.safetensors` |
