@@ -187,3 +187,11 @@ Note on the day's total draw: six earlier A100 sessions were lost to Colab
 reclaiming the runtime for inactivity before this one completed. Those sessions
 produced the Gate C0 number and the GATE 0a / splits bug findings, but each also
 drew units. The completed run above is the only one that reached the end.
+
+## 2026-08-17 — exp2 7B Phase 1 (Stage A, Math GRPO) STARTED
+- GPU: Colab A100-SXM4-80GB High-RAM (same warm runtime that passed Phase 0 on 08-16)
+- Phase: Phase 1 Stage A, 100 updates, group 8, LoRA r=16, config hash fc243e587296
+- Launched ~23:21 local as a detached subprocess (pid 21875); expected ~3.5 h
+- Units before/after: TO FILL BY HAND (not readable from the notebook)
+- Note: reused the Phase-0 runtime deliberately — a fresh one risks drawing the
+  40 GB A100 SKU, which Gate C0 (peak 40.14 GiB) says will OOM.
