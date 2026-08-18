@@ -87,3 +87,39 @@ walk(document, 0);
 
 This is how the runtime was reconnected without operator input, and it is the
 same technique that will drive the Drive-mount consent dialog.
+
+---
+
+## 6. Restart #2 (2026-08-18 ~08:45) and what changed
+
+Fresh VM, verified **A100-SXM4-80GB / 80.0 GiB** before spending anything. GPU
+gate, blob unpack, pinned install and the numpy single-pass assert all passed.
+Relaunched with the identical config, hash re-asserted as `e33527592dd9`.
+
+**Two things are different, and neither touches the recipe:**
+
+1. **Polling interval 29 min -> 15 min.** The evidence for the mechanism is
+   specific: six checks at ~29-minute spacing all survived, and the run died
+   during the one gap that stretched past ~40 minutes (a question to the
+   operator was pending, so no cell executed). Executing a cell is the cheapest
+   thing that registers as activity, so the monitor cell is now the keep-alive
+   as well as the report.
+
+2. **Backup moved out of the launch path.** `drive.mount()` blocks on an OAuth
+   popup, and Chrome blocked that popup — the same popup-block that broke the
+   PAT/GitHub route on 2026-08-16. Rather than let a 5.6 h launch depend on it,
+   `drive_backup_dir` stays `None` and the *monitor* cell copies the run
+   directory to Drive whenever Drive is mounted. **Turning Drive on later
+   therefore requires no restart** — the next poll simply starts backing up.
+
+   This is strictly better than the original design even if the popup had
+   worked: `_make_drive_sync_callback` only fires every `eval_every=25` steps,
+   whereas the monitor copies every 15 minutes (~4-5 updates).
+
+### Still outstanding, and it needs the operator
+
+The OAuth popup must be unblocked once for `colab.research.google.com`. Until
+then the run is unprotected: a reclaim costs everything again. The auth URL
+itself was deliberately not extracted — it carries session credentials, and
+routing around the block that hides them is not an appropriate thing to
+automate.
