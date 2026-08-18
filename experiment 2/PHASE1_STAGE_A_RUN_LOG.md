@@ -129,3 +129,16 @@ have to leave the runtime either way. `drive_backup_dir=None` was chosen because
 mounting Drive is an OAuth grant that is the operator's call; that decision now
 needs revisiting, and it is blocking on one click, not on any technical
 obstacle.
+
+## 6. Attempt 2 (after the reclaim) — periodic checks
+
+Fresh 80 GB A100, identical config `e33527592dd9`, polling every 15 min.
+
+| updates | clip (last few) | mean_len | reward | s/update | Drive |
+|---:|---|---:|---:|---:|---|
+| 4 | .016 .031 .047 .156 | 689 – 968 | .13 – .41 | 199 | NOT MOUNTED |
+
+Reproducibility spot-check against attempt 1: step-3 `mean_len` is 953.06 here
+against 953.2 there, and step-4 clip 0.156 against 0.156. The seed is doing its
+job; the residual difference is ordinary sampling/CUDA nondeterminism, not a
+different recipe.
