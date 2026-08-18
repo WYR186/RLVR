@@ -57,6 +57,9 @@ Drive, the better protection is available immediately and should be taken.
 | 23:40 | 0:19 | **STOPPED at update 7/100.** `LocalSafetyCallback`: five consecutive updates >10% completion clipping (steps 3-7 = 0.188, 0.125, 0.156, 0.141, 0.156). `fixed_budget_completion` correctly refused the partial run: `RuntimeError: incomplete: requested 100, got 7`. |
 | 23:55 | — | Launched the generation-only completion-length measurement the v10 draft prescribes (32 prompts x 8 gens, cap 3072). Trains nothing; changes no registered variable. |
 
+| 00:35 | — | Measurement #1 done. **No candidate cap reaches the v10 rule's 5% target** (1536: 8.98%, 2048: 6.25%, 2560: 5.08%). Distribution is bimodal — p50 532, p95 2805, and 4.69% still running at 3072. Raising the cap is not the fix. See [`FINDING_COMPLETION_LENGTH_MEASUREMENT_7B.md`](FINDING_COMPLETION_LENGTH_MEASUREMENT_7B.md). |
+| 00:40 | — | Launched measurement #2 on **Qwen2.5-7B-Instruct**, identical protocol, to quantify the base-vs-Instruct question rather than decide it. |
+
 **Outcome: this run produced ckpt-0 only.** Full analysis and the correction it
 forces on `FINDING_7B_PHASE0_COMPLETE.md` §5 are in
 [`FINDING_7B_STAGE_A_CLIPPING_STOP.md`](FINDING_7B_STAGE_A_CLIPPING_STOP.md).
