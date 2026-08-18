@@ -60,7 +60,10 @@ Drive, the better protection is available immediately and should be taken.
 | 00:35 | — | Measurement #1 done. **No candidate cap reaches the v10 rule's 5% target** (1536: 8.98%, 2048: 6.25%, 2560: 5.08%). Distribution is bimodal — p50 532, p95 2805, and 4.69% still running at 3072. Raising the cap is not the fix. See [`FINDING_COMPLETION_LENGTH_MEASUREMENT_7B.md`](FINDING_COMPLETION_LENGTH_MEASUREMENT_7B.md). |
 | 00:40 | — | Launched measurement #2 on **Qwen2.5-7B-Instruct**, identical protocol, to quantify the base-vs-Instruct question rather than decide it. |
 
-**Outcome: this run produced ckpt-0 only.** Full analysis and the correction it
+| 01:05 | — | Measurement #2 (Instruct) done: p95 **1338** vs base 2805; 1536 -> **2.34%** truncation. The v10 sizing rule now returns a qualifying candidate. |
+| 01:20 | — | **RESTARTED** as `exp2_colab_guru_math7b_instruct_group8_e33527592dd9` — Qwen2.5-7B-Instruct, cap 1536, every gate unchanged. Config hash asserted in-runtime. Splits re-frozen to `exp2_colab_splits_instruct.json` (ids change with the chat template). Registration: [`EXPERIMENT_2_COLAB_7B_INSTRUCT_AMENDMENT.md`](EXPERIMENT_2_COLAB_7B_INSTRUCT_AMENDMENT.md). |
+
+**Outcome of the BASE run: ckpt-0 only.** Full analysis and the correction it
 forces on `FINDING_7B_PHASE0_COMPLETE.md` §5 are in
 [`FINDING_7B_STAGE_A_CLIPPING_STOP.md`](FINDING_7B_STAGE_A_CLIPPING_STOP.md).
 

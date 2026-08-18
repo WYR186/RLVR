@@ -195,3 +195,11 @@ drew units. The completed run above is the only one that reached the end.
 - Units before/after: TO FILL BY HAND (not readable from the notebook)
 - Note: reused the Phase-0 runtime deliberately — a fresh one risks drawing the
   40 GB A100 SKU, which Gate C0 (peak 40.14 GiB) says will OOM.
+
+## 2026-08-18 — exp2 7B Phase 1, base run STOPPED + Instruct restart
+- GPU: Colab A100-SXM4-80GB High-RAM (same session, continuous since 08-17)
+- Base Stage A: 7/100 updates in 19m07s, stopped on the clipping gate (162.7 s/update)
+- Two generation-only measurements, ~35 min each: base and Instruct completion-length
+  distributions at cap 3072, 256 completions each
+- Restarted Stage A on Qwen2.5-7B-Instruct, cap 1536, config hash e33527592dd9
+- Units before/after: TO FILL BY HAND
