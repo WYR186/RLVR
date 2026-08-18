@@ -54,8 +54,20 @@ Drive, the better protection is available immediately and should be taken.
 |---|---|---|
 | 23:21 | 0:00 | launched, pid 21875. `VRAM free 76.4 / 79.3 GiB` after freeing the Phase-0 model |
 | 23:24 | 0:03 | `ckpt-0` written (identity adapter, the stage-2-alone baseline). 54257 stage-A train rows loaded. Base weights loading. |
+| 23:40 | 0:19 | **STOPPED at update 7/100.** `LocalSafetyCallback`: five consecutive updates >10% completion clipping (steps 3-7 = 0.188, 0.125, 0.156, 0.141, 0.156). `fixed_budget_completion` correctly refused the partial run: `RuntimeError: incomplete: requested 100, got 7`. |
+| 23:55 | — | Launched the generation-only completion-length measurement the v10 draft prescribes (32 prompts x 8 gens, cap 3072). Trains nothing; changes no registered variable. |
 
-*(appended at each ~30 min check)*
+**Outcome: this run produced ckpt-0 only.** Full analysis and the correction it
+forces on `FINDING_7B_PHASE0_COMPLETE.md` §5 are in
+[`FINDING_7B_STAGE_A_CLIPPING_STOP.md`](FINDING_7B_STAGE_A_CLIPPING_STOP.md).
+
+Two numbers to carry forward regardless of what happens next:
+- **162.7 s/update**, so 100 updates is **~4.5 h**, not the ~3.5 h Phase 0's
+  2-update smoke implied. The MVP schedule needs re-planning around 4.5 h.
+- The 7B completion-length distribution is **the same as 0.5B's** (mean 615-717
+  vs 719-753). Model scale did not help; the "7B clears the clipping gate"
+  reading of Phase 0 was an artifact of a 2-update smoke being unable to fail a
+  five-update streak gate.
 
 ## 4. What to watch for
 

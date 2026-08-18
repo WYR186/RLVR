@@ -88,9 +88,14 @@ same `max_completion_length=1280`. **The 7B run cleared it.** Longer, better
 completions from the larger model apparently finish inside the 1280 cap often
 enough to stay under the clipping gate.
 
-This weakens the urgency of the v10 amendment: the truncation problem looks
-model-scale-dependent, not a property of the recipe. v10 remains the right fix
-for the 0.5B track, but it is not on the critical path for the 7B deliverable.
+**CORRECTED 2026-08-18 — this inference was wrong.** A 2-update smoke cannot
+fail a gate that requires a *five*-update streak, so clearing it was never
+evidence about the streak. Given 7 real updates, Stage A stopped on exactly this
+gate with clip ratios 0.078-0.188 and mean completion lengths 615-717 - i.e.
+statistically the same distribution as the 0.5B track. Truncation is a property
+of the recipe and the Math population, **not** of model scale, and v10 is on the
+critical path for the 7B deliverable too. See
+[`FINDING_7B_STAGE_A_CLIPPING_STOP.md`](FINDING_7B_STAGE_A_CLIPPING_STOP.md).
 
 ## 6. Measured wall times (A100 80 GB)
 
