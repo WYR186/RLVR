@@ -109,3 +109,64 @@ row id changes and the frozen splits will not match**. Switching variant is
 therefore a re-freeze, not a drop-in, at the splits layer. The measurement below
 sidesteps this by re-deriving the population from the same filter rule rather
 than from frozen ids.
+
+---
+
+## 6. Follow-up (2026-08-18, ~30 min into the Instruct run) — the init-policy measurement under-predicts in-training clipping
+
+The Instruct run's first 9 updates at cap 1536:
+
+| step | clip | mean_len | reward | reward_std |
+|---:|---:|---:|---:|---:|
+| 2 | 0.000 | 708.6 | 0.3031 | 0.4055 |
+| 3 | 0.0625 | 953.2 | 0.3438 | 0.4407 |
+| 4 | 0.1563 | 953.8 | 0.1344 | 0.2184 |
+| 5 | 0.0781 | 918.8 | 0.2641 | 0.3848 |
+| 6 | 0.2656 | 1037.7 | 0.1203 | 0.2234 |
+| 7 | 0.000 | 731.7 | 0.4438 | 0.4787 |
+| 8 | 0.000 | 852.2 | 0.2875 | 0.3934 |
+| 9 | 0.1250 | 891.6 | 0.1656 | 0.2762 |
+
+**The prediction was wrong in magnitude.** §1 measured 2.34% truncation at 1536
+on the policy at init; the run is oscillating 0–26.6%, averaging ~11%. Compare
+how the two models' predictions held up:
+
+| | predicted (init policy) | observed (in training) | ratio |
+|---|---:|---:|---:|
+| base @1280 | 11.33% | ~13% | 1.15x |
+| instruct @1536 | 2.34% | ~11% | **4.7x** |
+
+So the instrument is well calibrated for the base model and badly calibrated for
+Instruct. The mechanism is visible in the table: mean completion length is
+already 953–1038 by step 4–6, against 793.8 at init. Instruct drifts longer,
+much faster than base did (+15% over 7 updates).
+
+**This is the caveat in §5 of `FINDING_7B_STAGE_A_CLIPPING_STOP.md` coming true,
+larger than anticipated.** The 4x margin between 2.34% and the 10% gate was
+supposed to absorb drift; roughly all of it has been spent within 9 updates.
+
+### Why the run is nevertheless still alive, and not obviously wrong
+
+The gate needs **five consecutive** updates above 10%. The observed sequence
+resets constantly (0.0 at steps 2, 7, 8), so no streak builds. That is not luck
+that can be relied on — if mean length keeps climbing, the resets stop.
+
+More importantly, the reward tells a different story from the base run:
+
+| | reward (mean over first updates) | reward_std |
+|---|---:|---:|
+| base, steps 1–7 | ~0.10 | ~0.22 |
+| instruct, steps 2–9 | **~0.26** | **~0.35** |
+
+Reward is roughly **2.6x** the base run's, with correspondingly larger spread.
+Read together with the length growth, the most economical reading is that
+Instruct is learning to write longer, more complete solutions that earn the
+exact-match reward more often — i.e. the length drift is a *symptom of learning*,
+not of degeneration. That is a claim this run can test, not one to assume.
+
+### What is NOT being done about it
+
+Nothing. The cap is not being raised again, the gate is not being touched, and
+no third variable is moving. If the streak builds and the run stops, that is the
+registered protection working and it is the reportable outcome — the alternative
+is chasing a moving target across an unbounded number of untracked changes.
