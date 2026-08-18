@@ -305,3 +305,32 @@ and it broke on its own both times it reached 3.
 |---|---|
 | dashboard.jsonl (101 rows), summary.json, update_sentinel.jsonl, frozen splits, config, run log | committed to git under `eaaj-pilot/outputs/exp2_colab_guru_math7b_instruct_group8_e33527592dd9/stage_a/` |
 | ckpt-0 / ckpt-50 / ckpt-100 adapters (~154 MB each) | same directory, **local only** — `.gitignore` excludes `*.safetensors` |
+
+---
+
+## 9. Phase 2 (T_t transfer + Q metrics) — launched 2026-08-18
+
+Run as a subprocess from the same warm runtime, following
+`colab/02_transfer_T_and_qmetrics.ipynb` cell for cell with only the
+config/splits/run-dir names changed to the Instruct fork (notebook 02 itself
+cannot run — its first cell clones via the broken PAT).
+
+Ordered ahead of Stage B deliberately: the config's own `mvp_deliverable` calls
+T_t **"NOT cuttable — Delta-R is unreadable without it"**, it is far cheaper than
+three Stage-B runs, and it is this owner's own assignment (Person 4).
+
+### Measured cost, useful for scheduling
+
+`run_transfer_T` reloads the model per checkpoint and scores 300 CodeIO eval
+questions greedily at batch 8. Observed **~25 min per checkpoint**, so ~75 min
+for the three-point T_t curve.
+
+GPU utilisation during this phase sits at **39%**, not ~100%: greedy generation
+at batch 8 is latency-bound, not throughput-bound. That is worth knowing before
+anyone budgets eval time by assuming the card is saturated — the eval is not
+slow because the model is big, it is slow because the batch is small.
+
+**Diagnostic note.** `guru_greedy_accuracy` prints nothing per batch, so a
+15-minute silence in the log is not evidence of a hang. The monitor now reports
+process CPU-time against wall-time (49:47 CPU in 49:02 elapsed, 101% — busy) and
+GPU utilisation, which distinguishes the two without guessing.
