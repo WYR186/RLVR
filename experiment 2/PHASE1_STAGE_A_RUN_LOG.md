@@ -103,6 +103,7 @@ Run `exp2_colab_guru_math7b_instruct_group8_e33527592dd9`, cap 1536, gates uncha
 | 31 | 0.016 – 0.141 | 1 | 774 – 1032 | ~0.24 | 203 |
 | 40 | 0.016 – 0.125 | 1 | 733 – 982 | ~0.20 | 207 |
 | 49 | 0.016 – 0.156 | 1 | 658 – 1008 | ~0.23 | 203 |
+| 52 | 0.000 – 0.156 | 1 | 633 – 981 | ~0.28 | 201 |
 
 Steady. Clipping stays mostly under the 10% gate and the consecutive-breach
 streak has never exceeded 1 against a patience of 5. Mean completion length is
@@ -110,3 +111,21 @@ oscillating around ~875 with no upward trend since the step-6 peak of 1038.
 Reward holds ~0.24–0.26, about 2.5x the base run's ~0.10.
 
 At ~203 s/update, 100 updates is **~5.6 h**. `ckpt-50` is the next artifact.
+
+### ckpt-50 landed (2026-08-18, ~04:45)
+
+`checkpoints: ['ckpt-0', 'ckpt-50']` — **the first mid-training checkpoint any
+exp2 track has produced.** Sizes on the ephemeral disk:
+
+```
+ckpt-0    155 MB
+ckpt-50   165 MB
+run dir   320 MB   (~485 MB once ckpt-100 lands)
+```
+
+**These exist only on Colab's ephemeral disk.** This is not a "survive until the
+run finishes" problem — Phases 2/3 need these adapters *after* the run, so they
+have to leave the runtime either way. `drive_backup_dir=None` was chosen because
+mounting Drive is an OAuth grant that is the operator's call; that decision now
+needs revisiting, and it is blocking on one click, not on any technical
+obstacle.
