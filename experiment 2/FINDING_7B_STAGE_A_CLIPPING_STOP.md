@@ -52,6 +52,35 @@ evidence that a streak-based gate will pass.
 
 §5 of that document has been corrected in place.
 
+## 2b. The reward signal at 7B is healthy — truncation is the *only* binding problem
+
+The step-7 log carries a number that matters as much as the clip ratio:
+
+```
+frac_reward_zero_std : 0
+reward_std           : 0.3061
+entropy              : 0.1779
+completions/mean_terminated_length : 603.5
+completions/max_terminated_length  : 1274
+```
+
+`frac_reward_zero_std = 0` means **not one prompt group had zero reward
+variance**. The sparse-reward collapse that v8 hit and that v9's group 3->8 fix
+was built to defeat is simply gone at 7B with group 8. Combined with GATE 0b's
+5/8 exact-variable Stage-B groups, this says the reward side of the recipe is
+working.
+
+So the remaining obstacle is *only* completion truncation. That is a much
+better position to be in than the 0.5B track ever reached, and it is why the
+v10 direction is worth spending an A100 on rather than reconsidering the reward
+design.
+
+`max_terminated_length = 1274` is the other tell: among completions that did
+finish, the longest finished **2 tokens under the cap**. The terminated
+distribution is pressed right up against 1280 — it has not run out of mass, it
+has run out of room. That is the signature of a cap that is too low, as opposed
+to a model that rambles without ever converging.
+
 ## 3. Consequence for the team: v10 is now on the critical path for BOTH tracks
 
 `EXPERIMENT_2_4070_INSTRUCT_V10_AMENDMENT_DRAFT.md` was written as a 0.5B-track
