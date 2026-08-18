@@ -147,6 +147,8 @@ Fresh 80 GB A100, identical config `e33527592dd9`, polling every 15 min.
 | 42 | .094 .078 .031 .047 .063 .188 | 699 – 872 | .12 – .33 | 201 | NOT MOUNTED |
 | 47 | .188 0 .094 .094 .047 .016 | 650 – 1004 | .13 – .33 | 196 | NOT MOUNTED |
 | 51 **ckpt-50** | .047 .016 0 .063 .188 .063 | 708 – 997 | .22 – .33 | 197 | NOT MOUNTED |
+| 56 | .063 .016 .141 0 .156 .078 | 684 – 977 | .21 – .40 | 199 | NOT MOUNTED |
+| 61 | .078 0 0 .078 .156 0 | 668 – 1008 | .17 – .43 | 190 | NOT MOUNTED |
 
 Reproducibility spot-check against attempt 1: step-3 `mean_len` is 953.06 here
 against 953.2 there, and step-4 clip 0.156 against 0.156. The seed is doing its
@@ -185,3 +187,6 @@ the Instruct arm is not just surviving the clipping gate, it is earning more
 reward as it goes.
 
 Two updates from here the run passes update 53, where attempt 1 was lost.
+
+**Passed it at 18:55.** Everything from update 54 onward is ground attempt 1
+never reached.
