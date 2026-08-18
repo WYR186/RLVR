@@ -149,6 +149,8 @@ Fresh 80 GB A100, identical config `e33527592dd9`, polling every 15 min.
 | 51 **ckpt-50** | .047 .016 0 .063 .188 .063 | 708 – 997 | .22 – .33 | 197 | NOT MOUNTED |
 | 56 | .063 .016 .141 0 .156 .078 | 684 – 977 | .21 – .40 | 199 | NOT MOUNTED |
 | 61 | .078 0 0 .078 .156 0 | 668 – 1008 | .17 – .43 | 190 | NOT MOUNTED |
+| 66 | 0 .063 .094 .078 .016 0 | 643 – 944 | .11 – .43 | 199 | NOT MOUNTED |
+| 70 | .016 0 .016 .063 0 .125 | 730 – 866 | .18 – .27 | 197 | NOT MOUNTED |
 
 Reproducibility spot-check against attempt 1: step-3 `mean_len` is 953.06 here
 against 953.2 there, and step-4 clip 0.156 against 0.156. The seed is doing its
@@ -190,3 +192,12 @@ Two updates from here the run passes update 53, where attempt 1 was lost.
 
 **Passed it at 18:55.** Everything from update 54 onward is ground attempt 1
 never reached.
+
+### 70/100 — the length distribution is narrowing
+
+Through the middle of the run `mean_len` swung 650-1040; over updates 65-70 the
+band is 730-866 with no 1000+ excursions, while the learning rate has decayed to
+6.8e-6. Clipping follows: one breach in six updates. The policy is settling
+rather than drifting, which is the opposite of the failure mode the base run
+showed and is the strongest sign yet that the cap at 1536 is genuinely adequate
+for this variant rather than marginally so.
