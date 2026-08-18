@@ -137,8 +137,12 @@ Fresh 80 GB A100, identical config `e33527592dd9`, polling every 15 min.
 | updates | clip (last few) | mean_len | reward | s/update | Drive |
 |---:|---|---:|---:|---:|---|
 | 4 | .016 .031 .047 .156 | 689 – 968 | .13 – .41 | 199 | NOT MOUNTED |
+| 9 | .156 .047 .188 0 0 .047 | 726 – 1034 | .16 – .52 | 201 | NOT MOUNTED |
 
 Reproducibility spot-check against attempt 1: step-3 `mean_len` is 953.06 here
 against 953.2 there, and step-4 clip 0.156 against 0.156. The seed is doing its
 job; the residual difference is ordinary sampling/CUDA nondeterminism, not a
-different recipe.
+different recipe. At 9 updates the match is stronger still: the mean-length
+transient peaks at step 6 in both runs (1034 here, 1038 there) and collapses at
+step 7 in both (726 vs 731). The step-6 length spike is a **reproducible feature
+of this recipe**, not a one-off.
