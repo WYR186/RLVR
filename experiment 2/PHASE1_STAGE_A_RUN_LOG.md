@@ -155,6 +155,8 @@ Fresh 80 GB A100, identical config `e33527592dd9`, polling every 15 min.
 | 80 | .016 0 .078 .016 .094 .203 | 717 – 1000 | .16 – .27 | 196 | NOT MOUNTED |
 | 85 | .203 .016 .063 .047 .063 .016 | 717 – 1000 | .11 – .27 | 204 | NOT MOUNTED |
 | 90 | .016 .047 .063 0 0 .047 | 710 – 970 | .21 – .33 | 213 | NOT MOUNTED |
+| 95 | .047 0 **.250** .016 0 .141 | 663 – 1052 | .21 – .33 | 186 | NOT MOUNTED |
+| 97 | .250 .016 0 .141 .141 .047 | 807 – 1052 | .21 – .30 | 203 | NOT MOUNTED |
 
 Reproducibility spot-check against attempt 1: step-3 `mean_len` is 953.06 here
 against 953.2 there, and step-4 clip 0.156 against 0.156. The seed is doing its
@@ -216,3 +218,31 @@ to the reward.
 
 For contrast, the base run's first 7 updates sat at reward ~0.10 and were
 already breaching the clipping gate every step.
+
+## 7. Artifact extraction — local download instead of Drive
+
+The Drive OAuth popup could not be unblocked, so on 2026-08-18 the operator
+**explicitly authorised downloading the artifacts to their machine instead**.
+
+Export runs in four parts, one per cell execution:
+
+| part | contents | size |
+|---|---|---|
+| `01_meta` | dashboard.jsonl, summary.json, update_sentinel.jsonl, both completion-length measurements, the frozen splits, the config, the run log | < 5 MB |
+| `02_ckpt-0` | identity adapter (stage-2-alone baseline) | ~155 MB |
+| `03_ckpt-50` | mid-training adapter | ~165 MB |
+| `04_ckpt-100` | final adapter | ~165 MB |
+
+**Metadata goes first, deliberately.** `dashboard.jsonl` and `summary.json` are a
+few hundred KB and cannot be regenerated without another 5.5 h of A100; the
+adapters are large but reproducible in principle from the same seed. If the
+transfer is going to fail partway, it must fail on the replaceable half.
+
+One part per run also keeps Chrome from seeing a burst of automatic downloads,
+which is its own block.
+
+Note on where these land in the repo: `.gitignore` excludes `*.safetensors` and
+`*.bin` while keeping metrics, dashboards and configs under
+`eaaj-pilot/outputs/`. That split is exactly right here — the scientific record
+is committed, the ~485 MB of adapter weights stay local and are referenced by
+path.
