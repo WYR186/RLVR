@@ -170,3 +170,29 @@ Nothing. The cap is not being raised again, the gate is not being touched, and
 no third variable is moving. If the streak builds and the run stops, that is the
 registered protection working and it is the reportable outcome — the alternative
 is chasing a moving target across an unbounded number of untracked changes.
+
+### Update at 22/100 — the drift did **not** continue; it settled
+
+| step | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| clip | .078 | .094 | .078 | .047 | **.109** | .078 | **.172** | .094 |
+| mean_len | 897 | 808 | 867 | 746 | 812 | 936 | 875 | 849 |
+| reward | .186 | .450 | .186 | .330 | .230 | .186 | .177 | .252 |
+
+The escalation feared above has not happened. Mean completion length peaked at
+**1038 around step 6** and has since settled to roughly **850**, below its own
+early peak. Clipping now sits mostly under the 10% gate (6 of these 8 updates),
+with a maximum consecutive-breach streak of **1** against a patience of 5.
+
+So the honest revision of the previous section: the init-policy measurement did
+under-predict the *early* clipping, but it under-predicted a **transient**, not a
+trend. The 4x margin was spent temporarily and then partly recovered. The run is
+in a materially safer position at update 22 than it was at update 9, and the
+"if mean length keeps climbing the resets stop" scenario is not what happened.
+
+Reward remains around **0.25**, roughly 2.5x the base run's ~0.10, and
+`completions/max_terminated_length` is 1390 against the 1536 cap — the
+terminated distribution is no longer pressed against the ceiling the way the
+base run's 1274-against-1280 was.
+
+Throughput 198.5 s/update, so 100 updates is ~5.5 h.
