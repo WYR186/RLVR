@@ -11,6 +11,17 @@ claim attributed to that run should carry that caveat until its artifacts are
 available. The 7B numbers are recomputed from artifacts (see
 `ANALYSIS_REPORT_7B_MVP.md`).
 
+**Prior-work caveat, and a correction.** Most of what §2 below reports as
+"agreement" was **already established in this owner's own `AARON_COLLATING_PAGE.md`
+(2026-08-02)**, before the 7B run existed. That page already states "Dose, not the
+dataset pair, is the current blocker", already predicts "if four people pick four new
+stage-1/stage-2 pairs and all run at safe learning rates, we should expect four more
+null results", already cross-checks Jason's three runs in its §3.3, and already
+explains *why* dormant fraction is dead (§5.2: Qwen2's SiLU-gated MLP computes
+`act_fn(gate) * up`, which essentially never reaches zero — a mechanism, not just an
+observation). The 7B run **confirms and quantifies that prediction at 14x the model
+scale**; it does not discover it. Any write-up should say so.
+
 **Protocol caveat.** The 0.5B runs use **GSM8K → SVAMP**, which is the *proposal's
 original pilot* protocol, not Tommy's 2026-08-02 GURU spec (Math / Table →
 Simulation). They are therefore not a second "stage 1" arm of the same study. They
@@ -76,6 +87,43 @@ into another run.
 ### 2.3 β = 0 in every run
 
 All four are KL-free. The proposal's own stability mechanism was never exercised.
+
+### 2.4 The ceiling confound reappears at 7B
+
+`AARON_COLLATING_PAGE.md` §3.2 documents that Δ-accuracy correlates negatively with
+pre-adaptation accuracy on two independent datasets — ρ = −0.66 (exp1.5 v3, n=6) and
+ρ = −0.667 (recomputed on Jason's run 1, n=5). Much of what "Δ accuracy" measures is
+**how much room was left to improve**, not adaptability.
+
+Recomputed on the 7B run: **ρ(acc_before, Delta-R) = −0.756** (n=3). Same sign, same
+magnitude, third independent dataset. The mechanism is visible directly in the data:
+`acc_after` has an SD of 0.47 pp across arms while `acc_before` has 0.72 pp, so
+Delta-R here is close to `constant − acc_before` by construction.
+
+This subsumes an observation made independently in `ANALYSIS_REPORT_7B_MVP.md` §2.3
+("the monotone ordering is manufactured by subtracting a non-monotone acc_before").
+That is the ceiling confound, which already had a name and a prior estimate. n=3 makes
+the 7B ρ descriptive only, but it belongs in the limitations with the other two.
+
+### 2.5 A zero-compute check that explains why this run did not collapse
+
+The Task-3 review (`lit review/TASK3_FOUR_PAPER_REVIEW.md`) records a critical group
+pass rate from arXiv:2606.18487: at `num_generations = 8`, below **p\* ≈ 0.083** most
+groups carry no reward variance and therefore no gradient. `frac_reward_zero_std` is
+logged in every run this project has done.
+
+| | mean reward | updates below p\* | mean frac_zero_std |
+|---|---|---|---|
+| 7B Stage A *(includes a 0.1 format bonus — not directly comparable)* | 0.2381 | 0 / 100 | 0.416 |
+| 7B Stage B ckpt-0 *(pure exact-match = pass rate)* | 0.2812 | 2 / 30 | 0.542 |
+| 7B Stage B ckpt-50 | 0.3016 | 1 / 30 | 0.542 |
+| 7B Stage B ckpt-100 | 0.2708 | 1 / 30 | 0.575 |
+
+Every arm stayed **well above** the critical line throughout. Against Jason's run 2,
+which crossed 0.083 at step 30 and never recovered, this is an independent and
+free explanation of why these runs stayed healthy — and a candidate early-warning
+signal that is reward-based (what Tommy asked for), has a theoretical threshold, and
+needs no new compute.
 
 ---
 
