@@ -25,3 +25,6 @@ Slides/
 *.bin
 tokenizer.json
 stageb_repeat.lock
+
+# Personal Chinese explainer for exp2 — intentionally not published
+EXP2_UNDERSTANDING_GUIDE_ZH.md
