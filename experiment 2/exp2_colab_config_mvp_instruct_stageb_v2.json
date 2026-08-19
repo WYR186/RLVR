@@ -1,0 +1,206 @@
+{
+ "experiment": "eaaj_exp2_colab_guru_math7b_instruct_group8_to_simulation_MVP",
+ "spec_source": "Tommy Slack 12:15 (edited version) + 2026-08-12 model-size note (\"stronger than Qwen2.5-7B\") + WIN4070 track's FINDING_GROUP_SIZE_REWARD_VARIANCE.md / EXPERIMENT_2_4070_INSTRUCT_V9_AMENDMENT.md",
+ "plan": "experiment 2/EXPERIMENT_2_COLAB_PLAN.md",
+ "forked_from": "exp2_colab_config_mvp_instruct.json (hash e33527592dd9)",
+ "status": "Stage-B recipe DEVIATION implemented/logged/flagged 2026-08-18, NOT authorized by Tommy. See FINDING_STAGE_B_CAP_SIZING.md",
+ "merge_note": "2026-08-12: merges two independent needs for a >=24GB GPU into one Colab run rather than running them separately - Tommy's ask for a model stronger than Qwen2.5-7B, and the WIN4070 track's v9 finding that GRPO group size 3 leaves most Math prompt groups with zero within-group reward variance (dead gradient) and group 8 needs >=24GB. Operator decision (Aaron), confirmed 2026-08-12.",
+ "model_id": "Qwen/Qwen2.5-7B-Instruct",
+ "model_revision": null,
+ "model_variant": "instruct",
+ "model_variant_contingency": "FIRED 2026-08-18 on a non-terminating completion tail, not on its literal boxed-format trigger. See EXPERIMENT_2_COLAB_7B_INSTRUCT_AMENDMENT.md section 4.1",
+ "seed": 42,
+ "dataset": {
+  "source": "LLM360/guru-RL-92k",
+  "revision": "2e2790a962a3c099bfb5ea61389cbf98a5ea439b",
+  "loader_note": "heterogeneous parquet schemas under train/*.parquet - datasets==5.0.0 cannot cast to one unified Dataset; load MATH_FILE/SIM_FILE independently (src/guru_data.py, adapted from the confirmed exp2_4070_data.py loader)",
+  "math_file": "train/math__combined_54.4k.parquet",
+  "simulation_file": "train/simulation__codeio_3.7k.parquet",
+  "domain_field": "data_source",
+  "prompt_field": "prompt (list of role/content messages, rendered via tokenizer.apply_chat_template)",
+  "answer_field": "reward_model.ground_truth (nested)",
+  "stage_a_data_sources": [
+   "math__deepscaler_preview",
+   "math__merged_deduped_dapo_or1_dataset"
+  ],
+  "stage_b_data_sources": [
+   "simulation__codeio"
+  ],
+  "source_limitation": "the released math parquet merges DAPO and OR1 into one data_source value; a defensible per-origin DAPO-vs-OR1 split is not recoverable from the released fields",
+  "confirmed_by": "data/guru_schema_audit.json (WIN4070 track, 2026-08-04/05) - re-verified, not re-discovered, for this 7B/Colab run"
+ },
+ "peft": {
+  "method": "lora",
+  "r": 16,
+  "lora_alpha": 32,
+  "lora_dropout": 0.05,
+  "target_modules": [
+   "q_proj",
+   "k_proj",
+   "v_proj",
+   "o_proj",
+   "gate_proj",
+   "up_proj",
+   "down_proj"
+  ],
+  "adapter_dtype": "float32",
+  "base_dtype": "bfloat16",
+  "validated": false,
+  "note": "first-pass default; this project has not trained a LoRA adapter before this run"
+ },
+ "stage_a": {
+  "domain": "Math",
+  "token_filter_max": 512,
+  "algorithm": "GRPO",
+  "reward_mode": "exact_plus_boxed_format_0.1",
+  "reward_mode_rationale": "matches the WIN4070 v8/v9 recipe - pure exact-match at this population's low base accuracy leaves most GRPO groups with zero variance (FINDING_GROUP_SIZE_REWARD_VARIANCE.md); the 0.1 boxed-format bonus recovers some gradient, mostly formatting signal not reasoning signal per that finding, reported honestly not as free lift",
+  "max_steps": 100,
+  "checkpoint_steps": [
+   0,
+   50,
+   100
+  ],
+  "adapt_from_checkpoints": [
+   0,
+   50,
+   100
+  ],
+  "learning_rate": 2e-05,
+  "learning_rate_applies_to": "lora_adapter_only",
+  "learning_rate_rationale": "literature-typical order of magnitude for LoRA-adapter GRPO; UNVALIDATED, not derived from a dose-response study like the 4070 exp2's 5.5e-6 full-parameter dose. Not comparable to prior full-parameter doses. See plan \u00a71.1/\u00a71.3/\u00a78.",
+  "per_device_train_batch_size": 8,
+  "gradient_accumulation_steps": 8,
+  "num_generations": 8,
+  "num_generations_rationale": "merged decision: matches the WIN4070 v9 group-size fix (3->8), tested for the same reason on the same Math population and confirmed to need >=24GB - see merge_note. Bumped from an earlier group-4 default chosen only for 7B memory headroom, before the v9 finding was known.",
+  "beta": 0.0,
+  "temperature": 0.7,
+  "top_p": 1.0,
+  "max_prompt_length": 512,
+  "max_completion_length": 1536,
+  "max_completion_length_rationale": "RAISED 1280->1536 by the v10 draft sizing rule (smallest of {1536,1792,2048,2560} with measured truncation <=5%); Instruct measures 2.34% at 1536. See EXPERIMENT_2_COLAB_7B_INSTRUCT_AMENDMENT.md section 2",
+  "eval_every": 25,
+  "de_scope_fallback_max_steps": null,
+  "de_scope_fallback_checkpoint_steps": null,
+  "mvp_descope_note": "200->100 updates, checkpoints [0,100,200]->[0,50,100]. This is NOT a new deviation: it is exactly the de_scope_fallback_max_steps / de_scope_fallback_checkpoint_steps already pre-registered in the full-scope config and in plan section 4 de-scope priority item 2. Still three checkpoints (Tommy's stated floor), still ckpt-0 as the stage-2-alone baseline. Cost: less stage-1 exposure per checkpoint, so a weaker dose range on the x-axis of any Q-vs-adaptability correlation.",
+  "max_completion_length_mvp_note": "DELIBERATELY NOT CUT from 1280. Shortening stage-A completions is the single cheapest-looking saving here and it is forbidden: truncating multi-step Math reasoning before a boxed answer is emitted destroys the reward signal, which is the exact failure mode that already ended the WIN4070 v8 run. Cut updates, not completion length."
+ },
+ "stage_b": {
+  "domain": "Simulation",
+  "token_filter_max": 640,
+  "algorithm": "GRPO",
+  "reward_mode": "exact",
+  "eval_questions": 300,
+  "budget_updates": 30,
+  "eval_at_updates": [
+   0,
+   30
+  ],
+  "learning_rate": 2e-05,
+  "learning_rate_applies_to": "lora_adapter_only",
+  "per_device_train_batch_size": 8,
+  "gradient_accumulation_steps": 8,
+  "num_generations": 8,
+  "num_generations_rationale": "applied uniformly with stage_a for the same shared training-geometry reason v9 did, even though the reward-variance finding was measured on Math specifically - Phase 0's sparse-reward preflight runs on both stages and will catch it if Simulation does not have the same problem at group 4",
+  "beta": 0.0,
+  "temperature": 0.7,
+  "top_p": 1.0,
+  "max_prompt_length": 640,
+  "max_completion_length": 2048,
+  "seeds": [
+   42
+  ],
+  "committed_seeds": [
+   42
+  ],
+  "stretch_goal_seeds": [
+   43,
+   44
+  ],
+  "mvp_descope_note": "50->30 updates, eval points 6->4. Endpoint and AUC both remain readable. Applied uniformly to all three cells - a mixed-budget grid is not a fixed-budget experiment and would be uninterpretable.",
+  "max_completion_length_deviation": "DEVIATION, 384 -> 640, registered 2026-08-16. Cause: the WIN4070 v8 post-stop Stage-B cell at ckpt100/seed42 safety-stopped at update 23 with completions/clipped_ratio rising 0.1094 -> 0.1719 -> 0.2344 against the \">10% clipping for 5 consecutive updates\" stop. That is a recipe-length failure, not a training failure: CodeIO's structured-JSON answers were being cut off. 640 matches stage_b max_prompt_length and the token audit (data/token_length_audit.json). CONSEQUENCE: this changes the fixed-budget recipe, so all three cells must run under 640 and NO cell may be compared against a 384-token cell from any earlier run.",
+  "clipping_stop_unchanged": "the >10%-for-5-updates stop is NOT relaxed. The fix is to give the model enough room to finish, not to stop noticing that it cannot.",
+  "max_completion_length_deviation_v2": "DEVIATION, 640 -> 2048, registered 2026-08-18. The 640 value was never measured: its stated basis was 'matches stage_b max_prompt_length', a prompt-side setting used as a completion-side justification. Measured on the two actual Stage-B starting policies (ckpt-0 and ckpt-100 of the completed Instruct Stage A), 24 frozen stage_b_train prompts x 8 generations at a 2048 probe cap, truncation at 640 is 9.38% (ckpt-0) / 8.33% (ckpt-100) - i.e. the run began already pressed against the >10%-for-5-updates stop, which is why the 2026-08-18 Stage-B run died at update 26. 2048 is the smallest candidate in {640,768,896,1024,1280,1536,2048} whose worst-arm truncation (1.56%) meets the sizing rule. CONSEQUENCE: all three cells must run under 2048 and NO cell may be compared against a 640- or 384-token cell from any earlier run.",
+  "max_completion_length_sizing_rule": "smallest candidate cap whose truncation on the WORST arm is <= 2.34%, the init-policy truncation of the Stage-A recipe (Instruct @ 1536) that actually completed 100/100 updates under the same clipping stop. Anchored rather than assumed: that run's observed in-training mean clipped_ratio was 6.52%, a 2.79x inflation over its 2.34% measured figure, so the rule carries a measured init-to-training correction. Projected in-training clipped_ratio at 2048: 1.56% x 2.79 = 4.4%, against a 0.10 gate.",
+  "non_terminating_tail_note": "The Simulation/CodeIO completion distribution is bimodal: p50 is 271 (ckpt-0) / 285 (ckpt-100) tokens, but ~1.5% of generations do not terminate by 2048. This is the same pathology that disqualified Qwen2.5-7B base on Math (4.69% non-terminating at 3072); it is milder here but NOT removable by raising the cap. 1.56% is therefore a floor, not a number that more headroom would buy down.",
+  "eval_at_updates_descope": "DE-SCOPE, [0,10,20,30] -> [0,30], registered 2026-08-18, on the eval-point axis the MVP fork already used (mvp_descope_note: 6->4). Delta-R is unaffected: acc_before and acc_after are measured by run_stage_b_adaptation outside the eval callback, so the endpoint contrast is untouched; what is lost is the within-Stage-B adaptation SHAPE (the intermediate curve points), not the outcome. Buys back the wall-clock the 640->2048 cap costs."
+ },
+ "execution": {
+  "backend": "cuda",
+  "device_tier_default": "L4",
+  "device_tier_expectation": "A100 is the realistic default here, not just the fallback - stacking a 7B base (vs 0.5B) AND group-8 generation (vs the group-4 default this config had before the merge) compounds two independent memory-pressure increases. L4 is still tried first (cheaper compute-unit draw) but do not be surprised when Gate C0 escalates.",
+  "device_tier_escalation": "A100",
+  "escalation_gate": "gate_c0_memory_headroom_below_15pct_or_oom",
+  "param_dtype_base": "bfloat16",
+  "param_dtype_lora_adapter": "float32",
+  "quantization": "none",
+  "quantization_fallback": "nf4_4bit_bitsandbytes",
+  "quantization_fallback_gate": "gate_c0_oom_on_a100",
+  "optimizer": "paged_adamw_8bit",
+  "checkpoint_content": "lora_adapter_only",
+  "env": {
+   "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"
+  }
+ },
+ "gates": {
+  "phase0a_stage_b_p95_prompt_tokens_max": 1024,
+  "phase0a_note": "CORRECTED 2026-08-16: the earlier note claimed the WIN4070 audit 'already found stage-B max_prompt_tokens=640' - false; the audit (data/token_length_audit.json) found raw p95=1407, status STOP, and 640 is this config's own token_filter_max, not an audit result. As of 2026-08-16 the gate audits the token_filter_max-eligible population (the rows training actually uses); threshold unchanged. See FINDING_GATE_0A_MEASURES_THE_WRONG_POPULATION.md.",
+  "phase0b_sparse_reward_preflight": "tightened per the v9 finding: STOP unless >= min_variable_groups have variable COMBINED reward; separately record and report exact-channel variance (FINDING_GROUP_SIZE_REWARD_VARIANCE.md section 9, 'a gate defined on the exact channel would be the stronger instrument' - reported, not silently adopted as the gate itself, since that would be stricter than what any team run has used)",
+  "phase0b_stage_a_preflight_prompts": 16,
+  "phase0b_stage_b_preflight_prompts": 8,
+  "phase0b_min_variable_groups": 2,
+  "gate_c0_memory_headroom_min_pct": 15,
+  "phase1_update_sentinel_step": 25,
+  "phase1_zero_variance_streak_stop": 5,
+  "phase1_clipping_over_10pct_streak_stop": 5
+ },
+ "outcomes": {
+  "P1_delta_R": "R_end(ckpt0) - R_end(ckpt_t), R_end = mean stage-B eval reward at update 50",
+  "P2_delta_AUC": "AUC(ckpt0) - AUC(ckpt_t) over eval_at_updates",
+  "P3_transfer_T": "T_t = Score_B(M_{A,t}) - Score_B(M_0), zero-shot, no stage-2 training",
+  "reading_rule": "delta_R is interpreted conditional on T_t; T_t far from 0 means delta_R is transfer-confounded and must be reported as such"
+ },
+ "measurement": {
+  "note": "beyond Tommy's spec but in scope for this owner; gates nothing in phase 3",
+  "probe_questions": 4096,
+  "probe_rationale": "hidden dim is 3584 for Qwen2.5-7B; a probe smaller than the hidden dim makes effective-rank magnitudes sample-truncated and n-dependent (same reasoning as the 0.5B plan's 512-vs-896 case, one level up)",
+  "probe_source": "frozen at Phase 0 in data/exp2_colab_splits.json: stage-B pool rows disjoint from stage-B train and eval, topped up from held-out stage-A rows if the CodeI/O pool is too small; per-source counts recorded in the splits file",
+  "layers": [
+   5,
+   14,
+   26
+  ],
+  "layers_rationale": "rescaled from the 0.5B plan's [4,12,22] of 24 blocks to the same relative depths (~18%/50%/93%) of Qwen2.5-7B's 28 blocks",
+  "model_dtype": "bfloat16_base_float32_lora_adapter",
+  "batch_size": 16,
+  "dormant_taus": [
+   0.025,
+   0.1
+  ],
+  "ckpt0_identity_gate": "within-run re-measurement consistency check only; NOT compared to the 0.5B pilot reference value (different model, not comparable in magnitude)",
+  "model_dtype_correction": "CORRECTED 2026-08-16. The full-scope config declared \"float32\", but pipeline.measure_checkpoint_q() calls build_peft_model(), which unconditionally loads the base in bfloat16 and upcasts only LoRA parameters - the model_dtype field was never read by any code path. Declaring fp32 was also infeasible at this scale: fp32 weights for a 7B model are ~28 GB, which does not fit an L4 at all. All checkpoints are measured under identical dtype, so within-run comparability (the property the comparability rule actually requires) holds. Q values from this run are NOT numerically comparable to the WIN4070 track's float32 measurements.",
+  "probe_questions_mvp_note": "4096 KEPT, not cut. Qwen2.5-7B hidden dim is 3584; a probe below that makes effective rank sample-truncated, i.e. the metric stops measuring what it claims to. If Phase 2b must be shortened, cut the ckpt-0 identity re-measurement pass (4 passes -> 3) before touching n_probe, and if that is still not enough drop Phase 2b entirely per plan section 4 de-scope priority item 4 - it gates nothing in Phase 3."
+ },
+ "open_team_questions": [
+  "Does 'stronger than Qwen2.5-7B' mean exactly 7B is acceptable, or strictly larger?",
+  "LoRA vs full fine-tuning for this arm specifically, if other members' stage-1 arms stay full-parameter at smaller sizes - this is a second confound on top of the task-pair difference",
+  "Stage-1 LoRA learning rate 2e-5 is unvalidated; no dose-response study has been run for LoRA GRPO on this model family",
+  "Base vs Instruct model - kept Base for this run (model_variant_contingency above), contingent on the Phase 0 smoke test not showing format-following collapse; the WIN4070 track already moved to Instruct with real supporting evidence at 0.5B scale",
+  "Committed scope (3 checkpoints x 1 seed) is smaller than the 4070 run's superset (5 x 3) - a time/budget decision, not a claim of sufficiency",
+  "Compute-unit budget ownership for this run - not part of the eaaj-pilot ~300-unit allocation in CLAUDE.md, and now also overlaps in purpose with the WIN4070 track's own Colab/L4 ask for the group-8 test",
+  "This run is not dose-comparable to exp1.6/exp1.7 or to the 4070 exp2 run (architecture change: LoRA vs full-parameter)",
+  "The exact-format gate (>=2/16 combined-variable groups) is looser than the exact-channel-only gate FINDING_GROUP_SIZE_REWARD_VARIANCE.md argues is the stronger instrument - using the looser gate to match precedent, not because it's been shown sufficient"
+ ],
+ "mvp": {
+  "registered": "2026-08-16",
+  "reason": "operator decision (Aaron): keep Tommy's >=7B model requirement and absorb the 2026-08-23 abstract deadline entirely on the SCOPE axis instead. Zero GPU-hours of real throughput data exist for LoRA GRPO at any scale in this project, so the full-scope schedule cannot be defended as feasible; this fork commits to the smallest scope that still yields a COMPLETE (not truncated) Delta-R curve.",
+  "model_unchanged": "Qwen/Qwen2.5-7B - the >=7B ask is NOT de-scoped",
+  "promotion_gate": "if Phase 0 measured s/update implies the full-scope schedule (stage_a 200 updates, stage_b 50 updates x 3 cells) finishes before 2026-08-23 with >=30% calendar margin, run the full scope from exp2_colab_config.json instead and discard this fork unused. Decide ONCE, at the end of Phase 0, never mid-run.",
+  "splits_file": "exp2_colab_splits_instruct.json"
+ },
+ "mvp_deliverable": {
+  "primary": "one COMPLETE fixed-budget Delta-R curve: R_B(ckpt_t) - R_B(ckpt_0) at t in {0,50,100}, seed 42, 30-update budget, 300 frozen CodeIO eval questions",
+  "secondary": "T_t zero-shot transfer at the same three checkpoints (Phase 2) - NOT cuttable, Delta-R is unreadable without it",
+  "tertiary": "Q(t) effective rank / dormant fraction at the same three checkpoints (Phase 2b)",
+  "honest_limits": "n=3 checkpoints, 1 seed, LoRA-adapter subspace not full parameter space, stage-A learning rate 2e-5 unvalidated. Any Q-vs-adaptability relationship is an exploratory description with no inferential claim. Say this in the abstract; do not report a rank correlation over three points as evidence."
+ }
+}
