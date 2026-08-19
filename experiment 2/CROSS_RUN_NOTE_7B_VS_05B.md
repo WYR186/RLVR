@@ -4,11 +4,11 @@
 **Status:** comparison of this owner's completed 7B run against a second party's
 0.5B pilot, supplied as two PDF write-ups (`three_run_summary`, `run2_analysis`).
 
-**Provenance caveat, stated first.** The 0.5B numbers below are **transcribed from
-those write-ups and have not been independently verified** — no dashboards, configs,
-or artifacts were supplied, and nothing matching them exists in this repo. Every
-claim attributed to that run should carry that caveat until its artifacts are
-available. The 7B numbers are recomputed from artifacts (see
+**Provenance — UPGRADED 2026-08-19.** The raw artifacts were subsequently supplied
+(`jason run/run {1,2,3}.zip`, each containing `stageA_log_history.json` and
+`summary.csv`). **Every claim below has now been recomputed from those files**, and
+§7 records which of the original write-up's claims survived verification and which
+needed correcting. The 7B numbers are recomputed from this repo's artifacts (see
 `ANALYSIS_REPORT_7B_MVP.md`).
 
 **Prior-work caveat, and a correction.** Most of what §2 below reports as
@@ -239,3 +239,119 @@ should be stated as unknown, not assumed in either direction.**
 > two runs also supply complementary halves of a fix: KL anchoring (β ≈ 0.02–0.04)
 > for stability, and measured completion caps with a clipping guard for the length
 > explosion that proximately caused the collapses.
+
+
+---
+
+## 7. Verification against the raw artifacts (2026-08-19)
+
+`stageA_log_history.json` logs every 5th update; `summary.csv` carries the
+per-checkpoint Q, GSM8K and SVAMP numbers. Completion cap is **384** in all three runs
+(`completions/max_length` saturates there exactly).
+
+### 7.1 Dose, from real epoch counters rather than an assumed dataset size
+
+| run | steps | epochs | updates / epoch | runtime |
+|---|---|---|---|---|
+| Jason 1 | 200 | 1.5625 | **128** | 3 311 s |
+| Jason 2 | 450 | 3.5156 | **128** | 7 279 s |
+| Jason 3 | 110 | 0.8594 | **128** | 1 993 s |
+| **7B Stage A** | 100 | **0.0147** | **6 781** | 19 783 s |
+
+**Each of Jason's updates carries 53x the dose of one of ours**, in epochs. The
+earlier estimate in §1 (assuming a 512-question set) was close but is now superseded.
+
+### 7.2 The collapse timeline — entropy DID lead, by 10–15 updates
+
+Run 2, the only complete collapse. Baseline entropy = 0.2195 (step 10).
+
+| step | reward | entropy | ×baseline | clip | zero-var groups | grad norm | first firing |
+|---|---|---|---|---|---|---|---|
+| 15 | 0.1750 | 0.3841 | 1.75 | 0.019 | 0.40 | 4.42 | |
+| **20** | 0.3125 | **0.5760** | **2.62** | 0.000 | 0.35 | 4.82 | **entropy > 2× baseline** |
+| 25 | 0.1875 | 0.5097 | 2.32 | 0.019 | 0.45 | 2.81 | |
+| **30** | **0.0813** | 0.5062 | 2.31 | 0.094 | 0.60 | 4.66 | **reward < p\* = 0.083** |
+| **35** | 0.0187 | 0.6260 | 2.85 | **0.463** | **0.90** | **0.000** | zero-variance ≥90%, **grad norm exactly 0**, clip > 10% |
+| 40 | 0.0250 | 1.1817 | 5.38 | 0.869 | 0.85 | 0.000 | |
+
+**This corrects the original write-up in the project's favour on one point and
+against it on another.**
+
+- **Correction 1 (favourable):** the write-up called entropy "the exception, and the
+  most promising thread". The artifacts are stronger than that — entropy crossed 2×
+  its baseline at **step 20**, ten updates before reward crossed the critical group
+  pass rate and fifteen before the gradient hit exactly zero. **That is a genuine
+  positive lead time, and it is the only one anywhere in this dataset.**
+- **Correction 2 (unfavourable):** `grad_norm` is reported as **exactly 0.000** from
+  step 35 onward — a hard, unambiguous "training is dead" flag available for free in
+  the existing dashboard. Any lead-time claim for Q must beat *that*, not a soft
+  reward trend.
+
+### 7.3 Q is variant-dependent, and neither variant led
+
+| checkpoint | erank **MLP** | vs ckpt-0 | erank **residual** | vs ckpt-0 | GSM8K |
+|---|---|---|---|---|---|
+| 0 | 1724.0 | — | 78.1 | — | 0.4531 |
+| 50 | 1666.6 | **−3.3%** | 114.3 | **+46.3%** | 0.0469 |
+| 150 | 1708.3 | −0.9% | 499.5 | **+539.2%** | 0.0000 |
+| 300 | 492.0 | **−71.5%** | 361.3 | +362.3% | 0.0000 |
+| 450 | 495.3 | −71.3% | 361.8 | +363.0% | 0.0000 |
+
+The two variants move in **opposite directions during the same collapse** —
+`AARON_COLLATING_PAGE.md` §3.3 flagged exactly this and required a single measurement
+contract before pooling. The artifacts confirm it.
+
+On lead time, the honest statement is narrower than the write-up's:
+
+- Checkpoints exist only at 0 / 50 / 150 / 300 / 450, so Q's time resolution is 50
+  updates at best.
+- By the **first** post-failure checkpoint (50) the model is already dead
+  (GSM8K 0.4531 → 0.0469), so even the residual variant, which had already moved
+  +46%, moved **concurrently with the visible collapse, not before it**.
+- The MLP variant was still within 1% of baseline at checkpoint 150 and only collapsed
+  by 300 — roughly **−250 updates of lead time**.
+
+So: **no Q variant achieved positive lead time; one achieved strongly negative lead
+time; and the metric's sign depends on which variant you pick.** That is a sharper
+and more defensible claim than "Q lagged".
+
+### 7.4 The ceiling confound, recomputed
+
+`AARON_COLLATING_PAGE.md` §3.2 records ρ = −0.667 on Jason's run 1. Recomputing from
+`run1/summary.csv` (`svamp_acc_start` vs `svamp_improvement`, n=5) gives **ρ = −0.611**
+— same sign, same magnitude; the small difference is presumably a variant of the
+statistic. Run 3 shows the mechanism directly: its damaged ckpt-50 has the lowest
+SVAMP start (0.2467) **and** the largest improvement (+0.1933) in the set.
+
+Together with the 7B value (**ρ = −0.756**, n=3, §2.4), that is **three independent
+datasets, same sign, similar magnitude**. Pre-adaptation accuracy must be a covariate
+in anything we report.
+
+### 7.5 What this owner's safety gate would have bought
+
+The registered stop — >10% completion clipping for 5 consecutive updates — applied to
+Jason's artifacts:
+
+- **Run 2:** clip goes 0.094 (step 30) → 0.463 (35) → 0.869 (40) → 0.894 (45) → 0.812
+  (50). The gate fires around **update 40** (≤55 even on the 5-step-sampled log). The
+  run instead continued to 450. From step 235 onward every logged update has reward
+  0.0000, grad norm 0.000, clip 1.000 and mean length exactly 384.0 — a dead model
+  spinning on the GPU. **~410 of 450 updates, roughly 1.8 h of GPU, were spent after
+  the gate would have stopped it.**
+- **Run 3:** fires around update 90–105, close to where its manual guard fired
+  anyway — so ~5 updates saved. Its own abort guard did the job.
+
+This is the concrete transferable piece: the gate is worth about 90% of one wasted run,
+and the completion-cap sizing procedure in `FINDING_STAGE_B_CAP_SIZING.md` addresses
+the *cause* rather than the symptom.
+
+### 7.6 One further observation the write-ups do not make
+
+**Run 1 was also drifting toward length explosion and was rescued by its LR schedule.**
+Its clip ratio falls to 0.013–0.025 mid-run, then climbs back to 0.13–0.19 over steps
+105–200 while mean completion length grows 154 → 300. Meanwhile its cosine LR decays to
+2.5e-8, so the last third of the run is barely training at all.
+
+That sharpens the tension already noted in §5.1: run 1 is the run in which nothing
+eroded, and it is also the run whose learning rate went to zero before anything could.
+The two facts are not independent.
