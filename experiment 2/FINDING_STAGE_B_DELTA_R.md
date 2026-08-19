@@ -1,7 +1,7 @@
 # Result — Stage B Delta-R, 7B Instruct (LIVE, arms land one at a time)
 
-**Status:** ckpt-0 and ckpt-100 complete — **both endpoint arms are in, so the
-headline contrast is readable.** ckpt-50 running (midpoint). Updated as arms land.
+**Status:** COMPLETE — all three arms finished their fixed budget (`STAGE_B_V2_DONE`).
+This is the MVP deliverable.
 **Config:** `exp2_colab_config_mvp_instruct_stageb_v2.json`, hash `bd99ddd2817f`
 **Run dir:** `outputs/exp2_colab_guru_math7b_instruct_group8_e33527592dd9/stage_b_v2`
 **Hardware:** Colab A100-SXM4-80GB. Artifacts mirrored to Drive per arm.
@@ -14,22 +14,37 @@ headline contrast is readable.** ckpt-50 running (midpoint). Updated as arms lan
 |---|---|---|---|---|---|---|
 | ckpt-0 | 0.1733 | **0.2767** | **+0.1033** | 52 -> 83 /300 | 30/30 | complete |
 | ckpt-100 | 0.1867 | **0.2767** | **+0.0900** | 56 -> 83 /300 | 30/30 | complete |
-| ckpt-50 | — | — | — | — | running | — |
+| ckpt-50 | 0.1900 | **0.2867** | **+0.0967** | 57 -> 86 /300 | 30/30 | complete |
 
-### The headline: both arms land on the SAME post-adaptation accuracy
+(rows ordered ckpt-0 / ckpt-100 / ckpt-50 in the table above; by Stage-A
+training the sequence is 0 -> 50 -> 100.)
 
-`acc_after` is **0.2767 for both** — 83/300 each. The two arms started 4
-questions apart and finished on the same number.
+### The exact tie was a coincidence, not a bug — ckpt-50 settled it
 
-The Delta-R gap is therefore **0.1033 - 0.0900 = 0.0133**, which is exactly the
-zero-shot T_t gap between the two checkpoints (`FINDING_TRANSFER_T_7B_INSTRUCT.md`:
-ckpt-100 - ckpt-0 = +0.0133). In other words the whole difference in Delta-R is
-inherited from the different starting points; the fixed-budget *destination* is
-identical.
+The two endpoint arms both returned `acc_after = 0.2767` (83/300 each), which
+§"One caution" below flagged as *also what a defect would look like*. **ckpt-50
+returned 0.2867 (86/300)** — a different value. The identical pair was chance,
+and the per-arm eval is reading per-arm model state correctly.
 
-Against a per-accuracy SE of 2.58 pp at n=300, and the +-6 pp smallest
-detectable difference that finding already registered, **1.33 pp is far inside
-noise.**
+A third exact reproduction also landed: `ckpt-50 acc_before = 0.1900`, matching
+`FINDING_TRANSFER_T_7B_INSTRUCT.md`'s ckpt-50 entry (0.1900, 57/300). All three
+`acc_before` values now reproduce their T_t entries exactly.
+
+### Delta-R is flat across the three checkpoints
+
+Net questions gained, in Stage-A order:
+
+```
+ckpt-0    52 -> 83   net +31   Delta-R +0.1033
+ckpt-50   57 -> 86   net +29   Delta-R +0.0967
+ckpt-100  56 -> 83   net +27   Delta-R +0.0900
+```
+
+Full range **1.33 pp**. The paired SE of a single Delta-R is ~2.1-2.8 pp
+depending on the discordant-pair count, so the SE of a *difference between two
+arms* is ~3.0-3.9 pp. The observed 1.33 pp gives z ~ 0.4. Together with the
++-6 pp smallest detectable difference already registered for T_t at this n,
+**the three arms are statistically indistinguishable.**
 
 **Stated within the framing constraint** (never "RLVR reduces the ability to
 learn"): at a fixed budget of 30 GRPO updates on the held-out Simulation family,
@@ -52,21 +67,30 @@ rather than dressed up as a negative result about Q. What the run does deliver
 is a working, gate-passing, fully instrumented Delta-R pipeline and a clean
 null at this scale and budget — which is what the MVP was scoped to produce.
 
-### One caution, and what ckpt-50 is now worth
+### The monotone ordering is NOT a trend — do not report it as one
 
-Both arms landing on *exactly* 83/300 is a stronger coincidence than the
-argument needs. At SE ~2.6 pp the chance of an exact tie is roughly 4-5% — low
-but unremarkable. Still, an exact tie is also what a bug would look like if
-`acc_after` were somehow being computed off a shared or stale model state.
+The three Delta-R point estimates decline in Stage-A order, and by a suspiciously
+even step: **+31, +29, +27 questions**, i.e. -2 questions per 50 Stage-A updates.
+It is tempting. It should not be reported as a finding, for three independent
+reasons:
 
-The `acc_before` values argue against that: they differ (0.1733 vs 0.1867) and
-each reproduces its own T_t entry exactly, so the per-arm model state is
-demonstrably being read correctly at the start of each arm.
+1. **The whole range is inside noise.** 1.33 pp against a ~3.0-3.9 pp SE for an
+   arm-to-arm difference. Nothing here is distinguishable from flat.
+2. **Three points make a monotone ordering cheap.** With n=3 checkpoints, a
+   monotone sequence (either direction) arises by chance **1 time in 3**.
+3. **`acc_after` is not monotone** — 83, 86, 83. The monotone appearance in
+   Delta-R comes from subtracting a non-monotone `acc_before` (52, 57, 56).
 
-**ckpt-50 now discriminates.** If it also returns exactly 0.2767, that pattern
-should be treated as a defect to investigate before the result is reported. If
-it returns something near but not equal, the convergence is real and noisy.
-Either way the third arm has become a check, not just a midpoint.
+What it is worth: a **pre-specified hypothesis for a properly powered run**. If
+the team wants to test "Delta-R declines with Stage-A training", this run says
+what that would cost — detecting a 2-question-per-50-updates slope needs far
+more than 300 eval questions and 3 checkpoints, and should carry multiple seeds.
+That is a concrete, useful thing to hand Tommy, and it is the honest version of
+this observation.
+
+Per the framing constraint, none of this is a claim about the model's ability to
+learn — every quantity here is fixed-budget adaptability on a named held-out
+family at a named budget.
 
 ## 2. ckpt-0 — the first Stage B in exp2 to finish its fixed budget
 
@@ -109,9 +133,21 @@ ckpt-0's in-training completion lengths, all 30 updates:
  291,277,544,545,356,497,350,312,485,363,263]
 ```
 
-Mean ~350, **no trend** — it fluctuates in both directions and stays well below
-512 throughout. So there is no systematic length shift for the truncation
-mechanism to act on, and the confound cannot account for +10.3 pp.
+Mean ~350, **no trend within the run** — it fluctuates in both directions and
+stays well below 512 throughout.
+
+Now that all three arms are in, the same holds across arms, and the second half
+of each run is only slightly longer than the first:
+
+| arm | mean_len | first 15 updates | last 15 | clip mean | clip max |
+|---|---|---|---|---|---|
+| ckpt-0 | 361 | 338 | 385 | 0.0229 | 0.1094 |
+| ckpt-50 | 354 | 297 | 410 | 0.0271 | 0.1094 |
+| ckpt-100 | 353 | 302 | 404 | 0.0229 | 0.1562 |
+
+Completions drift *upward* by ~20-35% over a run, not downward, and the means
+stay ~30% below the 512 eval cap on every arm. The confound would need lengths
+to fall toward the cap; they do the opposite. It cannot account for +10.3 pp.
 
 The confound still stands as a question about the *absolute* value of R (roughly
 10-15% of eval completions exceed 512 at this domain's p90 of ~620) and is still
@@ -123,21 +159,37 @@ rather than the series. The full series above shows neither trend. Per-update
 samples are 8 prompts x 8 generations = 64 completions, far too few to read a
 trajectory from.
 
-## 5. The 2048 cap held on both arms
+## 5. The 2048 cap held on all three arms
 
 | arm | clip mean | clip max | >10% streak (stop is 5) | wall |
 |---|---|---|---|---|
-| ckpt-0 | 0.0229 | 0.1094 | never above 1 | 2:29:45 |
-| ckpt-100 | 0.0229 | 0.1562 | never above 1 | 2:27:02 |
+| ckpt-0 | 0.0229 | 0.1094 | never above 1 | 3:19:36 |
+| ckpt-50 | 0.0271 | 0.1094 | never above 1 | 3:23:04 |
+| ckpt-100 | 0.0229 | 0.1562 | never above 1 | 3:17:33 |
 
-Two independent starting policies, 60 updates total, and the streak never got
-past 1. The registered 640 measured 9.38% truncation *before training started*.
+Three independent starting policies, **90 updates**, and the streak never got
+past 1. The registered 640 measured 9.38% truncation *before training started*
+and killed the previous attempt at update 26.
+
+**The adapters genuinely moved** — `update_sentinel.jsonl` reports
+`updates_effective: true` on every arm, with relative parameter change 1.15% /
+1.31% / 1.23%. The no-op failure mode that invalidated the 4070 v1 run (lr too
+small, every update rounding to zero) is ruled out here by measurement, not by
+assumption.
 
 **A mid-run claim that ckpt-100 was faster and clipping-free is withdrawn.**
 Both were read from its first four updates: `clip 0.0000` became 0.0229 (the
 same as ckpt-0) and `~150 s/update` became 294 s/update against ckpt-0's 300 —
 i.e. the two arms ran at the same speed. Four updates is 32 prompts; nothing
-about an arm's character can be read from that.
+about an arm's character can be read from that. Final wall times differ by under
+3%.
+
+**A second mid-run correction, itself wrong, is reversed.** Seeing the last
+training step report `665 s/it`, this file's author concluded the periodic eval
+took 6-8 minutes rather than the ~25 minutes estimated from `run_transfer_T`.
+`stageb_eval_curve.jsonl` records `eval_seconds` of **1529 / 1546 / 1526** — 25.5
+minutes. The 665 figure was tqdm's rate display, not the step's duration, and
+the original 25-minute estimate was right.
 
 The offline finding it seemed to confirm still stands on its own evidence:
 ckpt-100's completion tail *is* shorter (p99 1441 vs 2048; 0.52% vs 1.56%

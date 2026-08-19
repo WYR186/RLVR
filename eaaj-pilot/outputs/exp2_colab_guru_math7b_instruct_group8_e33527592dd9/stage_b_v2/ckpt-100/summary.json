@@ -1,0 +1,17 @@
+{
+ "stage_a_checkpoint": "/content/ckpts/ckpt-100",
+ "task": "Simulation",
+ "algo": "grpo",
+ "peft": "lora",
+ "reward_mode": "exact",
+ "budget_updates": 30,
+ "requested_updates": 30,
+ "actual_updates": 30,
+ "completion_status": "complete",
+ "seed": 42,
+ "learning_rate": 2e-05,
+ "acc_before": 0.18666666666666668,
+ "acc_after": 0.27666666666666667,
+ "delta_acc": 0.09,
+ "wall_seconds": 11853.295191049576
+}
