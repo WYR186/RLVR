@@ -160,9 +160,19 @@ linear fit: reward 0.2414 → 0.2342, entropy 0.0997 → 0.0950, grad_norm 0.026
 0.0288, mean completion length 853.9 → 839.3. All within one standard deviation.
 
 **Interpretation.** The intended comparison — "Q gives more lead time than the
-dashboard" — is unanswerable, because there is no stall and the dashboard is as flat
-as Q. The instrumentation is not shown to be insensitive; it is shown to have been
-pointed at a run in which nothing happened.
+dashboard" — is unanswerable *in this run*, because there is no stall and the
+dashboard is as flat as Q. The instrumentation is not shown to be insensitive; it is
+shown to have been pointed at a run in which nothing happened.
+
+**But the team-level position is stronger than "unanswerable", and should be written
+that way.** See [`CROSS_RUN_NOTE_7B_VS_05B.md`](CROSS_RUN_NOTE_7B_VS_05B.md): in a
+separate 0.5B GSM8K→SVAMP pilot — the one run in this project where something
+actually happened — dashboard signals fired by update ~35 while effective rank was
+still reading healthy at checkpoint 150, more than 100 updates after the model had
+already reached 0% accuracy. There, Q gave **negative** lead time. That evidence is
+second-hand and unverified (no artifacts supplied), so it is not folded into this
+report's own conclusions, but it means the headline claim is *contradicted* where it
+could be tested, not merely untested.
 
 ---
 
@@ -333,4 +343,7 @@ models that were, functionally, nearly the same model.
 > explanation for the uniform flatness. **We therefore report this as a null result
 > about the recipe's dose rather than a test of RQ1: with no variance on either the
 > predictor or the outcome, the run is equally consistent with the plasticity
-> hypothesis and with its negation.**
+> hypothesis and with its negation.** (Read alongside
+> `CROSS_RUN_NOTE_7B_VS_05B.md`: a separate 0.5B pilot, unverified here, is the one
+> run in which anything happened, and in it the plasticity metrics *trailed* the
+> dashboard signals by 100+ updates.)
