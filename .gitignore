@@ -28,3 +28,6 @@ stageb_repeat.lock
 
 # Personal Chinese explainer for exp2 — intentionally not published
 EXP2_UNDERSTANDING_GUIDE_ZH.md
+
+# Build artifacts: the shareable run package (regenerable, 1.2 MB)
+aaron_exp2_*.zip
