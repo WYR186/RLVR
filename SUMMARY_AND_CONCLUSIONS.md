@@ -113,7 +113,7 @@ monotone (83, 86, 83). The ordering is produced by subtracting a non-monotone
 
 ---
 
-## 4. Why nothing moved: the dose was ~70× too small
+## 4. Why nothing moved: Stage A ran ~70× short of a single epoch
 
 This is the most useful result in the run, and it is a spec-versus-compute problem the
 team needs to decide on.
@@ -128,7 +128,8 @@ one full Stage-A epoch = 6,781 updates
                        ≈ 2,525 Colab compute units
 ```
 
-That is roughly **30× my entire budget**, for one epoch of one stage of one arm.
+That is **more than 20× the compute budget I have**, for one epoch of one stage of
+one arm. Reaching one epoch would take 68× the updates I ran.
 
 Three independent measurements agree that almost nothing happened:
 
