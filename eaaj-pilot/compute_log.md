@@ -192,7 +192,9 @@ drew units. The completed run above is the only one that reached the end.
 - GPU: Colab A100-SXM4-80GB High-RAM (same warm runtime that passed Phase 0 on 08-16)
 - Phase: Phase 1 Stage A, 100 updates, group 8, LoRA r=16, config hash fc243e587296
 - Launched ~23:21 local as a detached subprocess (pid 21875); expected ~3.5 h
-- Units before/after: TO FILL BY HAND (not readable from the notebook)
+- Units before/after: **not recoverable.** Colab shows only a live balance, no
+  history, and no reading was taken at the time. Duration and GPU type below are
+  the recoverable part; the unit delta for this entry is permanently missing.
 - Note: reused the Phase-0 runtime deliberately — a fresh one risks drawing the
   40 GB A100 SKU, which Gate C0 (peak 40.14 GiB) says will OOM.
 
@@ -202,7 +204,7 @@ drew units. The completed run above is the only one that reached the end.
 - Two generation-only measurements, ~35 min each: base and Instruct completion-length
   distributions at cap 3072, 256 completions each
 - Restarted Stage A on Qwen2.5-7B-Instruct, cap 1536, config hash e33527592dd9
-- Units before/after: TO FILL BY HAND
+- Units before/after: **not recoverable** (no reading taken; Colab keeps no history)
 
 ## 2026-08-18 — exp2 7B Phase 1 Stage A COMPLETE (Instruct, cap 1536)
 - GPU: Colab A100-SXM4-80GB High-RAM (3rd VM of the day; SKU verified before spending)
@@ -212,4 +214,38 @@ drew units. The completed run above is the only one that reached the end.
 - Same-day cost also includes: base Stage A 7/100 (19 m, stopped on clipping gate),
   two generation-only completion-length measurements (~35 m each), one lost run
   of 53/100 (~2 h 50 m) reclaimed for browser inactivity
-- Units before/after: TO FILL BY HAND
+- Units before/after: **not recoverable** (no reading taken; Colab keeps no history)
+
+## 2026-08-19 — exp2 7B Stage B v2, all three Delta-R arms (overnight)
+- GPU: Colab A100-SXM4-80GB High-RAM. Two VMs: the first was reclaimed ~30 min into
+  the run, the second carried the whole overnight session (~10 h continuous).
+- Config: `exp2_colab_config_mvp_instruct_stageb_v2.json`, hash `bd99ddd2817f`
+  (Stage-B cap 640 -> 2048, eval points [0,10,20,30] -> [0,30])
+- Work done: Stage-B completion-length measurement on ckpt-0 and ckpt-100
+  (~35 min); environment rebuild + Drive restore after the VM recycle (~15 min);
+  then three Stage-B arms at 30/30 updates each — 11 976 s, 12 184 s, 11 853 s.
+- **Units, from live readings taken during the session** (Colab exposes only a
+  current balance, so these are spot observations, not a ledger):
+
+  | time | reading | note |
+  |---|---|---|
+  | ~22:00, 08-18 | 94.07 | before the length measurement |
+  | ~22:30, 08-18 | 92.38 | at the VM recycle |
+  | ~22:35, 08-18 | 91.50 | during environment rebuild |
+  | 07:51, 08-19 | 129.44 | after a +100 top-up bought overnight |
+  | 09:03, 08-19 | 120.97 | run complete |
+  | ~13:00, 08-19 | 115.33 | runtime still connected and idle |
+
+- **Derived draw:** 91.50 − 100 (top-up) + 129.44 → **62.1 units** for the overnight
+  work, over ~9.3 h. That implies ~6.7 units/h against the 6.77/h the resources
+  panel reported — the two agree, which is the only cross-check available here.
+- **5.6 units were wasted** between 09:03 and ~13:00 with the run finished and the
+  runtime still attached. Disconnect immediately after `STAGE_B_V2_DONE`.
+- Rate quoted by Colab's resources panel throughout: **~6.77 units/hour** on
+  A100-SXM4-80GB High-RAM.
+
+### Outstanding against the CLAUDE.md compute-accounting constraint
+GPU-dashboard **screenshots were not taken for any exp2 session** and cannot be
+recovered after the fact. The constraint is therefore only partly satisfied: dates,
+GPU types, durations and phases are recorded throughout, and unit readings exist for
+this session only. Screenshots need to start with the next run.

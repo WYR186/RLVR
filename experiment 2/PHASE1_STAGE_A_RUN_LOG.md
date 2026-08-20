@@ -317,7 +317,7 @@ cannot run — its first cell clones via the broken PAT).
 
 Ordered ahead of Stage B deliberately: the config's own `mvp_deliverable` calls
 T_t **"NOT cuttable — Delta-R is unreadable without it"**, it is far cheaper than
-three Stage-B runs, and it is this owner's own assignment (Person 4).
+three Stage-B runs, and it is this owner's own assignment.
 
 ### Measured cost, useful for scheduling
 

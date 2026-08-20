@@ -344,21 +344,46 @@ measure the same non-event more precisely.
 
 ## 10. Package contents
 
-`aaron_exp2_7b_mvp_2026-08-19.zip` (1.2 MB, 56 files):
+`aaron_exp2_7b_mvp_2026-08-19.zip` (1.6 MB, 68 files). `MANIFEST.sha256` covers
+every file; `shasum -a 256 -c MANIFEST.sha256` verifies the lot.
 
-- `VERIFY.py` — recomputes all 45 claims from `data/`; reads no summary or report;
-  no dependencies; **currently 45/45 pass**
-- `data/` — Stage-A dashboard and sentinel, frozen splits, Q measurements at three
-  checkpoints plus an independent re-measurement, the transfer curve, and full Stage-B
-  artifacts for all three arms
-- `configs/` — both pre-registered recipes, hash-verified in-run (`e33527592dd9`,
-  `bd99ddd2817f`)
-- `docs/` — the analysis report, the cross-run note, and all supporting findings
-- `figures/` — `delta_r_vs_q.png` / `.svg`
-- `derived/` — `headline_numbers.csv` (every value with its source file) and
-  `cross_run_derived.csv` (quantities recomputed from Jason's runs; his raw files are
-  deliberately not redistributed)
+| | |
+|---|---|
+| `VERIFY.py` | recomputes all 45 claims from `data/`; reads no summary or report; no dependencies; **currently 45/45 pass** |
+| `data/` | Stage-A dashboard and sentinel, frozen splits, Q at three checkpoints plus an independent re-measurement, the transfer curve, and full Stage-B artifacts for all three arms |
+| `code/` | `src/` (the modules that ran), `drivers/` (the scripts that called them), pinned `requirements.txt`, unit test |
+| `configs/` | both pre-registered recipes, hash-verified in-run (`e33527592dd9`, `bd99ddd2817f`) |
+| `docs/` | analysis report, cross-run note, findings; `docs/operational/` has the plans, amendments, run log, and the expensive gotchas |
+| `figures/` | `delta_r_vs_q` and `collapse_timeline_run2`, each `.png` + `.svg` |
+| `derived/` | `headline_numbers.csv` (every value with its source file), `cross_run_derived.csv` |
+| `compute/` | per-session GPU accounting |
+| `WEIGHTS.md` | where the LoRA adapters live and how to load them |
 
-LoRA adapter weights are excluded for size and live in Drive under
-`eaaj-exp2-checkpoints/`. Everything needed to check the numbers is in the zip; only
-re-running training needs the weights.
+**Two things deliberately excluded.**
+
+*LoRA adapter weights* (154 MB each) — nothing in `VERIFY.py` or any figure needs
+them. They are in Drive; `WEIGHTS.md` has the details.
+
+*The `colab/01–04` notebooks* — they were written for the base-model config
+(`fc243e587296`), reference the wrong splits file, clone through a PAT that is
+confirmed broken, and have **zero cell outputs; none was ever executed.** Shipping
+them as "the code that produced this" would misstate the provenance. `code/drivers/`
+is what actually ran, and its README says which files are verbatim and which are
+reconstructed.
+
+*Jason's raw run files* are also not redistributed — they are his to share.
+`derived/cross_run_derived.csv` carries the quantities §6 depends on so they can be
+checked against his originals.
+
+---
+
+## 11. Two things this package does not satisfy
+
+1. **GPU-dashboard screenshots were never taken**, for any exp2 session, and cannot
+   be recovered after the fact. The compute-accounting requirement is therefore only
+   partly met: dates, GPU types, durations and phases are recorded throughout, and
+   unit readings exist for the final session only. Noted at the end of
+   `compute/compute_log.md`. Screenshots start with the next run.
+2. **Unit deltas for the three earlier sessions are permanently missing** — Colab
+   shows a live balance and keeps no history, and no reading was taken at the time.
+   Those entries say so rather than carrying a placeholder.

@@ -3,7 +3,7 @@
 **Config:** `exp2_colab_config_mvp.json`
 **Amends:** `EXPERIMENT_2_COLAB_PLAN.md` (scope only — the plan is not retracted)
 **Registered:** 2026-08-16, before any Phase 0 run
-**Owner:** Aaron Wang (Person 4)
+**Owner:** Aaron Wang
 **Status:** Phase 0 not started
 
 ## Why this amendment exists

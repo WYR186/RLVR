@@ -2,7 +2,7 @@
 
 **Target machine:** Google Colab (L4 default, escalate to A100 — see Gate C0)
 **Audience:** the agent running this notebook set
-**Owner:** Aaron Wang (Person 4)
+**Owner:** Aaron Wang
 **Status:** pre-registered, not started
 **Written:** 2026-08-12
 **Supersedes for this run only:** `EXPERIMENT_2_PLAN.md` (the Windows RTX4070 / Qwen2.5-0.5B /
