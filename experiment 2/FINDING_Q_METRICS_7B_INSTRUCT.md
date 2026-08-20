@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-18
 **Run:** `exp2_colab_guru_math7b_instruct_group8_e33527592dd9`
-**Owner:** Person 4 (early-warning diagnostics) — this is the tertiary MVP
+**Scope:** early-warning diagnostics — this is the tertiary MVP
 deliverable and this owner's own assignment.
 **Probe:** n = **4096** frozen prompts, layers [5, 14, 26], batch 16.
 **Measurement contract (identical at every checkpoint):**

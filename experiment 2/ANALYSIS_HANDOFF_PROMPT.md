@@ -1,4 +1,4 @@
-# Analysis handoff — exp2 7B Colab MVP (Person 4 deliverable)
+# Analysis handoff — exp2 7B Colab MVP
 
 Copy everything below the line into the analyst's context. It is self-contained
 except for the repo itself.

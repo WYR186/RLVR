@@ -1,6 +1,6 @@
 # exp2 — Math → Simulation: summary and conclusions
 
-**Aaron Wang (Person 4) · 2026-08-19**
+**Aaron Wang · 2026-08-19**
 Companion to `aaron_exp2_7b_mvp_2026-08-19.zip`. Every number here is recomputed from
 the artifacts in that zip; running `python3 VERIFY.py` inside it re-derives all 45
 claims from the raw files and currently passes 45/45.

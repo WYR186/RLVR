@@ -135,7 +135,7 @@ arms *end up* under a fixed budget) shows no ordering at all.
 
 ## 3. Dashboard signals versus Q — the assignment, and the finding
 
-This is Person 4's own deliverable: do dashboard signals move when Q does not?
+The question here: do dashboard signals move when Q does not?
 
 **Nothing moves.** OLS slope of each Stage-A signal on update index, n = 100
 (descriptive over the whole run — explicitly *not* a leakage-safe online feature):
