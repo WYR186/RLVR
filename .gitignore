@@ -31,3 +31,7 @@ EXP2_UNDERSTANDING_GUIDE_ZH.md
 
 # Build artifacts: the shareable run package (regenerable, 1.2 MB)
 aaron_exp2_*.zip
+
+# Selects the active run dir for eaaj-pilot phases 2-4; machine-local by
+# design (CLAUDE.md) so per-machine active runs never collide in git.
+eaaj-pilot/outputs/ACTIVE_RUN.txt
