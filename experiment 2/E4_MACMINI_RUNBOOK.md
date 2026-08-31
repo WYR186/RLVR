@@ -62,7 +62,24 @@ plus **15.2 GB** if you do the optional Arm W base-norm half. Check with
 
 ---
 
-## 3. Step 1 — freeze the probe (minutes)
+## 3. Step 1 — freeze the probe (ALREADY DONE — skip unless re-deriving)
+
+**The frozen probe is committed.** `outputs/probe_frozen.json` (2.1 MB) and
+`outputs/probe_manifest.json` are in git, so every machine gets the
+byte-identical probe without the ~3 GB GURU download. Verify and move on:
+
+```bash
+python3 -c "import json,hashlib;p=json.load(open('../outputs/e4/probe_frozen.json'))['prompts'];h=hashlib.sha256();[ (h.update(x.encode()),h.update(b'\x00')) for x in p];print(len(p), h.hexdigest())"
+```
+
+Expect `4096 8bc2b4066c892c0ff6ac69e9a64846557c1d586c2ee6e162d3b831abbaecd265`,
+matching `rendered_text_sha256` in the manifest. Gate P1 already passed on the
+packaging machine (probe ids `1e61252e7b54793e`, n=4096, not truncated).
+
+Only re-run the driver below if you are deliberately re-deriving the probe from
+the dataset.
+
+### Re-deriving it (minutes)
 
 ```bash
 ./.venv-e4/bin/python drivers/06_e4_freeze_probe.py --out ../outputs/e4

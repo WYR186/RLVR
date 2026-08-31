@@ -76,8 +76,13 @@ class _DormancyAccumulator:
         flat = x[token_mask]                       # (N_tok, H)
         if flat.numel() == 0:
             return
-        self._abssum += flat.sum(dim=0).double().cpu()
-        self._absmax = torch.maximum(self._absmax, flat.max(dim=0).values.double().cpu())
+        # .cpu() BEFORE .double(): MPS has no float64, so upcasting on the
+        # accelerator raises there. The reorder is value-preserving - an
+        # f32->f64 upcast is exact and commutes with a device copy - so this
+        # does not perturb the published E1 numbers, it only lets the same
+        # code run on Apple Silicon.
+        self._abssum += flat.sum(dim=0).cpu().double()
+        self._absmax = torch.maximum(self._absmax, flat.max(dim=0).values.cpu().double())
         self._tok_count += int(flat.shape[0])
 
         # V2a — score each (unit, token) against that token's own layer mean.
@@ -91,7 +96,7 @@ class _DormancyAccumulator:
             # equal to tau must not count as dormant.
             idx = torch.bucketize(s_tok.reshape(-1), edges, right=True)
             self._tok_hist += torch.bincount(
-                idx, minlength=len(self.taus) + 1).double().cpu()
+                idx, minlength=len(self.taus) + 1).cpu().double()
             self._tok_scored += int(s_tok.shape[0]) * self.hidden_size
 
         # V2c — one vector per prompt (mean |h| over that prompt's real tokens).
@@ -195,6 +200,7 @@ def collect_e1_activations(model, tokenizer, prompts, layers,
                            depth_profile_layers=None,
                            per_prompt_layers=None,
                            full_variant_layers=None,
+                           dormancy_layers=None,
                            continuation_starts=None,
                            verify_gated_mlp: bool = True):
     """One instrumented sweep: every V2/V3/V5a/V5c/V6 reduction at once.
@@ -244,13 +250,21 @@ def collect_e1_activations(model, tokenizer, prompts, layers,
     # (V5a's depth profile) get only the reference dormancy tensor, because
     # retaining four MLP tensors at 28 layers is tens of GB of activations.
     full_layers = tuple(l for l in layers if l in set(full_variant_layers))
+    # `dormancy_layers` defaults to `layers`, which reproduces the E1 behaviour
+    # exactly. Passing () gives a spectra-only pass: the dormancy reductions
+    # upcast a (B, T, intermediate) activation to float32 and run a bucketize
+    # over ~10^8 elements per tensor per layer, which is cheap on an A100 and
+    # ruinous on MPS. E4's ruler is an effective-rank statement, and E1 already
+    # measured 7B dormancy as exactly 0.0 everywhere, so skipping it there costs
+    # no information -- but it is an explicit argument, never a silent default.
+    dorm_set = set(layers if dormancy_layers is None else dormancy_layers)
     tensors_for = {l: (DORMANT_TENSORS if l in full_layers else ("down_in",))
-                   for l in layers}
+                   for l in layers if l in dorm_set}
 
     dormancy = {
         (t, l): _DormancyAccumulator(
             intermediate, taus, keep_per_prompt=(l in per_prompt_layers))
-        for l in layers for t in tensors_for[l]
+        for l in tensors_for for t in tensors_for[l]
     }
     pooled_chunks: dict = {}
     for l in spectrum_layers:
@@ -304,7 +318,7 @@ def collect_e1_activations(model, tokenizer, prompts, layers,
             wanted |= {"resid", "down_in", "gate_post"}
         if l in depth_profile_layers and l not in spectrum_layers:
             wanted -= {"down_in", "gate_post"}
-        wanted |= set(tensors_for[l])
+        wanted |= set(tensors_for.get(l, ()))
         if verify_here:
             wanted |= {"gate_post", "up", "down_in"}
         if "resid" in wanted:
@@ -356,7 +370,10 @@ def collect_e1_activations(model, tokenizer, prompts, layers,
         for h in handles:
             h.remove()
 
-    pooled = {k: np.concatenate(v, axis=0) for k, v in pooled_chunks.items()}
+    # A key with no chunks means nothing was collected for it; np.concatenate
+    # would raise on the empty list, so surface it as an empty matrix and let
+    # the caller's contract say the variant was not measured.
+    pooled = {k: np.concatenate(v, axis=0) for k, v in pooled_chunks.items() if v}
     meta = {
         "n_probe": n_seen,
         "layers": list(layers),
@@ -364,7 +381,8 @@ def collect_e1_activations(model, tokenizer, prompts, layers,
         "depth_profile_layers": list(depth_profile_layers),
         "per_prompt_layers": list(per_prompt_layers),
         "full_variant_layers": list(full_layers),
-        "dormancy_tensors_by_layer": {str(l): list(tensors_for[l]) for l in layers},
+        "dormancy_tensors_by_layer": {str(l): list(v)
+                                      for l, v in sorted(tensors_for.items())},
         "hidden_size": hidden_size,
         "intermediate_size": intermediate,
         "gated_mlp_hook_check_max_abs_err": hook_check["max_abs_err"],

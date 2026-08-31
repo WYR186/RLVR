@@ -85,13 +85,18 @@ def resolve_device(requested: str):
     return "cpu"
 
 
-def resolve_dtype(requested: str, device: str):
+def resolve_dtype(requested: str, device: str, scale_name: str = "small"):
     import torch
     if requested != "auto":
         return getattr(torch, requested)
-    # bf16 matches E1's contract on CUDA. On MPS/CPU float32 is the
-    # better-tested kernel path and costs nothing at 0.5B; E4-small never
-    # compares erank LEVELS with E1, only arms against each other.
+    # The large scale follows E1's contract (bfloat16) on EVERY device, not
+    # just CUDA. Two reasons: Gate R2 compares against E1's published bf16
+    # eranks, and float32 doubles a 7B model to 30.4 GB, which on unified
+    # memory doubles the bandwidth the forward pass is bound by.
+    if scale_name == "large":
+        return torch.bfloat16
+    # At 0.5B float32 is free and is the better-tested MPS/CPU kernel path;
+    # E4-small never compares erank LEVELS with E1, only arms against each other.
     return torch.bfloat16 if device == "cuda" else torch.float32
 
 
@@ -179,12 +184,14 @@ def tokenizer_identity_gate(tok_a, tok_b, prompts, n_check: int = 64) -> dict:
 
 
 def measure(model, tok, prompts, layers, *, batch_size, pm, label,
-            max_length=512):
+            max_length=512, spectra_only=False):
     t0 = time.time()
     pooled, dormancy, meta = e1_sweep.collect_e1_activations(
         model, tok, prompts, layers=layers, batch_size=batch_size,
         max_length=max_length, spectrum_layers=layers,
-        per_prompt_layers=layers, full_variant_layers=layers)
+        per_prompt_layers=() if spectra_only else layers,
+        full_variant_layers=() if spectra_only else layers,
+        dormancy_layers=() if spectra_only else None)
     rec = e1_sweep.build_variant_records(
         pooled, dormancy, meta, pm.spectrum_metrics, pm.anisotropy_metrics,
         probe_prefixes=(), score_dir=None, checkpoint=label,
@@ -221,6 +228,14 @@ def main():
                          "layers; or a comma list; or 'all'")
     ap.add_argument("--doses", default=",".join(str(d) for d in e4.DOSE_LADDER))
     ap.add_argument("--force", action="store_true", help="recompute existing arms")
+    ap.add_argument("--spectra-only", action="store_true",
+                    help="skip the dormancy reductions and measure spectra "
+                         "only. They upcast a (B, T, intermediate) activation "
+                         "to float32 and bucketize ~1e8 elements per tensor per "
+                         "layer -- cheap on an A100, ruinous on MPS. E1 already "
+                         "measured 7B dormancy as exactly 0.0 at every layer, "
+                         "threshold and checkpoint, so the ruler loses no "
+                         "information. Recorded as a contract override.")
     ap.add_argument("--benchmark", type=int, default=0, metavar="N",
                     help="time N probe batches on the reference model, print the "
                          "extrapolated cost of the full run, and exit without "
@@ -244,7 +259,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     device = resolve_device(args.device)
-    dtype = resolve_dtype(args.dtype, device)
+    dtype = resolve_dtype(args.dtype, device, args.scale)
     mem = memory_gate(scale, device, dtype)
 
     if args.layers == "auto":
@@ -266,6 +281,12 @@ def main():
         "e4_dtype": str(dtype),
         "probe_source": "frozen rendered text from 06_e4_freeze_probe.py",
         "adapter": "none - bare model weights",
+        "dormancy_measured": not args.spectra_only,
+        "spectra_only_reason": (
+            "dormancy reductions skipped (--spectra-only); E1 measured 7B "
+            "dormant fraction as exactly 0.0 at every layer, threshold and "
+            "checkpoint, so the erank ruler loses no information"
+            if args.spectra_only else None),
     }
 
     def write(label, rec, extra):
@@ -294,7 +315,8 @@ def main():
               f"= {n} prompts ...", flush=True)
         t0 = time.time()
         measure(m, t, prompts[:n], layers, batch_size=args.batch_size, pm=pm,
-                label="benchmark", max_length=args.max_length)
+                label="benchmark", max_length=args.max_length,
+                spectra_only=args.spectra_only)
         per_batch = (time.time() - t0) / args.benchmark
         free_model(m)
 
@@ -334,7 +356,8 @@ def main():
             print(f"\n[R_instruct] {scale['instruct']} ...", flush=True)
             rec = measure(m_i, t_i, prompts, layers,
                           batch_size=args.batch_size, pm=pm, label="R_instruct",
-                          max_length=args.max_length)
+                          max_length=args.max_length,
+                          spectra_only=args.spectra_only)
             rec["tokenizer_identity_gate"] = gate
             rec["model_id"] = scale["instruct"]
             if args.scale == "large" and not args.instruct_model:
@@ -348,7 +371,8 @@ def main():
             print(f"\n[R_base] {scale['base']} ...", flush=True)
             rec = measure(m_b, t_b, prompts, layers,
                           batch_size=args.batch_size, pm=pm, label="R_base",
-                          max_length=args.max_length)
+                          max_length=args.max_length,
+                          spectra_only=args.spectra_only)
             rec["model_id"] = scale["base"]
             records["R_base"] = write("R_base", rec, {
                 "arm_role": "ruler - separated from the reference by a full "
@@ -372,7 +396,8 @@ def main():
                   f"{pert['achieved_aggregate_dose']:.6e} "
                   f"over {pert['n_modules_perturbed']} modules")
             rec = measure(m, t, prompts, layers, batch_size=args.batch_size,
-                          pm=pm, label=label, max_length=args.max_length)
+                          pm=pm, label=label, max_length=args.max_length,
+                          spectra_only=args.spectra_only)
             # Keep the summary; the full per-module list is large and its
             # aggregate is what the ladder uses.
             rec["perturbation"] = {k: v for k, v in pert.items()
