@@ -1,0 +1,3 @@
+step,erank_mlp_mid,erank_resid_mid,dormant_frac_0.025,dormant_frac_0.1,gsm8k_acc,svamp_acc_start,svamp_acc_end,svamp_improvement,entropy_pre_ckpt,svamp_sampled_delta
+0,1724.0405,78.1481,0.0000,0.0000,0.4531,0.5467,0.7067,0.1600,0.3156,0.2094
+50,1742.5839,87.0745,0.0000,0.0000,0.2344,0.2467,0.4400,0.1933,0.1605,0.1031
