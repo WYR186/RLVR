@@ -62,35 +62,63 @@ def main():
                     help="emit ||dW||_F only; relative dose is left not-run "
                          "with a reason, to be completed later")
     ap.add_argument("--checkpoints", nargs="+", default=list(CKPTS))
+    ap.add_argument("--full-param", action="store_true",
+                    help="the checkpoints are FULL-PARAMETER snapshots (e.g. "
+                         "exp1.5 v3) rather than LoRA adapters; dose is then "
+                         "||W_ckpt - W_0||_F and --base-dir/--download is "
+                         "required, since there is no adapter algebra to fall "
+                         "back on")
     args = ap.parse_args()
+
+    if args.full_param and args.skip_base_norms:
+        raise SystemExit(
+            "--full-param needs the base weights to diff against; "
+            "--skip-base-norms is only meaningful for LoRA adapters, whose "
+            "||dW||_F is computable from B and A alone.")
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     adapters = Path(args.adapters)
 
-    missing = [c for c in args.checkpoints
-               if not (adapters / c / "adapter_model.safetensors").is_file()]
+    if args.full_param:
+        missing = [c for c in args.checkpoints
+                   if not list((adapters / c).glob("*.safetensors"))]
+    else:
+        missing = [c for c in args.checkpoints
+                   if not (adapters / c / "adapter_model.safetensors").is_file()]
     if missing:
         raise SystemExit(
-            f"missing adapter weights for {missing} under {adapters}.\n"
-            "The .safetensors files are gitignored (154-165 MB each); see "
-            "experiment 2/WEIGHTS.md for where to get them.")
+            f"missing checkpoint weights for {missing} under {adapters}.\n"
+            "The .safetensors files are gitignored; for the 7B Stage-A adapters "
+            "see experiment 2/WEIGHTS.md, and for exp1.5 v3's full-parameter "
+            "checkpoints they exist only on the Windows RTX 4070 machine.")
+
+    base_dir = None if (args.skip_base_norms and not args.full_param) \
+        else resolve_base_dir(args)
+    if args.full_param and base_dir is None:
+        raise SystemExit("--full-param requires --base-dir or --download")
 
     deltas = {}
     for ckpt in args.checkpoints:
-        d = e4.lora_delta_norms(adapters / ckpt)
+        if args.full_param:
+            d = e4.full_delta_norms(
+                sorted((adapters / ckpt).glob("*.safetensors")),
+                sorted(Path(base_dir).glob("*.safetensors")))
+            kind = "full-parameter weights"
+        else:
+            d = e4.lora_delta_norms(adapters / ckpt)
+            kind = "LoRA modules"
         deltas[ckpt] = d
         total = sum(v["delta_fro"] ** 2 for v in d.values()) ** 0.5
-        print(f"{ckpt}: {len(d)} LoRA modules, ||dW||_F (all modules) = {total:.6g}")
+        print(f"{ckpt}: {len(d)} {kind}, ||dW||_F (all modules) = {total:.6g}")
 
     record = {
         "arm": "W",
+        "mode": "full_parameter" if args.full_param else "lora_adapter",
         "base_model": args.base_model,
         "adapters_dir": str(adapters),
         "delta_norms": deltas,
     }
-
-    base_dir = None if args.skip_base_norms else resolve_base_dir(args)
     if base_dir is None:
         record["relative_dose"] = {
             "status": "not_run",
@@ -129,9 +157,16 @@ def main():
     path = out / "arm_W_weight_dose.json"
     path.write_text(json.dumps(record, indent=1))
     print(f"\nwrote {path}")
-    print("\nckpt-0 is the pre-update adapter: LoRA initialises B=0, so its "
-          "dose MUST be exactly 0. A nonzero value there means the wrong "
-          "checkpoint was read.")
+    if not args.full_param:
+        print("\nckpt-0 is the pre-update adapter: LoRA initialises B=0, so its "
+              "dose MUST be exactly 0. A nonzero value there means the wrong "
+              "checkpoint was read.")
+    else:
+        print("\nFull-parameter mode: ckpt-0 is exactly 0 only if it was saved "
+              "before the first update AND from the same base snapshot being "
+              "diffed against. A small nonzero value there is a dtype/round-trip "
+              "artifact and is itself this run's dose noise floor - report it, "
+              "do not discard it.")
 
 
 if __name__ == "__main__":

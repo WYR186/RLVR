@@ -278,3 +278,79 @@ class TestDormancyExtraction:
         rec = {"dormancy": {"down_in/layer5": {
             "max": {"dormant_frac_by_tau": {"0.025": 0.3}}}}}
         assert e4.dormancy_by_layer(rec, pooling="mean") == {}
+
+
+class TestFullParameterDose:
+    """exp1.5 v3 trains every parameter, so its dose is a direct weight diff."""
+
+    def _write(self, tmp_path, name, tensors):
+        st = pytest.importorskip("safetensors.numpy")
+        p = tmp_path / name
+        st.save_file(tensors, str(p))
+        return p
+
+    def test_matches_hand_computed_frobenius_difference(self, tmp_path):
+        pytest.importorskip("safetensors.numpy")
+        rng = np.random.default_rng(3)
+        W0 = rng.normal(size=(6, 8)).astype(np.float32)
+        W = (W0 + 0.01 * rng.normal(size=(6, 8))).astype(np.float32)
+        k = "model.layers.0.mlp.up_proj.weight"
+        b = self._write(tmp_path, "base.safetensors", {k: W0})
+        c = self._write(tmp_path, "ckpt.safetensors", {k: W})
+        out = e4.full_delta_norms([c], [b])
+        want = np.linalg.norm(W.astype(np.float64) - W0.astype(np.float64))
+        assert out[k]["delta_fro"] == pytest.approx(want)
+
+    def test_identical_weights_give_zero_dose(self, tmp_path):
+        pytest.importorskip("safetensors.numpy")
+        W = np.random.default_rng(4).normal(size=(4, 4)).astype(np.float32)
+        k = "model.layers.0.self_attn.q_proj.weight"
+        b = self._write(tmp_path, "base.safetensors", {k: W})
+        c = self._write(tmp_path, "ckpt.safetensors", {k: W.copy()})
+        assert e4.full_delta_norms([c], [b])[k]["delta_fro"] == 0.0
+
+    def test_non_target_modules_are_excluded(self, tmp_path):
+        pytest.importorskip("safetensors.numpy")
+        rng = np.random.default_rng(5)
+        keep = "model.layers.0.mlp.down_proj.weight"
+        drop = "model.layers.0.input_layernorm.weight"
+        t = {keep: rng.normal(size=(4, 4)).astype(np.float32),
+             drop: rng.normal(size=(4,)).astype(np.float32)}
+        b = self._write(tmp_path, "base.safetensors", t)
+        c = self._write(tmp_path, "ckpt.safetensors", t)
+        out = e4.full_delta_norms([c], [b])
+        assert set(out) == {keep}
+
+    def test_shape_mismatch_raises_instead_of_silently_skipping(self, tmp_path):
+        pytest.importorskip("safetensors.numpy")
+        k = "model.layers.0.mlp.up_proj.weight"
+        b = self._write(tmp_path, "base.safetensors",
+                        {k: np.zeros((4, 4), dtype=np.float32)})
+        c = self._write(tmp_path, "ckpt.safetensors",
+                        {k: np.zeros((4, 8), dtype=np.float32)})
+        with pytest.raises(ValueError, match="shape"):
+            e4.full_delta_norms([c], [b])
+
+    def test_no_overlap_raises_rather_than_reporting_an_empty_dose(self, tmp_path):
+        pytest.importorskip("safetensors.numpy")
+        b = self._write(tmp_path, "base.safetensors",
+                        {"model.layers.0.mlp.up_proj.weight":
+                         np.zeros((4, 4), dtype=np.float32)})
+        c = self._write(tmp_path, "ckpt.safetensors",
+                        {"something.else.weight":
+                         np.zeros((4, 4), dtype=np.float32)})
+        with pytest.raises(ValueError, match="no target-module weights"):
+            e4.full_delta_norms([c], [b])
+
+    def test_output_feeds_relative_dose_unchanged(self, tmp_path):
+        """The point of matching lora_delta_norms' shape."""
+        pytest.importorskip("safetensors.numpy")
+        k = "model.layers.0.mlp.up_proj.weight"
+        W0 = np.full((4, 4), 1.0, dtype=np.float32)
+        W = np.full((4, 4), 1.1, dtype=np.float32)
+        b = self._write(tmp_path, "base.safetensors", {k: W0})
+        c = self._write(tmp_path, "ckpt.safetensors", {k: W})
+        delta = e4.full_delta_norms([c], [b])
+        base = e4.base_weight_norms([b], wanted={k})
+        out = e4.relative_dose(delta, base)
+        assert out["aggregate_relative_dose"] == pytest.approx(0.1, rel=1e-5)

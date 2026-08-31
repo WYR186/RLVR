@@ -105,6 +105,61 @@ def lora_delta_norms(adapter_dir, *, scaling: float | None = None) -> dict:
     return out
 
 
+def full_delta_norms(ckpt_files, base_files, *,
+                     target_modules=TARGET_MODULES) -> dict:
+    """||W_ckpt - W_0||_F per module for a FULL-PARAMETER checkpoint.
+
+    `lora_delta_norms` only covers adapters. Runs like exp1.5 v3 train every
+    parameter, so their dose is a direct weight difference against the base
+    snapshot. Both sides are streamed a tensor at a time and matched by name,
+    so an 8 GiB machine can do this for a 0.5B model without loading either
+    model whole.
+
+    Only weights whose name ends in one of `target_modules` are compared, so
+    the dose is measured over the same parameter set as Arm N perturbs and as
+    `lora_delta_norms` reports. Returns the same shape as `lora_delta_norms`,
+    which means `relative_dose` consumes either one unchanged.
+    """
+    from safetensors import safe_open
+
+    def index(files):
+        loc = {}
+        for path in files:
+            with safe_open(str(path), framework="np") as f:
+                for key in f.keys():
+                    loc[key] = path
+        return loc
+
+    ckpt_loc = index(ckpt_files)
+    base_loc = index(base_files)
+
+    def wanted(key: str) -> bool:
+        stem = key[:-len(".weight")] if key.endswith(".weight") else key
+        return any(stem.endswith(t) for t in target_modules)
+
+    out: dict = {}
+    for key in sorted(k for k in ckpt_loc if wanted(k)):
+        if key not in base_loc:
+            continue
+        with safe_open(str(ckpt_loc[key]), framework="np") as fc:
+            W = np.asarray(fc.get_tensor(key), dtype=np.float64)
+        with safe_open(str(base_loc[key]), framework="np") as fb:
+            W0 = np.asarray(fb.get_tensor(key), dtype=np.float64)
+        if W.shape != W0.shape:
+            raise ValueError(
+                f"{key}: checkpoint shape {W.shape} != base {W0.shape}")
+        out[key] = {
+            "delta_fro": float(np.linalg.norm(W - W0)),
+            "shape": [int(x) for x in W.shape],
+            "r": None,
+        }
+    if not out:
+        raise ValueError(
+            "no target-module weights matched between the checkpoint and the "
+            f"base snapshot; target_modules={list(target_modules)}")
+    return out
+
+
 def base_weight_norms(weight_files, wanted: set[str] | None = None) -> dict:
     """||W_0||_F for each base weight, streamed one tensor at a time.
 

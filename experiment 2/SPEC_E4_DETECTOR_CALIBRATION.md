@@ -6,8 +6,10 @@
 **Parent:** `FINDING_E1_METRIC_REMEASUREMENT.md` §10 — "a future detector test needs
 a regime where the intervention has measurable dynamic range."
 **Depends on:** nothing. No retraining, no team decision, no other person.
-**Estimated cost:** E4-small **0 compute units** (16 GB Apple Silicon);
-E4-large ~1–1.5 A100-hours ≈ **7–10 units**.
+**Estimated cost:** E4-small **0 compute units**. E4-large is **0 units if the
+M3 Max can carry it** (7B bf16 is 15.2 GB against 128 GB of unified memory) and
+~1–1.5 A100-hours ≈ **7–10 units** otherwise. `08_e4_ruler.py --benchmark N`
+decides this from measured seconds-per-batch, not from a guess.
 
 ---
 
@@ -80,9 +82,22 @@ controlled perturbation of one another), which is precisely why Arm N exists.
 
 | Arm | What it measures | Cost | Where it runs |
 |---|---|---|---|
-| **W** | `\|\|BA·(α/r)\|\|_F / \|\|W_0\|\|_F` for ckpt-0/50/100 | CPU, minutes | 16 GB Mac |
-| **R** | Q(Qwen2.5-7B) vs Q(Qwen2.5-7B-Instruct) | 2 probe passes | A100 (7B) / Mac (0.5B) |
-| **N** | Q(Instruct + noise) at 6 doses | 6 probe passes | A100 (7B) / Mac (0.5B) |
+| **W** | `\|\|BA·(α/r)\|\|_F / \|\|W_0\|\|_F` for ckpt-0/50/100 | CPU, minutes | M3 Max |
+| **R** | Q(Qwen2.5-7B) vs Q(Qwen2.5-7B-Instruct) | 2 probe passes | M3 Max, else A100 |
+| **N** | Q(Instruct + noise) at 6 doses | 6 probe passes | M3 Max, else A100 |
+
+### The three machines
+
+| machine | role | why |
+|---|---|---|
+| **M3 Max, 40 GPU cores, 128 GB** | all local compute | 7B bf16 is 15.2 GB; it fits with 8× headroom |
+| **Mac mini M4, 16 GB** | drives Colab; audits artifacts | 7B does not fit; the audit and report drivers are CPU-only and take seconds |
+| **Colab A100** | fallback for E4-large only | ~94 of ~300 units left; spend only what the M3 Max cannot absorb |
+
+Routing between the M3 Max and Colab for E4-large is decided by
+`08_e4_ruler.py --benchmark`, which times real probe batches on the real model
+and extrapolates the eight passes. Do not commit a machine to a multi-hour run
+without it.
 
 ### Arm W — the Stage-A dose in weight space
 
@@ -155,9 +170,10 @@ additionally refuses two rungs that achieved the same dose.
 | layers | 4, 12, 22 (depth-matched to 5/14/26 of 28) | 5, 14, 26 |
 | hidden | 896 | 3584 |
 | dtype | float32 (MPS/CPU) | bfloat16 (E1's contract) |
-| cost | 0 units, ~1–3 h on Apple Silicon | ~7–10 units |
+| cost | 0 units, <1 h on the M3 Max | 0 units on the M3 Max if the benchmark allows, else ~7–10 |
 
-E4-small is a **second data point at a 14× smaller scale**, not a dry run. Whether
+E4-small stays worth running even when E4-large is free: it is a **second data
+point at a 14× smaller scale**, not a dry run. Whether
 the detector's sensitivity threshold is scale-invariant is a real question, and the
 answer connects directly to the 0.5B track, where the pilot's MLP spectrum *did*
 move when the 7B's did not (`FINDING_E1_METRIC_REMEASUREMENT.md` §4). It also
@@ -208,16 +224,17 @@ reorders Qwen2MLP cannot silently hand us a different tensor.
 ## 7. Execution order
 
 ```
-1  06_e4_freeze_probe.py     Mac,  minutes    → probe_frozen.json + manifest
-2  07_e4_weight_dose.py      Mac,  minutes    → Arm W
-3  08_e4_ruler.py --small    Mac,  1-3 h      → E4-small Arms R + N
-4  09_audit_e4_artifacts.py  Mac,  seconds    → audit E4-small
-5  08_e4_ruler.py --large    A100, ~1.5 h     → E4-large Arms R + N
-6  09_audit_e4_artifacts.py  Mac,  seconds    → audit E4-large
+1  06_e4_freeze_probe.py         M3 Max,   minutes  → probe_frozen.json + manifest
+2  07_e4_weight_dose.py          M3 Max,   minutes  → Arm W (full, --download)
+3  08_e4_ruler.py --scale small  M3 Max,   <1 h     → E4-small Arms R + N
+4  09_audit + 10_report          any Mac,  seconds  → audit + table + figure
+5  08_e4_ruler.py --benchmark 4  M3 Max,   minutes  → ROUTING DECISION for step 6
+6  08_e4_ruler.py --scale large  M3 Max or A100     → E4-large Arms R + N
+7  09_audit + 10_report          any Mac,  seconds  → audit + table + figure
 ```
 
-Steps 1–4 need no compute units and no team decision. Step 5 is the only one that
-spends budget, and it is entered only after step 4 is green.
+Steps 1–5 need no compute units and no team decision. Step 6 is the only one
+that can spend budget, and only if step 5 says the M3 Max cannot carry it.
 
 **Compute accounting.** `compute_log.md` records that GPU-dashboard screenshots were
 taken for **no** exp2 session — a standing violation of a hard constraint

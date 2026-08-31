@@ -221,6 +221,11 @@ def main():
                          "layers; or a comma list; or 'all'")
     ap.add_argument("--doses", default=",".join(str(d) for d in e4.DOSE_LADDER))
     ap.add_argument("--force", action="store_true", help="recompute existing arms")
+    ap.add_argument("--benchmark", type=int, default=0, metavar="N",
+                    help="time N probe batches on the reference model, print the "
+                         "extrapolated cost of the full run, and exit without "
+                         "writing any arm. Use this before committing a machine "
+                         "to a multi-hour run.")
     ap.add_argument("--base-model", default=None,
                     help="override the scale's base model id (a local snapshot "
                          "path works too); pointing both overrides at the SAME "
@@ -273,6 +278,40 @@ def main():
         p.write_text(json.dumps(rec, indent=1, default=str))
         print(f"  wrote {p}  ({rec['wall_seconds']} s)")
         return rec
+
+    if args.benchmark:
+        n = args.benchmark * args.batch_size
+        if n > len(prompts):
+            raise SystemExit(
+                f"--benchmark {args.benchmark} needs {n} prompts but the probe "
+                f"has {len(prompts)}")
+        print(f"\n[benchmark] loading {scale['instruct']} ...", flush=True)
+        t_load = time.time()
+        m, t = load_plain_model(scale["instruct"], device, dtype)
+        load_s = time.time() - t_load
+        print(f"  load: {load_s:.1f} s")
+        print(f"[benchmark] {args.benchmark} batches x {args.batch_size} "
+              f"= {n} prompts ...", flush=True)
+        t0 = time.time()
+        measure(m, t, prompts[:n], layers, batch_size=args.batch_size, pm=pm,
+                label="benchmark", max_length=args.max_length)
+        per_batch = (time.time() - t0) / args.benchmark
+        free_model(m)
+
+        n_batches_full = -(-len(prompts) // args.batch_size)
+        pass_s = per_batch * n_batches_full
+        n_passes = 2 + len(
+            [x for x in args.doses.split(",") if x.strip()])
+        total_s = n_passes * (pass_s + load_s)
+        print(f"\n  per batch      : {per_batch:.2f} s")
+        print(f"  per full pass  : {pass_s / 60:.1f} min "
+              f"({n_batches_full} batches of {args.batch_size})")
+        print(f"  passes needed  : {n_passes} (2 for Arm R + one per Arm N rung)")
+        print(f"  ESTIMATED TOTAL: {total_s / 3600:.2f} h "
+              f"(includes a model load per pass)")
+        print("\n  Arm N reloads the model between rungs on purpose, so no "
+              "rounding residue accumulates down the ladder.")
+        return
 
     records = {}
 

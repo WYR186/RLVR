@@ -42,3 +42,6 @@ eaaj-pilot/outputs/exp2_colab_guru_math7b_instruct_group8_e33527592dd9/measureme
 # E4 measurement outputs and the adapter handoff bundle (460 MB uncompressed).
 experiment 2/outputs/e4*/
 E4_HANDOFF.tar.gz
+
+# E4 virtualenv (runbook section 2), machine-local.
+experiment 2/.venv-e4/
