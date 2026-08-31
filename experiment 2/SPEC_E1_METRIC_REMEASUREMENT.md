@@ -2,7 +2,7 @@
 
 **Owner:** Aaron Wang (early-warning diagnostics)
 **Date:** 2026-08-30
-**Status:** spec, not yet executed.
+**Status:** executed; see `FINDING_E1_METRIC_REMEASUREMENT.md`.
 **Parent:** `PROJECT_OVERVIEW_AND_NEXT_EXPERIMENTS.md` §5.1 — read that for why.
 **Depends on:** nothing. No retraining, no team decision, no other person.
 **Estimated cost:** ~1–2 A100-hours ≈ 7–14 compute units.

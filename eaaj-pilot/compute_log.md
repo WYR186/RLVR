@@ -249,3 +249,58 @@ GPU-dashboard **screenshots were not taken for any exp2 session** and cannot be
 recovered after the fact. The constraint is therefore only partly satisfied: dates,
 GPU types, durations and phases are recorded throughout, and unit readings exist for
 this session only. Screenshots need to start with the next run.
+
+## 2026-08-30 — E1 metric re-measurement sweep COMPLETE
+
+- GPU: Colab **A100-SXM4-80GB High-RAM**.
+- Session shown by Colab resources panel: **10:16 PM–11:45 PM** local
+  (1 h 29 min); usage rate **~6.77 compute units/hour**.
+- Estimated draw from the displayed rate and duration: **~10.1 units**.
+  Final live balance: **105.3 units**. No pre-session balance was recorded, so
+  this is a rate-derived estimate rather than an exact before/after delta.
+- Work completed: reference-arm reproduction gate at ckpt-0/50/100;
+  V2/V3/V4/V5/V6 re-measurement sweep; V1a frozen-ckpt-0 continuation probe.
+- Gate result: all nine published reference eranks reproduced within `1e-4` and
+  dormant fraction reproduced as 0.0 under the registered arm.
+- Artifacts backed up to Drive:
+  `MyDrive/eaaj-exp2-checkpoints/e1_sweep/` (three reference JSONs, three base
+  sweep JSONs, three V1a JSONs, `summary.csv`, `summary_v1a.csv`, and 108 score
+  vectors).
+- GPU/resource evidence:
+  `experiment 2/evidence/e1_a100_resources_2026-08-30.png` and
+  `experiment 2/evidence/e1_a100_complete_2026-08-30.png`.
+- Runtime disconnected and deleted at **11:47 PM** after Drive backup was
+  verified; Colab then showed `Reconnect A100 High-RAM` (no active backend).
+
+### 2026-08-31 — E1 session 2: V5a all-layer depth profile (A100)
+
+- GPU: Colab **A100-SXM4-80GB High-RAM** (second session; the session logged
+  above was disconnected at 11:47 PM and a new backend was allocated for this
+  work).
+- Balance before: **105.3 units** (closing balance of session 1).
+  Balance after disconnect: **94.16 units**. Delta: **~11.1 units**.
+  This one is a true before/after delta, not a rate estimate.
+- Displayed usage rate during the session: **~6.77 units/hour**, which puts the
+  billed duration at roughly **1 h 38 min**. Verified wall-clock anchors: the
+  V5a Drive-backup cell executed at **1:31 AM**, and the runtime was
+  disconnected and deleted at **2:04 AM**; the start time is inferred from the
+  balance delta and the rate, not read off the resources panel.
+- Work completed: **V5a** — erank/dormancy re-measured at all **28** decoder
+  blocks (vs the three pre-registered layers), n_probe 4096, ckpt-0/50/100.
+- Result: the checkpoint-0→100 erank change is **under 1% at every one of the
+  28 layers**. Peak is **+0.7227% at layer 16**; layers 0–9 are flat to within
+  ±0.07%. The pre-registered layers [5, 14, 26] gave +0.068% / +0.528% /
+  +0.455%, so the registered choice slightly understated the mid-depth peak
+  without changing any conclusion.
+- Artifacts backed up to Drive `MyDrive/eaaj-exp2-checkpoints/e1_sweep/`:
+  `V5a_ckpt{0,50,100}.json`, `summary_v5a.csv`, `e1_v5a.log`, and 258
+  additional score vectors (directory total after this session: 12 JSONs,
+  366 score vectors, 3 summary CSVs).
+- Disconnect verified: resources panel showed `0 active sessions` and
+  `approximately 0 per hour` after teardown.
+
+### E1 campaign total
+
+Sessions 1 and 2 together: **~21 units** of the ~300-unit budget, covering the
+reference-arm gate plus every operationalization axis in
+`SPEC_E1_METRIC_REMEASUREMENT.md` (V1a, V2, V3, V4, V5a, V5b, V5c, V6a–c).

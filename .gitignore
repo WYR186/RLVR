@@ -35,3 +35,6 @@ aaron_exp2_*.zip
 # Selects the active run dir for eaaj-pilot phases 2-4; machine-local by
 # design (CLAUDE.md) so per-machine active runs never collide in git.
 eaaj-pilot/outputs/ACTIVE_RUN.txt
+
+# E1 score-vector working tree is archived under experiment 2/artifacts/.
+eaaj-pilot/outputs/exp2_colab_guru_math7b_instruct_group8_e33527592dd9/measurements/e1_sweep/

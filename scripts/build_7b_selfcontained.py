@@ -11,7 +11,7 @@ import json
 import tarfile
 from pathlib import Path
 
-REPO = Path("/Users/ipanda/Documents/algoverse")
+REPO = Path(__file__).resolve().parent.parent
 EXP2 = REPO / "experiment 2"
 OUT = REPO / "experiment 2" / "colab" / "00_phase0_selfcontained.ipynb"
 
