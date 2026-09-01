@@ -141,6 +141,15 @@ Colab session, which downloads the model anyway.
 is **skipped if that JSON already exists**, so if the run is interrupted,
 re-run the identical command and it resumes.
 
+**Wrap it in `caffeinate -dimsu`.** Learned the hard way on 2026-08-31: the
+packaging machine lost power mid-run and slept. The process survived, but its
+MPS context did not — it sat in state `SN` at 0.0% CPU with its resident set
+collapsed from 14 GB to 0.7 GB and made no progress for 93 minutes. It does not
+recover; kill it and re-run. No completed arm was damaged (every one of the
+seven artifacts on disk parsed and verified), so the only cost was wall clock —
+but a wedged run looks exactly like a slow one, so check `ps -o stat=,%cpu=`
+and the log mtime rather than assuming it is still working.
+
 **Gate R1** must print `tokenizer identity gate OK` with
 `"n_mismatched": 0, "identical_vocab": true`. If it fails, stop and report —
 the two models would differ in input as well as weights.
