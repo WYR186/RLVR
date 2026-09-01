@@ -13,6 +13,7 @@ Run `09_audit_e4_artifacts.py` first. This script reports; it does not verify.
 """
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -66,7 +67,7 @@ def bracket(rows: list[dict], target_pct: float):
     return (below[-1] if below else None), (above[0] if above else None)
 
 
-def write_figure(rows, arm_w, path: Path, scale: str):
+def write_figure(rows, arm_w, path: Path, scale: str, floor_pct=None):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -101,13 +102,30 @@ def write_figure(rows, arm_w, path: Path, scale: str):
         ax.axhline(r["max_abs_pct"], ls=":", lw=1.4, color="#7d3c98",
                    label=f"Arm R: base vs Instruct ({r['max_abs_pct']:.2f}%)")
 
+    if floor_pct and floor_pct > 0:
+        # Everything under the cross-platform drift is unresolvable, so shade it
+        # rather than letting a reader take a sub-floor rung as a measurement.
+        ax.axhspan(ax.get_ylim()[0], floor_pct, color="#95a5a6", alpha=0.22,
+                   zorder=0)
+        ax.axhline(floor_pct, ls="-", lw=1.0, color="#7f8c8d")
+        ax.annotate(f"cross-platform drift floor {floor_pct:.3f}%",
+                    xy=(ax.get_xlim()[0], floor_pct), xytext=(6, 3),
+                    textcoords="offset points", fontsize=7.5, color="#5d6d7e")
+
     if arm_w:
-        for ckpt, dose in sorted(arm_w.items()):
-            if dose and dose > 0:
-                ax.axvline(dose, ls="-.", lw=1.2, color="#148f77")
-                ax.annotate(f"our {ckpt}\n{dose:.2e}", xy=(dose, ax.get_ylim()[0]),
-                            xytext=(4, 8), textcoords="offset points",
-                            fontsize=8, color="#148f77")
+        # ckpt-50 and ckpt-100 differ by 7%, so their labels would collide;
+        # stack them and give each its own leader height.
+        live = sorted((c, d) for c, d in arm_w.items() if d and d > 0)
+        y0, y1 = ax.get_ylim()
+        for i, (ckpt, dose) in enumerate(live):
+            ax.axvline(dose, ls="-.", lw=1.2, color="#148f77")
+            # Sit the labels in the empty mid-band: the legend owns the top and
+            # the shaded floor owns the bottom.
+            frac = 0.52 - 0.09 * i
+            y = 10 ** (math.log10(y0) + frac * (math.log10(y1) - math.log10(y0)))
+            ax.annotate(f"our {ckpt}  {dose:.2e}", xy=(dose, y),
+                        xytext=(7, 0), textcoords="offset points",
+                        fontsize=7.5, color="#148f77", ha="left", va="center")
 
     ax.set_title(f"E4 detector calibration — {scale} scale\n"
                  "how large a weight change does effective rank register?",
@@ -139,6 +157,14 @@ def main():
         rel = json.loads(wpath.read_text()).get("relative_dose", {})
         if rel.get("status") != "not_run":
             arm_w = {c: r["aggregate_relative_dose"] for c, r in rel.items()}
+
+    # Gate R2's cross-platform delta is the smallest change this measurement can
+    # resolve; rungs below it are floor, not signal.
+    floor_pct = None
+    ref_rec = arms[args.reference]
+    pr = ref_rec.get("platform_reproduction_vs_e1")
+    if pr and math.isfinite(pr.get("max_abs_rel_delta_pct", float("nan"))):
+        floor_pct = float(pr["max_abs_rel_delta_pct"])
 
     lo, hi = bracket(rows, E1_MAX_ANY_PCT)
 
@@ -179,6 +205,19 @@ def main():
     elif lo and not hi:
         lines.append(f"That is **above every rung measured**; extend the ladder.")
 
+    if floor_pct:
+        below = [r for r in rows if r["kind"] == "ladder"
+                 and r["max_abs_pct"] <= floor_pct]
+        lines += ["",
+                  f"**Resolution floor.** This platform reproduces E1's "
+                  f"published ckpt-0 eranks to within **{floor_pct:.3f}%**, so a "
+                  f"change smaller than that is not resolvable here."]
+        if below:
+            names = ", ".join(f"`{r['arm']}`" for r in sorted(
+                below, key=lambda r: r["dose"]))
+            lines.append(f"{len(below)} ladder rung(s) fall at or below it "
+                         f"({names}) and must be read as floor, not as a "
+                         f"measured response.")
     lines += ["", "## Reading rules", "",
               "- Arm R is not a controlled dose. It is an order-of-magnitude "
               "reference point between two released checkpoints separated by an "
@@ -193,7 +232,8 @@ def main():
     print(f"\nwrote {d / 'e4_summary.md'}")
 
     if not args.no_figure:
-        write_figure(rows, arm_w, d / "e4_calibration.png", scale)
+        write_figure(rows, arm_w, d / "e4_calibration.png", scale,
+                     floor_pct=floor_pct)
 
 
 if __name__ == "__main__":

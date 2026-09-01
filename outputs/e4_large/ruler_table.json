@@ -1,0 +1,93 @@
+{
+ "reference_arm": "R_instruct",
+ "reference_erank_by_layer": {
+  "5": 1127.1409642863018,
+  "14": 1281.2909585374307,
+  "26": 1428.5393266489584
+ },
+ "arms": {
+  "N_dose_1e-1": {
+   "per_layer_pct": {
+    "5": 1.5776035105675317,
+    "14": 3.605002404427171,
+    "26": 2.4106773140542446
+   },
+   "max_abs_change_pct": 3.605002404427171,
+   "max_abs_change_layer": 14,
+   "signed_change_at_max_pct": 3.605002404427171
+  },
+  "N_dose_1e-2": {
+   "per_layer_pct": {
+    "5": 0.3990458992247467,
+    "14": 0.2707376503276749,
+    "26": -0.07948419110211923
+   },
+   "max_abs_change_pct": 0.3990458992247467,
+   "max_abs_change_layer": 5,
+   "signed_change_at_max_pct": 0.3990458992247467
+  },
+  "N_dose_1e-3": {
+   "per_layer_pct": {
+    "5": -0.03231048629563001,
+    "14": 0.08085705490624116,
+    "26": -0.10858303430972284
+   },
+   "max_abs_change_pct": 0.10858303430972284,
+   "max_abs_change_layer": 26,
+   "signed_change_at_max_pct": -0.10858303430972284
+  },
+  "N_dose_1e-4": {
+   "per_layer_pct": {
+    "5": -0.014213619745717145,
+    "14": 0.003356339836168744,
+    "26": -0.1271847470928031
+   },
+   "max_abs_change_pct": 0.1271847470928031,
+   "max_abs_change_layer": 26,
+   "signed_change_at_max_pct": -0.1271847470928031
+  },
+  "N_dose_3e-2": {
+   "per_layer_pct": {
+    "5": 1.0709584788275628,
+    "14": 0.88185760518279,
+    "26": 0.7716566666500332
+   },
+   "max_abs_change_pct": 1.0709584788275628,
+   "max_abs_change_layer": 5,
+   "signed_change_at_max_pct": 1.0709584788275628
+  },
+  "N_dose_3e-3": {
+   "per_layer_pct": {
+    "5": 0.008593567680272375,
+    "14": 0.17948766313923276,
+    "26": -0.12831560312007137
+   },
+   "max_abs_change_pct": 0.17948766313923276,
+   "max_abs_change_layer": 14,
+   "signed_change_at_max_pct": 0.17948766313923276
+  },
+  "R_base": {
+   "per_layer_pct": {
+    "5": -5.689930934424382,
+    "14": -2.1775815446417357,
+    "26": 11.859424685766665
+   },
+   "max_abs_change_pct": 11.859424685766665,
+   "max_abs_change_layer": 26,
+   "signed_change_at_max_pct": 11.859424685766665
+  }
+ },
+ "hardware": {
+  "device": "mps",
+  "dtype": "torch.bfloat16",
+  "weights_gb": 15.2,
+  "host_ram_gb": 137.4,
+  "headroom_gb": 122.2
+ },
+ "scale": "large",
+ "layers": [
+  5,
+  14,
+  26
+ ]
+}

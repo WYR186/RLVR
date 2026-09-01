@@ -248,6 +248,13 @@ def main():
                          "report exactly 0.0000%% change")
     ap.add_argument("--instruct-model", default=None,
                     help="override the scale's instruct model id")
+    ap.add_argument("--adapters", nargs="+", default=None, metavar="LABEL=PATH",
+                    help="additionally measure the instruct model with each "
+                         "LoRA adapter attached, e.g. ckpt50=/path/to/ckpt-50. "
+                         "This puts a real trained update in the SAME frame as "
+                         "the noise ladder - same machine, dtype, probe and "
+                         "contract - so the comparison no longer crosses "
+                         "platforms.")
     args = ap.parse_args()
 
     scale = dict(SCALES[args.scale])
@@ -408,6 +415,36 @@ def main():
                 "arm_role": "calibration ladder rung",
                 "requested_relative_dose": dose,
                 "achieved_relative_dose": pert["achieved_aggregate_dose"]})
+            free_model(m)
+
+    # -- Arm A: real adapters, measured in this run's own frame -----------
+    if args.adapters:
+        from peft import PeftModel
+
+        for spec in args.adapters:
+            if "=" not in spec:
+                raise SystemExit(f"--adapters wants LABEL=PATH, got {spec!r}")
+            label_raw, path = spec.split("=", 1)
+            label = f"A_{label_raw}"
+            if existing(label):
+                continue
+            print(f"\n[{label}] {scale['instruct']} + adapter {path} ...",
+                  flush=True)
+            m, t = load_plain_model(scale["instruct"], device, dtype)
+            m = PeftModel.from_pretrained(m, path, is_trainable=False)
+            m.eval()
+            hooked = m.get_base_model() if hasattr(m, "get_base_model") else m
+            rec = measure(hooked, t, prompts, layers,
+                          batch_size=args.batch_size, pm=pm, label=label,
+                          max_length=args.max_length,
+                          spectra_only=args.spectra_only)
+            rec["model_id"] = scale["instruct"]
+            rec["adapter_path"] = path
+            records[label] = write(label, rec, {
+                "adapter": f"LoRA adapter attached: {path}",
+                "arm_role": "the real trained update, measured in the same "
+                            "frame as the ladder so no cross-platform "
+                            "comparison is needed"})
             free_model(m)
 
     # -- assembly ---------------------------------------------------------
