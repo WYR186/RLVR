@@ -43,6 +43,26 @@ NOISE_SEED = 42
 
 
 # ---------------------------------------------------------------------------
+# tensor loading
+# ---------------------------------------------------------------------------
+
+def _f64(f, key) -> np.ndarray:
+    """One tensor from an open safetensors handle, as float64.
+
+    Reads through torch rather than numpy: released checkpoints are commonly
+    bfloat16, which numpy has no dtype for, so the numpy backend raises
+    `data type 'bfloat16' not understood`. torch upcasts bf16 -> f64 exactly,
+    so this changes no value for the fp32 adapters either.
+    """
+    import torch
+
+    t = f.get_tensor(key)
+    if not isinstance(t, torch.Tensor):
+        t = torch.as_tensor(np.asarray(t))
+    return t.to(torch.float64).numpy()
+
+
+# ---------------------------------------------------------------------------
 # Arm W — the Stage-A LoRA's dose in weight space
 # ---------------------------------------------------------------------------
 
@@ -88,13 +108,13 @@ def lora_delta_norms(adapter_dir, *, scaling: float | None = None) -> dict:
 
     path = adapter_dir / "adapter_model.safetensors"
     out: dict = {}
-    with safe_open(str(path), framework="np") as f:
+    with safe_open(str(path), framework="pt") as f:
         keys = list(f.keys())
         a_keys = {_base_key_for(k): k for k in keys if ".lora_A" in k}
         b_keys = {_base_key_for(k): k for k in keys if ".lora_B" in k}
         for base_key in sorted(set(a_keys) & set(b_keys)):
-            A = np.asarray(f.get_tensor(a_keys[base_key]), dtype=np.float64)
-            B = np.asarray(f.get_tensor(b_keys[base_key]), dtype=np.float64)
+            A = _f64(f, a_keys[base_key])
+            B = _f64(f, b_keys[base_key])
             # W_eff = W_0 + s * B @ A  (PEFT convention: A is r x in, B is out x r)
             delta = (B @ A) * scaling
             out[base_key] = {
@@ -125,7 +145,7 @@ def full_delta_norms(ckpt_files, base_files, *,
     def index(files):
         loc = {}
         for path in files:
-            with safe_open(str(path), framework="np") as f:
+            with safe_open(str(path), framework="pt") as f:
                 for key in f.keys():
                     loc[key] = path
         return loc
@@ -141,10 +161,10 @@ def full_delta_norms(ckpt_files, base_files, *,
     for key in sorted(k for k in ckpt_loc if wanted(k)):
         if key not in base_loc:
             continue
-        with safe_open(str(ckpt_loc[key]), framework="np") as fc:
-            W = np.asarray(fc.get_tensor(key), dtype=np.float64)
-        with safe_open(str(base_loc[key]), framework="np") as fb:
-            W0 = np.asarray(fb.get_tensor(key), dtype=np.float64)
+        with safe_open(str(ckpt_loc[key]), framework="pt") as fc:
+            W = _f64(fc, key)
+        with safe_open(str(base_loc[key]), framework="pt") as fb:
+            W0 = _f64(fb, key)
         if W.shape != W0.shape:
             raise ValueError(
                 f"{key}: checkpoint shape {W.shape} != base {W0.shape}")
@@ -170,11 +190,11 @@ def base_weight_norms(weight_files, wanted: set[str] | None = None) -> dict:
 
     out: dict = {}
     for path in weight_files:
-        with safe_open(str(path), framework="np") as f:
+        with safe_open(str(path), framework="pt") as f:
             for key in f.keys():
                 if wanted is not None and key not in wanted:
                     continue
-                W = np.asarray(f.get_tensor(key), dtype=np.float64)
+                W = _f64(f, key)
                 out[key] = {"base_fro": float(np.linalg.norm(W)),
                             "shape": [int(x) for x in W.shape]}
     return out
