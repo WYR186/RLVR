@@ -30,7 +30,7 @@ E1_MAX_ANY_PCT = 0.7303       # V6b down_in, layer 14
 def load_arms(d: Path) -> dict:
     skip = {"ruler_table.json", "probe_manifest.json", "probe_frozen.json",
             "arm_W_weight_dose.json", "audit_e4.json", "e4_summary.md"}
-    return {p.stem: json.loads(p.read_text())
+    return {p.stem: json.loads(p.read_text(encoding="utf-8"))
             for p in sorted(d.glob("*.json")) if p.name not in skip}
 
 
@@ -67,6 +67,15 @@ def bracket(rows: list[dict], target_pct: float):
     return (below[-1] if below else None), (above[0] if above else None)
 
 
+def dose_bracket(rows: list[dict], target_dose: float):
+    """Which two requested Arm-N doses bracket a measured Arm-W dose?"""
+    rungs = sorted((r for r in rows if r["kind"] == "ladder"),
+                   key=lambda r: r["requested"])
+    below = [r for r in rungs if r["requested"] <= target_dose]
+    above = [r for r in rungs if r["requested"] > target_dose]
+    return (below[-1] if below else None), (above[0] if above else None)
+
+
 def write_figure(rows, arm_w, path: Path, scale: str, floor_pct=None):
     import matplotlib
     matplotlib.use("Agg")
@@ -87,8 +96,9 @@ def write_figure(rows, arm_w, path: Path, scale: str, floor_pct=None):
                   r"$\|\Delta W\|_F / \|W_0\|_F$")
     ax.set_ylabel(r"max $|\Delta$ effective rank$|$  (%)")
 
-    ax.axhline(E1_MAX_ANY_PCT, ls="--", lw=1.4, color="#c0392b",
-               label=f"E1: Stage-A LoRA moved erank {E1_MAX_ANY_PCT:.4f}%")
+    if scale == "large":
+        ax.axhline(E1_MAX_ANY_PCT, ls="--", lw=1.4, color="#c0392b",
+                   label=f"E1: Stage-A LoRA moved erank {E1_MAX_ANY_PCT:.4f}%")
 
     for r in rows:
         if r["kind"] != "ruler":
@@ -113,15 +123,13 @@ def write_figure(rows, arm_w, path: Path, scale: str, floor_pct=None):
                     textcoords="offset points", fontsize=7.5, color="#5d6d7e")
 
     if arm_w:
-        # ckpt-50 and ckpt-100 differ by 7%, so their labels would collide;
-        # stack them and give each its own leader height.
+        # Multiple nearby checkpoints would collide at one height. Spread all
+        # nonzero Arm-W labels through a bounded mid-band of the log y-axis.
         live = sorted((c, d) for c, d in arm_w.items() if d and d > 0)
         y0, y1 = ax.get_ylim()
         for i, (ckpt, dose) in enumerate(live):
             ax.axvline(dose, ls="-.", lw=1.2, color="#148f77")
-            # Sit the labels in the empty mid-band: the legend owns the top and
-            # the shaded floor owns the bottom.
-            frac = 0.52 - 0.09 * i
+            frac = 0.55 - 0.43 * i / max(1, len(live) - 1)
             y = 10 ** (math.log10(y0) + frac * (math.log10(y1) - math.log10(y0)))
             ax.annotate(f"our {ckpt}  {dose:.2e}", xy=(dose, y),
                         xytext=(7, 0), textcoords="offset points",
@@ -152,9 +160,12 @@ def main():
     scale = arms[args.reference]["measurement_contract"].get("e4_scale", "?")
 
     arm_w = {}
+    arm_w_mode = None
     wpath = d / "arm_W_weight_dose.json"
     if wpath.is_file():
-        rel = json.loads(wpath.read_text()).get("relative_dose", {})
+        wrec = json.loads(wpath.read_text(encoding="utf-8"))
+        arm_w_mode = wrec.get("mode")
+        rel = wrec.get("relative_dose", {})
         if rel.get("status") != "not_run":
             arm_w = {c: r["aggregate_relative_dose"] for c, r in rel.items()}
 
@@ -166,7 +177,7 @@ def main():
     if pr and math.isfinite(pr.get("max_abs_rel_delta_pct", float("nan"))):
         floor_pct = float(pr["max_abs_rel_delta_pct"])
 
-    lo, hi = bracket(rows, E1_MAX_ANY_PCT)
+    lo, hi = bracket(rows, E1_MAX_ANY_PCT) if scale == "large" else (None, None)
 
     lines = [f"# E4 calibration summary — {scale} scale", "",
              f"Reference arm: `{args.reference}`. "
@@ -189,21 +200,36 @@ def main():
     else:
         lines.append("- Arm W relative dose not computed "
                      "(base weight norms missing); only \\|ΔW\\|_F is known.")
-    lines += ["",
-              f"E1 measured the Stage-A LoRA moving erank by at most "
-              f"**{E1_MAX_ANY_PCT:.4f}%** (down_in L14) / "
-              f"{E1_MAX_RESID_PCT:.4f}% (resid L16)."]
-    if lo and hi:
-        lines.append(f"On this ladder that sits between the "
-                     f"**{lo['requested']:.0e}** rung ({lo['max_abs_pct']:.4f}%) "
-                     f"and the **{hi['requested']:.0e}** rung "
-                     f"({hi['max_abs_pct']:.4f}%).")
-    elif hi and not lo:
-        lines.append(f"That is **below every rung measured** — the smallest "
-                     f"({hi['requested']:.0e}) already moves erank "
-                     f"{hi['max_abs_pct']:.4f}%.")
-    elif lo and not hi:
-        lines.append(f"That is **above every rung measured**; extend the ladder.")
+    if scale == "large":
+        lines += ["",
+                  f"E1 measured the Stage-A LoRA moving erank by at most "
+                  f"**{E1_MAX_ANY_PCT:.4f}%** (down_in L14) / "
+                  f"{E1_MAX_RESID_PCT:.4f}% (resid L16)."]
+        if lo and hi:
+            lines.append(f"On this ladder that sits between the "
+                         f"**{lo['requested']:.0e}** rung ({lo['max_abs_pct']:.4f}%) "
+                         f"and the **{hi['requested']:.0e}** rung "
+                         f"({hi['max_abs_pct']:.4f}%).")
+        elif hi and not lo:
+            lines.append(f"That is **below every rung measured** — the smallest "
+                         f"({hi['requested']:.0e}) already moves erank "
+                         f"{hi['max_abs_pct']:.4f}%.")
+        elif lo and not hi:
+            lines.append(f"That is **above every rung measured**; extend the ladder.")
+    elif arm_w:
+        largest_ckpt, largest_dose = max(arm_w.items(), key=lambda x: x[1])
+        dlo, dhi = dose_bracket(rows, largest_dose)
+        source = "full-parameter exp1.5 v3" if arm_w_mode == "full_parameter" \
+            else "measured Stage-A"
+        lines += ["", f"The largest {source} dose is `{largest_ckpt}` at "
+                  f"**{largest_dose:.4e}**."]
+        if dlo and dhi:
+            lines.append(
+                f"On the Arm-N dose axis it lies between **{dlo['requested']:.0e}** "
+                f"(max |Δerank| {dlo['max_abs_pct']:.4f}%) and "
+                f"**{dhi['requested']:.0e}** ({dhi['max_abs_pct']:.4f}%).")
+        lines.append("The 7B E1 erank reference is not plotted or bracketed here: "
+                     "erank levels and response magnitudes are not compared across scales.")
 
     if floor_pct:
         below = [r for r in rows if r["kind"] == "ladder"
@@ -227,7 +253,8 @@ def main():
               "- erank levels are never compared across scales or dtypes, only "
               "arms against their own scale's reference."]
 
-    (d / "e4_summary.md").write_text("\n".join(lines) + "\n")
+    (d / "e4_summary.md").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
     print(f"\nwrote {d / 'e4_summary.md'}")
 

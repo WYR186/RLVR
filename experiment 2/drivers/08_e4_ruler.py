@@ -143,11 +143,17 @@ def memory_gate(scale: dict, device: str, dtype) -> dict:
     return info
 
 
-def load_plain_model(model_id: str, device: str, dtype, revision=None):
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+def load_plain_tokenizer(model_id: str, revision=None):
+    from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(model_id, revision=revision)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
+    return tok
+
+
+def load_plain_model(model_id: str, device: str, dtype, revision=None):
+    from transformers import AutoModelForCausalLM
+    tok = load_plain_tokenizer(model_id, revision=revision)
     model = AutoModelForCausalLM.from_pretrained(
         model_id, revision=revision, dtype=dtype)
     model.to(device)
@@ -218,6 +224,11 @@ def main():
     ap.add_argument("--probe", required=True, help="probe_frozen.json from step 1")
     ap.add_argument("--out", required=True)
     ap.add_argument("--arms", nargs="+", default=["R", "N"], choices=["R", "N"])
+    ap.add_argument("--r-only", choices=["both", "instruct", "base"],
+                    default="both",
+                    help="run one Arm-R model in this process. On small GPUs, "
+                         "run instruct and base separately so every model "
+                         "starts from a fresh CUDA process.")
     ap.add_argument("--device", default="auto")
     ap.add_argument("--dtype", default="auto",
                     choices=["auto", "bfloat16", "float16", "float32"])
@@ -361,39 +372,48 @@ def main():
 
     # -- Arm R ------------------------------------------------------------
     if "R" in args.arms:
-        if not existing("R_instruct") or not existing("R_base"):
-            m_i, t_i = load_plain_model(scale["instruct"], device, dtype)
-            m_b, t_b = load_plain_model(scale["base"], device, dtype)
+        run_instruct = args.r_only in ("both", "instruct")
+        run_base = args.r_only in ("both", "base")
+        have_instruct = existing("R_instruct")
+        have_base = existing("R_base")
+        if (run_instruct and not have_instruct) or (run_base and not have_base):
+            t_i = load_plain_tokenizer(scale["instruct"])
+            t_b = load_plain_tokenizer(scale["base"])
             gate = tokenizer_identity_gate(t_i, t_b, prompts)
-            free_model(m_b)
 
-            print(f"\n[R_instruct] {scale['instruct']} ...", flush=True)
-            rec = measure(m_i, t_i, prompts, layers,
-                          batch_size=args.batch_size, pm=pm, label="R_instruct",
-                          max_length=args.max_length,
-                          spectra_only=args.spectra_only)
-            rec["tokenizer_identity_gate"] = gate
-            rec["model_id"] = scale["instruct"]
-            if args.scale == "large" and not args.instruct_model:
-                rec["platform_reproduction_vs_e1"] = e4.platform_reproduction_delta(
-                    e4.erank_by_layer(rec), E1_CKPT0_ERANK)
-            records["R_instruct"] = write("R_instruct", rec, {
-                "arm_role": "reference - the model E1's ckpt-0 adapter sits on"})
-            free_model(m_i)
+            if run_instruct and not have_instruct:
+                m_i, t_i = load_plain_model(scale["instruct"], device, dtype)
+                print(f"\n[R_instruct] {scale['instruct']} ...", flush=True)
+                rec = measure(m_i, t_i, prompts, layers,
+                              batch_size=args.batch_size, pm=pm, label="R_instruct",
+                              max_length=args.max_length,
+                              spectra_only=args.spectra_only)
+                rec["tokenizer_identity_gate"] = gate
+                rec["model_id"] = scale["instruct"]
+                if args.scale == "large" and not args.instruct_model:
+                    rec["platform_reproduction_vs_e1"] = e4.platform_reproduction_delta(
+                        e4.erank_by_layer(rec), E1_CKPT0_ERANK)
+                records["R_instruct"] = write("R_instruct", rec, {
+                    "arm_role": "reference - the model E1's ckpt-0 adapter sits on"})
+                free_model(m_i)
+                del m_i
 
-            m_b, t_b = load_plain_model(scale["base"], device, dtype)
-            print(f"\n[R_base] {scale['base']} ...", flush=True)
-            rec = measure(m_b, t_b, prompts, layers,
-                          batch_size=args.batch_size, pm=pm, label="R_base",
-                          max_length=args.max_length,
-                          spectra_only=args.spectra_only)
-            rec["model_id"] = scale["base"]
-            records["R_base"] = write("R_base", rec, {
-                "arm_role": "ruler - separated from the reference by a full "
-                            "instruction-tuning + RLHF pipeline",
-                "caveat": "NOT a controlled dose; an order-of-magnitude "
-                          "reference point only."})
-            free_model(m_b)
+            if run_base and not have_base:
+                m_b, t_b = load_plain_model(scale["base"], device, dtype)
+                print(f"\n[R_base] {scale['base']} ...", flush=True)
+                rec = measure(m_b, t_b, prompts, layers,
+                              batch_size=args.batch_size, pm=pm, label="R_base",
+                              max_length=args.max_length,
+                              spectra_only=args.spectra_only)
+                rec["tokenizer_identity_gate"] = gate
+                rec["model_id"] = scale["base"]
+                records["R_base"] = write("R_base", rec, {
+                    "arm_role": "ruler - separated from the reference by a full "
+                                "instruction-tuning + RLHF pipeline",
+                    "caveat": "NOT a controlled dose; an order-of-magnitude "
+                              "reference point only."})
+                free_model(m_b)
+                del m_b
 
     # -- Arm N ------------------------------------------------------------
     if "N" in args.arms:
@@ -429,6 +449,7 @@ def main():
                 "achieved_relative_dose": pert["achieved_aggregate_dose"],
                 "noise_seed": seed})
             free_model(m)
+            del m
 
     # -- Arm A: real adapters, measured in this run's own frame -----------
     if args.adapters:
@@ -456,9 +477,10 @@ def main():
             records[label] = write(label, rec, {
                 "adapter": f"LoRA adapter attached: {path}",
                 "arm_role": "the real trained update, measured in the same "
-                            "frame as the ladder so no cross-platform "
-                            "comparison is needed"})
+                             "frame as the ladder so no cross-platform "
+                             "comparison is needed"})
             free_model(m)
+            del m
 
     # -- assembly ---------------------------------------------------------
     if "R_instruct" in records:
@@ -475,8 +497,9 @@ def main():
                 continue
             print(f"{label:>18}  {row['max_abs_change_pct']:>13.4f}%  "
                   f"{row['max_abs_change_layer']:>8}")
-        print("\nE1 reference for comparison: the Stage-A LoRA moved erank by "
-              "at most 0.7303% (down_in L14) / 0.7227% (resid L16).")
+        if args.scale == "large":
+            print("\nE1 reference for comparison: the Stage-A LoRA moved erank by "
+                  "at most 0.7303% (down_in L14) / 0.7227% (resid L16).")
     else:
         print("\nArm R reference not measured in this session; "
               "ruler_table.json not written.")

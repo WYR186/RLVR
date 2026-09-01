@@ -1,0 +1,94 @@
+{
+ "reference_arm": "R_instruct",
+ "reference_erank_by_layer": {
+  "4": 312.93906139747816,
+  "12": 413.4804846361986,
+  "22": 447.7496532429048
+ },
+ "arms": {
+  "N_dose_1e-1": {
+   "per_layer_pct": {
+    "4": 6.663259269199827,
+    "12": 5.323766133656125,
+    "22": 6.53059365788576
+   },
+   "max_abs_change_pct": 6.663259269199827,
+   "max_abs_change_layer": 4,
+   "signed_change_at_max_pct": 6.663259269199827
+  },
+  "N_dose_1e-2": {
+   "per_layer_pct": {
+    "4": 0.11494174787431675,
+    "12": 0.21342877207363828,
+    "22": -0.2527026945818004
+   },
+   "max_abs_change_pct": 0.2527026945818004,
+   "max_abs_change_layer": 22,
+   "signed_change_at_max_pct": -0.2527026945818004
+  },
+  "N_dose_1e-3": {
+   "per_layer_pct": {
+    "4": -0.005818034305202751,
+    "12": -0.06094578665177476,
+    "22": 0.09022284239279518
+   },
+   "max_abs_change_pct": 0.09022284239279518,
+   "max_abs_change_layer": 22,
+   "signed_change_at_max_pct": 0.09022284239279518
+  },
+  "N_dose_1e-4": {
+   "per_layer_pct": {
+    "4": -0.00029047022450388,
+    "12": 0.0048075983012800414,
+    "22": 0.0037357481900764595
+   },
+   "max_abs_change_pct": 0.0048075983012800414,
+   "max_abs_change_layer": 12,
+   "signed_change_at_max_pct": 0.0048075983012800414
+  },
+  "N_dose_3e-2": {
+   "per_layer_pct": {
+    "4": 1.167356349472094,
+    "12": -0.5955216156494312,
+    "22": 1.0109922724119504
+   },
+   "max_abs_change_pct": 1.167356349472094,
+   "max_abs_change_layer": 4,
+   "signed_change_at_max_pct": 1.167356349472094
+  },
+  "N_dose_3e-3": {
+   "per_layer_pct": {
+    "4": 0.06937365084028718,
+    "12": 0.04836470282136043,
+    "22": -0.14785005863978357
+   },
+   "max_abs_change_pct": 0.14785005863978357,
+   "max_abs_change_layer": 22,
+   "signed_change_at_max_pct": -0.14785005863978357
+  },
+  "R_base": {
+   "per_layer_pct": {
+    "4": -2.1874029578951433,
+    "12": -8.446270040746692,
+    "22": 11.09909602753364
+   },
+   "max_abs_change_pct": 11.09909602753364,
+   "max_abs_change_layer": 22,
+   "signed_change_at_max_pct": 11.09909602753364
+  }
+ },
+ "hardware": {
+  "device": "cuda",
+  "dtype": "torch.float32",
+  "weights_gb": 2.0,
+  "accelerator_total_gb": 8.6,
+  "accelerator_name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "headroom_gb": 6.6
+ },
+ "scale": "small",
+ "layers": [
+  4,
+  12,
+  22
+ ]
+}

@@ -1,0 +1,14 @@
+{
+ "n_probe": 4096,
+ "n_probe_full": 4096,
+ "sample_truncated_vs_e1": false,
+ "probe_ids_sha16": "1e61252e7b54793e",
+ "rendered_text_sha256": "8bc2b4066c892c0ff6ac69e9a64846557c1d586c2ee6e162d3b831abbaecd265",
+ "rendered_text_sha256_full_4096": "8bc2b4066c892c0ff6ac69e9a64846557c1d586c2ee6e162d3b831abbaecd265",
+ "rendered_with_model_id": "Qwen/Qwen2.5-7B-Instruct",
+ "rendered_with_model_revision": null,
+ "dataset_revision": "2e2790a962a3c099bfb5ea61389cbf98a5ea439b",
+ "chat_template_applied": true,
+ "add_generation_prompt": true,
+ "note": "Both Arm R models consume THIS text verbatim. Do not re-render per model: Qwen2.5-7B and Qwen2.5-7B-Instruct do not share a chat template, and re-rendering would confound the weight difference with a prompt difference."
+}

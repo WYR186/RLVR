@@ -27,3 +27,32 @@ The human-readable interpretation is in
 `experiment 2/FINDING_E1_METRIC_REMEASUREMENT.md`; compute accounting and GPU
 shutdown evidence are recorded in `eaaj-pilot/compute_log.md` and
 `experiment 2/evidence/`.
+
+## E4-small Windows RTX 4070 archive
+
+`e4_small_win4070_2026-09-01.tar.gz` is the complete audited 0.5B E4 output,
+including exp1.5 v3 full-parameter Arm W, both Arm-R records, all six Arm-N
+rungs, the frozen probe and manifest, audit JSON, summary, figure, and the
+preserved batch-16 OOM diagnostic record.
+
+- Archive root: `e4_small/`
+- Files: 16
+- Uncompressed size: 3,329,503 bytes
+- Archive size: 777,129 bytes
+- SHA-256: `a172cc032ed5692290378441fb6903e218073d67461d6178655868e2c3bedd16`
+
+Extract from the repository root with:
+
+```bash
+tar -xzf "experiment 2/artifacts/e4_small_win4070_2026-09-01.tar.gz" -C outputs
+```
+
+Then verify the extracted artifacts with:
+
+```bash
+python "experiment 2/drivers/09_audit_e4_artifacts.py" \
+  --dir outputs/e4_small --require-arm-w
+```
+
+The interpretation and Windows execution notes are in
+`experiment 2/FINDING_E4_SMALL_WIN4070.md` and `eaaj-pilot/compute_log.md`.

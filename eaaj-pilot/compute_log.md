@@ -304,3 +304,27 @@ this session only. Screenshots need to start with the next run.
 Sessions 1 and 2 together: **~21 units** of the ~300-unit budget, covering the
 reference-arm gate plus every operationalization axis in
 `SPEC_E1_METRIC_REMEASUREMENT.md` (V1a, V2, V3, V4, V5a, V5b, V5c, V6a–c).
+
+## 2026-08-31--09-01 — E4-small + exp1.5 v3 Arm W COMPLETE
+
+- Machine: Windows RTX 4070 Laptop GPU, 8 GiB; no Colab compute units used.
+- Contract: Qwen2.5-0.5B Base/Instruct, float32, frozen 4,096-prompt probe,
+  layers 4/12/22, batch 8; every formal R/N arm ran in a fresh CUDA process.
+- Arm W: all eight exp1.5 v3 full-parameter checkpoints measured over 168
+  target modules. Aggregate dose rose monotonically from exactly 0 at ckpt-0
+  to `7.179374e-04` at ckpt-500.
+- Arm N: six requested doses from `1e-4` to `1e-1`; all achieved within 0.01%
+  relative error. Maximum absolute erank response rose from 0.0048% to 6.6633%.
+  Base-vs-Instruct Arm R measured 11.0991% (uncontrolled reference only).
+- Formal R/N arm wall time summed from records: about 47.7 minutes. Total
+  session time was longer because two combined-process attempts were preserved
+  after CUDA OOM on the 8-GiB device. No formal arm was accepted from a failed
+  process.
+- Engineering correction: the runner now releases caller-owned model
+  references and supports `--r-only`; final execution used one model per fresh
+  process without changing the scientific contract.
+- Audit: PASS, including probe hash `1e61252e7b54793e`, tokenizer identity,
+  gated-MLP hook max error 0.0, distinct ladder rungs, complete Arm W, and
+  exact ckpt-0 zero.
+- Outputs: `outputs/e4_small/`; interpretation:
+  `experiment 2/FINDING_E4_SMALL_WIN4070.md`.
