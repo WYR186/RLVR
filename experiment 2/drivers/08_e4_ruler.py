@@ -266,6 +266,21 @@ def main():
                          "report exactly 0.0000%% change")
     ap.add_argument("--instruct-model", default=None,
                     help="override the scale's instruct model id")
+    ap.add_argument("--checkpoints", nargs="+", default=None, metavar="LABEL=PATH",
+                    help="additionally measure FULL-PARAMETER checkpoint "
+                         "snapshots, e.g. ckpt500=/path/to/ckpt-500. Use this "
+                         "for runs that fine-tuned every weight (exp1.5 v3); "
+                         "--adapters is for LoRA. Each is loaded with "
+                         "AutoModelForCausalLM and measured under this run's "
+                         "contract, so it lands in the same frame as the "
+                         "ladder. Compare these against the arm the run was "
+                         "trained FROM: pass --reference to 10_e4_report.py.")
+    ap.add_argument("--checkpoint-tokenizer", default=None,
+                    help="tokenizer for --checkpoints (default: the scale's "
+                         "base model). Checkpoint dirs often ship a "
+                         "tokenizer_config without the vocab, and the probe is "
+                         "pre-rendered text anyway, so what matters is that the "
+                         "ids match - which is gated, not assumed.")
     ap.add_argument("--adapters", nargs="+", default=None, metavar="LABEL=PATH",
                     help="additionally measure the instruct model with each "
                          "LoRA adapter attached, e.g. ckpt50=/path/to/ckpt-50. "
@@ -479,6 +494,57 @@ def main():
                 "arm_role": "the real trained update, measured in the same "
                              "frame as the ladder so no cross-platform "
                              "comparison is needed"})
+            free_model(m)
+            del m
+
+    # -- Arm A (full-parameter): real checkpoints in this run's own frame --
+    if args.checkpoints:
+        tok_id = args.checkpoint_tokenizer or scale["base"]
+        for spec in args.checkpoints:
+            if "=" not in spec:
+                raise SystemExit(
+                    f"--checkpoints wants LABEL=PATH, got {spec!r}")
+            label_raw, path = spec.split("=", 1)
+            label = f"A_{label_raw}"
+            if existing(label):
+                continue
+            if not list(Path(path).glob("*.safetensors")) and not list(
+                    Path(path).glob("*.bin")):
+                raise SystemExit(
+                    f"{label}: no weight files under {path}. Full-parameter "
+                    "checkpoints are gitignored; on this project they exist "
+                    "only on the machine that trained them.")
+            print(f"\n[{label}] full-parameter checkpoint {path} ...",
+                  flush=True)
+            from transformers import AutoModelForCausalLM
+
+            t = load_plain_tokenizer(tok_id)
+            m = AutoModelForCausalLM.from_pretrained(path, dtype=dtype)
+            m.to(device)
+            m.eval()
+            # Same gate Arm R uses: the checkpoint must turn the frozen probe
+            # into the same ids as the tokenizer we are pairing it with, or the
+            # arms differ in input as well as weights.
+            try:
+                from transformers import AutoTokenizer
+                t_ck = AutoTokenizer.from_pretrained(path)
+                tokenizer_identity_gate(t, t_ck, prompts)
+            except (OSError, ValueError) as exc:
+                print(f"  checkpoint ships no usable tokenizer ({exc.__class__.__name__}); "
+                      f"using {tok_id} and recording that")
+            rec = measure(m, t, prompts, layers,
+                          batch_size=args.batch_size, pm=pm, label=label,
+                          max_length=args.max_length,
+                          spectra_only=args.spectra_only)
+            rec["model_id"] = path
+            rec["checkpoint_path"] = path
+            rec["tokenizer_id"] = tok_id
+            records[label] = write(label, rec, {
+                "adapter": f"full-parameter checkpoint: {path}",
+                "tokenizer_id": tok_id,
+                "arm_role": "the real trained update, measured in the same "
+                            "frame as the ladder. Compare against the arm this "
+                            "run was trained FROM, not against R_instruct."})
             free_model(m)
             del m
 

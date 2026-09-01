@@ -38,8 +38,14 @@ def audit_contract(rec: dict, label: str) -> None:
     assert c["activation_accumulator"] == "float32", f"{label}: wrong accumulator"
     assert c["svd_dtype"] == "float64", f"{label}: wrong SVD dtype"
     assert c["spectrum_centering"] is True, f"{label}: spectrum not centered"
-    assert c["adapter"] == "none - bare model weights", \
-        f"{label}: E4 arms must carry no adapter"
+    # Arm A deliberately carries a real trained update; every other arm must
+    # be a bare model, or an adapter would silently confound the ladder.
+    if label.startswith("A_"):
+        assert c["adapter"] != "none - bare model weights", \
+            f"{label}: an Arm-A record must name the checkpoint it loaded"
+    else:
+        assert c["adapter"] == "none - bare model weights", \
+            f"{label}: E4 arms must carry no adapter"
 
 
 def audit_probe(d: Path) -> dict:
@@ -63,7 +69,7 @@ def audit_arms(d: Path) -> dict:
             continue
         rec = load(p)
         assert "spectra" in rec, f"{p.name}: no spectra block"
-        audit_contract(rec, p.name)
+        audit_contract(rec, p.stem)
         arms[p.stem] = rec
     assert arms, f"no arm records under {d}"
 
