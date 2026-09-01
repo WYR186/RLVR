@@ -66,6 +66,28 @@ claim that a structured RLVR update behaves like isotropic noise. Arm R is only
 an order-of-magnitude reference between released Base and Instruct checkpoints,
 not a controlled intervention.
 
+## Arm A: the real exp1.5 v3 update in the same frame
+
+Arm A loads the full-parameter checkpoints directly and compares them against
+`R_base`, the exact pinned revision from which exp1.5 v3 was trained. Arm N
+continues to use `R_instruct`, its actual perturbation origin.
+
+| checkpoint | aggregate dose | max absolute erank change vs R_base | layer |
+|---|---:|---:|---:|
+| 0 | 0.000000e+00 | 0.000000% | 4 |
+| 100 | 4.876857e-04 | 0.869783% | 22 |
+| 500 | 7.179374e-04 | 0.614301% | 22 |
+
+At the matched ckpt-500 dose, the real response is **26.3x** the isotropic-noise
+mean and **19.2x** the largest of the three observed noise directions. The real
+update therefore has a much larger spectral effect per unit weight norm under
+this contract. The decline from ckpt-100 to ckpt-500 despite increasing dose is
+additional evidence that dose magnitude alone does not determine the response.
+
+This does not connect the separately measured −8.56 pp adaptability drop to
+either dose or erank: that outcome used another probe and remains an independent
+observation.
+
 The 7B E1 response is deliberately not used to bracket this small-scale result.
 Erank levels and response magnitudes are not compared across model scales.
 
@@ -79,6 +101,8 @@ Erank levels and response magnitudes are not compared across model scales.
 - all 11 unique `(requested dose, noise seed)` cells within 0.01% of their
   requests over all 168 target modules, with no duplicate dose/seed pair;
 - all eight Arm-W checkpoints present and checkpoint 0 exactly zero.
+- all three Arm-A checkpoints share the contract, with `A_ckpt0` reproducing
+  `R_base` at exactly 0.000000%.
 
 The complete machine-readable output is in `outputs/e4_small/`; the portable
 archive and checksum are recorded in `experiment 2/artifacts/README.md`.

@@ -8,6 +8,9 @@
   "sample_truncated_vs_e1": false
  },
  "arms": [
+  "A_ckpt0",
+  "A_ckpt100",
+  "A_ckpt500",
   "N_dose_1e-1",
   "N_dose_1e-2",
   "N_dose_1e-3",
@@ -23,6 +26,9 @@
   "R_instruct"
  ],
  "gated_mlp_hook_check": {
+  "A_ckpt0": 0.0,
+  "A_ckpt100": 0.0,
+  "A_ckpt500": 0.0,
   "N_dose_1e-1": 0.0,
   "N_dose_1e-2": 0.0,
   "N_dose_1e-3": 0.0,
@@ -119,6 +125,36 @@
  "ruler": {
   "status": "recomputed and matches",
   "arms": {
+   "A_ckpt0": {
+    "per_layer_pct": {
+     "4": -2.1874029578951433,
+     "12": -8.446270040746692,
+     "22": 11.09909602753364
+    },
+    "max_abs_change_pct": 11.09909602753364,
+    "max_abs_change_layer": 22,
+    "signed_change_at_max_pct": 11.09909602753364
+   },
+   "A_ckpt100": {
+    "per_layer_pct": {
+     "4": -2.094570693165072,
+     "12": -8.518137493559221,
+     "22": 10.132774548718492
+    },
+    "max_abs_change_pct": 10.132774548718492,
+    "max_abs_change_layer": 22,
+    "signed_change_at_max_pct": 10.132774548718492
+   },
+   "A_ckpt500": {
+    "per_layer_pct": {
+     "4": -1.9561729058341093,
+     "12": -8.278903944181197,
+     "22": 10.416612718610935
+    },
+    "max_abs_change_pct": 10.416612718610935,
+    "max_abs_change_layer": 22,
+    "signed_change_at_max_pct": 10.416612718610935
+   },
    "N_dose_1e-1": {
     "per_layer_pct": {
      "4": 6.663259269199827,
@@ -240,6 +276,42 @@
     "signed_change_at_max_pct": 11.09909602753364
    }
   }
+ },
+ "arm_A_vs_R_base": {
+  "status": "complete",
+  "arms": {
+   "A_ckpt0": {
+    "reference": "R_base",
+    "change_pct_by_layer": {
+     "4": 0.0,
+     "12": 0.0,
+     "22": 0.0
+    },
+    "max_abs_change_pct": 0.0,
+    "max_abs_change_layer": 4
+   },
+   "A_ckpt100": {
+    "reference": "R_base",
+    "change_pct_by_layer": {
+     "4": 0.09490829150575593,
+     "12": -0.078497569508654,
+     "22": -0.8697833856142846
+    },
+    "max_abs_change_pct": 0.8697833856142846,
+    "max_abs_change_layer": 22
+   },
+   "A_ckpt500": {
+    "reference": "R_base",
+    "change_pct_by_layer": {
+     "4": 0.23640109664146625,
+     "12": 0.1828064204920772,
+     "22": -0.6143014059750458
+    },
+    "max_abs_change_pct": 0.6143014059750458,
+    "max_abs_change_layer": 22
+   }
+  },
+  "ckpt0_identity_passed": true
  },
  "arm_W": {
   "status": "complete",

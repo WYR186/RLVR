@@ -1,4 +1,4 @@
-# Result — effective rank has a detection threshold, and every intervention we ran sits below it
+# Result — effective rank has a noise-dose threshold, but real training moves it far more efficiently
 
 **Date:** 2026-09-01
 **Owner:** Aaron Wang (early-warning diagnostics)
@@ -19,11 +19,15 @@ E1 showed Q does not move across our checkpoints. E4 asks what a change that
   response is monotone: 0.399% → 1.071% → 3.605% at 1.03e-2 / 3.04e-2 / 1.01e-1.
 - **Our intervention was ~19x below that threshold.** Arm W measures the 7B
   Stage-A LoRA at **5.4596e-04** (ckpt-100).
+- **At 0.5B, update structure matters.** At matched dose `7.1794e-04`, the real
+  exp1.5 v3 ckpt-500 moves erank **0.6143%**, versus isotropic noise mean
+  **0.0234%** (range 0.0079%--0.0321%): **26.3x** the mean and above every
+  measured noise direction.
 
-So the honest claim is not "Q has no dynamic range." It is: **Q has a dose
-threshold, we can state it, and our regime — like most LoRA-scale RLVR
-plasticity work — sits an order of magnitude beneath it.** That is a power
-analysis, and it makes the null results predictions rather than failures.
+So the honest claim is not "Q has no dynamic range." It is: **the isotropic
+noise ruler has a dose threshold, while a structured gradient update can move Q
+substantially below that threshold.** The ruler calibrates magnitude but is a
+conservative detector bound for real training at 0.5B.
 
 Dormant fraction is the opposite and E1 already settled it: no range at any
 dose, at either scale.
@@ -93,27 +97,29 @@ apart" is partly a statement about the checkpoints. Second, full-parameter
 training at 0.5B for 500 updates reaches **7.18e-04**, the same order as a
 rank-16 LoRA at 100 updates. The dose ceiling is not a LoRA artifact.
 
-## 5. What is NOT yet established
+## 5. Arm A closes the structured-vs-noise comparison at 0.5B
 
-**The comparison that matters most is still missing at both scales.** The
-interesting question is whether a real, structured, gradient-derived update
-moves the spectrum more per unit weight-norm than isotropic noise. Answering it
-needs the real checkpoints measured *in the same frame as the ladder*, and
-neither scale has that yet:
+The real exp1.5 v3 checkpoints were re-measured on the 4070 under E4-small's
+exact 4,096-prompt, float32, layers-4/12/22 contract. Because the run started
+from the pinned Qwen2.5-0.5B Base revision, every Arm-A value is measured against
+`R_base`; Arm N remains measured against the `R_instruct` model it perturbed.
 
-- **7B**: E1's Stage-A response was measured on an A100; the ladder is on MPS.
-  The Arm A run that would close this wedged twice on the mixed bf16-base /
-  fp32-adapter path and was abandoned.
-- **0.5B**: exp1.5 v3's own erank change (−0.976%) was measured on **its own
-  GSM8K probe at n_probe = 512**, which is below the 896-dim hidden size and so
-  **sample-truncated**; the ladder uses the 4096-prompt GURU probe. Different
-  probe, different size, truncated spectrum — three reasons the numbers must
-  not be divided by one another.
+| real checkpoint | aggregate dose | max abs erank change vs R_base | layer |
+|---|---:|---:|---:|
+| ckpt-0 | 0.000000e+00 | 0.000000% | 4 |
+| ckpt-100 | 4.876857e-04 | 0.869783% | 22 |
+| ckpt-500 | 7.179374e-04 | 0.614301% | 22 |
 
-Any "structured updates move Q ~Nx more than noise" statement is therefore
-**not yet supported**. The clean test is Arm A at 0.5B on the 4070: measure
-exp1.5 v3's ckpt-0 and ckpt-500 under E4-small's exact contract. It is a few
-0.5B passes on hardware that has already run this code.
+The ckpt-0 exact identity is a hard gate. At ckpt-500's matched dose, three
+isotropic directions moved erank 0.0321% / 0.0079% / 0.0301% (mean 0.0234%).
+The real response is therefore **26.3x the noise mean** and **19.2x the largest
+observed direction**. The non-monotone ckpt-100/500 response also shows that
+weight-norm dose alone does not determine the spectral effect.
+
+This closes the comparison only at 0.5B. The equivalent 7B Arm A remains absent
+because its mixed bf16-base/fp32-adapter run wedged on MPS. It also does not turn
+exp1.5 v3's separately measured −8.56 pp adaptability change into a causal
+consequence of dose or erank; the outcome and spectral probes remain distinct.
 
 ## 6. Reading rules
 
@@ -131,4 +137,6 @@ exp1.5 v3's ckpt-0 and ckpt-500 under E4-small's exact contract. It is a few
 ```bash
 python "experiment 2/drivers/09_audit_e4_artifacts.py" --dir outputs/e4_large --require-arm-w
 python "experiment 2/drivers/10_e4_report.py" --dir outputs/e4_large
+python "experiment 2/drivers/09_audit_e4_artifacts.py" --dir outputs/e4_small --require-arm-w
+python "experiment 2/drivers/10_e4_report.py" --dir outputs/e4_small --reference R_base
 ```

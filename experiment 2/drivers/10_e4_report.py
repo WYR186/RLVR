@@ -14,6 +14,7 @@ Run `09_audit_e4_artifacts.py` first. This script reports; it does not verify.
 import argparse
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -35,12 +36,18 @@ def load_arms(d: Path) -> dict:
 
 
 def ladder_rows(arms: dict, ref_label: str) -> list[dict]:
-    ref = e4.erank_by_layer(arms[ref_label])
+    requested_ref = e4.erank_by_layer(arms[ref_label])
+    # Arm N was constructed by perturbing R_instruct, so changing the report's
+    # Arm-A reference to R_base must not silently change the ladder's origin.
+    noise_ref_label = "R_instruct" if "R_instruct" in arms else ref_label
+    noise_ref = e4.erank_by_layer(arms[noise_ref_label])
     rows = []
     for label, rec in arms.items():
         if label == ref_label:
             continue
-        rel = e4.relative_change(ref, e4.erank_by_layer(rec))
+        comparison_ref = noise_ref if label.startswith("N_") else requested_ref
+        comparison_label = noise_ref_label if label.startswith("N_") else ref_label
+        rel = e4.relative_change(comparison_ref, e4.erank_by_layer(rec))
         if not rel:
             continue
         peak = max(rel, key=lambda l: abs(rel[l]))
@@ -53,7 +60,9 @@ def ladder_rows(arms: dict, ref_label: str) -> list[dict]:
             "signed_pct": rel[peak],
             "layer": peak,
             "seed": pert.get("seed") if pert else None,
-            "kind": "ladder" if pert else "ruler",
+            "reference": comparison_label,
+            "kind": ("ladder" if pert else
+                     ("trained" if label.startswith("A_") else "ruler")),
         })
     rows.sort(key=lambda r: (r["kind"], r["dose"] if r["dose"] is not None else -1))
     return rows
@@ -185,6 +194,25 @@ def write_figure(rows, arm_w, path: Path, scale: str, floor_pct=None):
                         xytext=(7, 0), textcoords="offset points",
                         fontsize=7.5, color="#148f77", ha="left", va="center")
 
+        trained_label_used = False
+        for row in (r for r in rows if r["kind"] == "trained"):
+            raw = row["arm"].removeprefix("A_")
+            match = re.fullmatch(r"ckpt-?(\d+)", raw)
+            ckpt = f"ckpt-{match.group(1)}" if match else raw
+            dose = arm_w.get(ckpt)
+            if not dose or row["max_abs_pct"] <= 0:
+                continue
+            ax.scatter(dose, row["max_abs_pct"], marker="*", s=105,
+                       color="#117864", edgecolor="white", linewidth=0.5,
+                       zorder=5,
+                       label=("Arm A: real trained checkpoints"
+                              if not trained_label_used else None))
+            trained_label_used = True
+            ax.annotate(f"{ckpt}  {row['max_abs_pct']:.3f}%",
+                        xy=(dose, row["max_abs_pct"]), xytext=(8, 5),
+                        textcoords="offset points", fontsize=7.5,
+                        color="#0e6251")
+
     ax.set_title(f"E4 detector calibration — {scale} scale\n"
                  "how large a weight change does effective rank register?",
                  fontsize=11)
@@ -230,20 +258,22 @@ def main():
 
     lo, hi = bracket(rows, E1_MAX_ANY_PCT) if scale == "large" else (None, None)
 
+    noise_reference = "R_instruct" if "R_instruct" in arms else args.reference
     lines = [f"# E4 calibration summary — {scale} scale", "",
-             f"Reference arm: `{args.reference}`. "
+             f"Arm-A/reference comparison arm: `{args.reference}`; Arm-N noise "
+             f"reference: `{noise_reference}`. "
              f"Probe n={arms[args.reference]['meta']['n_probe']}, "
              f"layers {arms[args.reference]['meta']['layers']}, "
              f"dtype {arms[args.reference]['measurement_contract']['e4_dtype']}.",
              "",
-             "| arm | requested dose | achieved dose | max \\|Δerank\\| | layer |",
-             "|---|---|---|---|---|"]
+             "| arm | reference | requested dose | achieved dose | max \\|Δerank\\| | layer |",
+             "|---|---|---|---|---|---|"]
     for r in rows:
         if r["kind"] == "ladder" and "_s" in r["arm"]:
             continue
         req = f"{r['requested']:.0e}" if r["requested"] is not None else "—"
         got = f"{r['dose']:.4e}" if r["dose"] is not None else "— (not a controlled dose)"
-        lines.append(f"| {r['arm']} | {req} | {got} | "
+        lines.append(f"| {r['arm']} | {r['reference']} | {req} | {got} | "
                      f"{r['max_abs_pct']:.4f}% | {r['layer']} |")
 
     if repeats:
@@ -255,6 +285,15 @@ def main():
             lines.append(
                 f"| {g['requested']:.6g} | {g['n']} | {seeds} | "
                 f"{g['mean']:.4f}% | [{g['min']:.4f}%, {g['max']:.4f}%] |")
+
+    trained = [r for r in rows if r["kind"] == "trained"]
+    if trained:
+        lines += ["", "## Arm A: real checkpoint response", "",
+                  "| checkpoint arm | reference | max \\|Δerank\\| | layer |",
+                  "|---|---|---:|---:|"]
+        for r in sorted(trained, key=lambda row: row["arm"]):
+            lines.append(f"| {r['arm']} | {r['reference']} | "
+                         f"{r['max_abs_pct']:.6f}% | {r['layer']} |")
 
     lines += ["", "## Where our Stage-A run falls", ""]
     if arm_w:
@@ -294,6 +333,16 @@ def main():
                 f"{', '.join(str(s) for s in matched['seeds'])}) gives mean max "
                 f"|Δerank| **{matched['mean']:.4f}%**, range "
                 f"[{matched['min']:.4f}%, {matched['max']:.4f}%].")
+            wanted = "A_" + largest_ckpt.replace("-", "")
+            real = next((r for r in trained if r["arm"] == wanted), None)
+            if real:
+                ratio = real["max_abs_pct"] / matched["mean"]
+                lines.append(
+                    f"The matching real checkpoint `{real['arm']}` moves erank by "
+                    f"**{real['max_abs_pct']:.4f}%** (layer {real['layer']}), "
+                    f"**{ratio:.1f}×** the isotropic-noise mean and "
+                    f"{'above' if real['max_abs_pct'] > matched['max'] else 'within'} "
+                    f"the observed direction-repeat range.")
         elif dlo and dhi:
             lines.append(
                 f"On the Arm-N dose axis it lies between **{dlo['requested']:.0e}** "

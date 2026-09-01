@@ -331,5 +331,10 @@ reference-arm gate plus every operationalization axis in
 - Audit: PASS, including probe hash `1e61252e7b54793e`, tokenizer identity,
   gated-MLP hook max error 0.0, distinct ladder rungs, complete Arm W, and
   exact ckpt-0 zero.
+- Arm A extension: full-parameter ckpt-0/100/500 ran in three isolated CUDA
+  processes (320.8 / 316.8 / 314.7 seconds; 15.9 minutes total). Against the
+  registered `R_base`, max |Δerank| was 0.000000% / 0.869783% / 0.614301%.
+  The ckpt-500 response was 26.3x the matched-dose isotropic mean and 19.2x its
+  largest observed direction. Strict audit, including ckpt-0 identity, passed.
 - Outputs: `outputs/e4_small/`; interpretation:
   `experiment 2/FINDING_E4_SMALL_WIN4070.md`.

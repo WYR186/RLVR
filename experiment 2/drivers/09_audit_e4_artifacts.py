@@ -96,6 +96,28 @@ def audit_hook_check(arms: dict) -> dict:
     return out
 
 
+def audit_arm_a(arms: dict) -> dict:
+    """Measure real checkpoints against their registered Base-model origin."""
+    checkpoints = {k: v for k, v in arms.items() if k.startswith("A_")}
+    if not checkpoints:
+        return {"status": "not run"}
+    assert "R_base" in arms, "Arm A is present but R_base is missing"
+    ref = e4.erank_by_layer(arms["R_base"])
+    rows = {}
+    for label, rec in sorted(checkpoints.items()):
+        rel = e4.relative_change(ref, e4.erank_by_layer(rec))
+        peak = max(rel, key=lambda layer: abs(rel[layer]))
+        rows[label] = {"reference": "R_base", "change_pct_by_layer": rel,
+                       "max_abs_change_pct": abs(rel[peak]),
+                       "max_abs_change_layer": peak}
+    if "A_ckpt0" in rows:
+        assert rows["A_ckpt0"]["max_abs_change_pct"] == 0.0, \
+            "A_ckpt0 must reproduce R_base exactly"
+    return {"status": "complete", "arms": rows,
+            "ckpt0_identity_passed": rows.get("A_ckpt0", {}).get(
+                "max_abs_change_pct") == 0.0}
+
+
 def audit_ladder(arms: dict) -> dict:
     """Arm N rungs must have hit the dose they claim, and be distinct."""
     rungs = {k: v for k, v in arms.items() if k.startswith("N_")}
@@ -175,13 +197,14 @@ def main():
     probe = audit_probe(d)
     arms = audit_arms(d)
     hooks = audit_hook_check(arms)
+    arma = audit_arm_a(arms)
     ladder = audit_ladder(arms)
     ruler = audit_ruler(d, arms)
     armw = audit_arm_w(d, args.require_arm_w)
 
     report = {"dir": str(d), "probe": probe, "arms": sorted(arms),
               "gated_mlp_hook_check": hooks, "ladder": ladder,
-              "ruler": ruler, "arm_W": armw}
+              "ruler": ruler, "arm_A_vs_R_base": arma, "arm_W": armw}
     (d / "audit_e4.json").write_text(json.dumps(report, indent=1))
 
     print("E4 ARTIFACT AUDIT PASS")
@@ -192,6 +215,13 @@ def main():
           f"truncated_vs_e1={probe.get('sample_truncated_vs_e1', 'n/a')}")
     print(f"  gated-MLP hook check: max err "
           f"{max(hooks.values()) if hooks else 'n/a'}")
+    if isinstance(arma.get("arms"), dict):
+        print("  Arm A erank change vs R_base:")
+        for label, row in sorted(arma["arms"].items()):
+            print(f"    {label:>16}  {row['max_abs_change_pct']:.6f}%  "
+                  f"(layer {row['max_abs_change_layer']})")
+        print(f"    ckpt-0 identity: "
+              f"{'PASS' if arma['ckpt0_identity_passed'] else 'FAIL'}")
     if ladder:
         print("  ladder rungs (requested -> achieved):")
         for label, r in sorted(ladder.items(), key=lambda kv: kv[1]["requested"]):
