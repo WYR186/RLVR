@@ -227,6 +227,13 @@ def main():
                     help="'auto' uses the scale's depth-matched reference "
                          "layers; or a comma list; or 'all'")
     ap.add_argument("--doses", default=",".join(str(d) for d in e4.DOSE_LADDER))
+    ap.add_argument("--noise-seeds", type=int, nargs="+", default=None,
+                    help="repeat every dose at each of these noise seeds. The "
+                         "rescaling makes the ACHIEVED dose seed-independent, "
+                         "so this varies only the noise direction - which is "
+                         "exactly the question a seed repeat should ask. Arm "
+                         "labels gain an _s<seed> suffix; without this flag the "
+                         "single-seed labels stay as they were.")
     ap.add_argument("--force", action="store_true", help="recompute existing arms")
     ap.add_argument("--spectra-only", action="store_true",
                     help="skip the dormancy reductions and measure spectra "
@@ -391,14 +398,19 @@ def main():
     # -- Arm N ------------------------------------------------------------
     if "N" in args.arms:
         doses = [float(x) for x in args.doses.split(",") if x.strip()]
+        seeds = args.noise_seeds or [e4.NOISE_SEED]
         for dose in doses:
+          for seed in seeds:
             label = f"N_dose_{dose:.0e}".replace("-0", "-")
+            if args.noise_seeds:
+                label = f"{label}_s{seed}"
             if existing(label):
                 continue
             print(f"\n[{label}] reloading {scale['instruct']} "
-                  f"and perturbing at relative dose {dose:g} ...", flush=True)
+                  f"and perturbing at relative dose {dose:g} "
+                  f"(noise seed {seed}) ...", flush=True)
             m, t = load_plain_model(scale["instruct"], device, dtype)
-            pert = e4.perturb_model_(m, dose)
+            pert = e4.perturb_model_(m, dose, seed=seed)
             print(f"  achieved aggregate dose "
                   f"{pert['achieved_aggregate_dose']:.6e} "
                   f"over {pert['n_modules_perturbed']} modules")
@@ -414,7 +426,8 @@ def main():
             records[label] = write(label, rec, {
                 "arm_role": "calibration ladder rung",
                 "requested_relative_dose": dose,
-                "achieved_relative_dose": pert["achieved_aggregate_dose"]})
+                "achieved_relative_dose": pert["achieved_aggregate_dose"],
+                "noise_seed": seed})
             free_model(m)
 
     # -- Arm A: real adapters, measured in this run's own frame -----------

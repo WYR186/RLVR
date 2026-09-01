@@ -103,14 +103,20 @@ def audit_ladder(arms: dict) -> dict:
         rel_err = abs(got - req) / req if req > 0 else 0.0
         rows[label] = {"requested": req, "achieved": got,
                        "rel_err": rel_err,
+                       "seed": p.get("seed"),
                        "n_modules": p["n_modules_perturbed"]}
         assert p["n_modules_perturbed"] > 0, f"{label}: nothing was perturbed"
         assert "not a model of an rlvr update" in p["caveat"].lower(), \
             f"{label}: perturbation caveat missing"
     if len(rows) > 1:
-        achieved = [r["achieved"] for r in rows.values()]
-        assert len(set(round(a, 12) for a in achieved)) == len(achieved), \
-            f"two ladder rungs achieved the same dose: {rows}"
+        # Seed repeats are SUPPOSED to land on the same achieved dose - the
+        # rescaling makes it seed-independent by construction, and varying only
+        # the noise direction is the whole point. So uniqueness is checked on
+        # (dose, seed), which still catches the real error this guards against:
+        # the same rung silently measured twice.
+        keys = [(round(r["achieved"], 12), r["seed"]) for r in rows.values()]
+        assert len(set(keys)) == len(keys), \
+            f"two ladder rungs share a (dose, seed): {rows}"
     return rows
 
 

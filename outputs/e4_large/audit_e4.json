@@ -32,36 +32,42 @@
    "requested": 0.1,
    "achieved": 0.1012809350715926,
    "rel_err": 0.012809350715925899,
+   "seed": 42,
    "n_modules": 196
   },
   "N_dose_1e-2": {
    "requested": 0.01,
    "achieved": 0.010258936640408703,
    "rel_err": 0.025893664040870304,
+   "seed": 42,
    "n_modules": 196
   },
   "N_dose_1e-3": {
    "requested": 0.001,
    "achieved": 0.000852059393617113,
    "rel_err": 0.14794060638288697,
+   "seed": 42,
    "n_modules": 196
   },
   "N_dose_1e-4": {
    "requested": 0.0001,
    "achieved": 3.1066502412945005e-05,
    "rel_err": 0.6893349758705499,
+   "seed": 42,
    "n_modules": 196
   },
   "N_dose_3e-2": {
    "requested": 0.03,
    "achieved": 0.03042604379052939,
    "rel_err": 0.014201459684312981,
+   "seed": 42,
    "n_modules": 196
   },
   "N_dose_3e-3": {
    "requested": 0.003,
    "achieved": 0.0031691248664097015,
    "rel_err": 0.056374955469900484,
+   "seed": 42,
    "n_modules": 196
   }
  },
