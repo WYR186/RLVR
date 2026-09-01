@@ -17,8 +17,10 @@ E1 showed Q does not move across our checkpoints. E4 asks what a change that
 - **It has a threshold.** Below a relative Frobenius weight change of roughly
   **1e-2**, isotropic perturbation produces nothing resolvable. Above it the
   response is monotone: 0.399% → 1.071% → 3.605% at 1.03e-2 / 3.04e-2 / 1.01e-1.
-- **Our intervention was ~19x below that threshold.** Arm W measures the 7B
-  Stage-A LoRA at **5.4596e-04** (ckpt-100).
+- **Our intervention was ~19x below that threshold — for isotropic noise.**
+  Arm W measures the 7B Stage-A LoRA at **5.4596e-04** (ckpt-100). §5 shows a
+  real update at that dose is plainly visible, so this must not be read as
+  "our intervention was too small to see."
 - **At 0.5B, update structure matters.** At matched dose `7.1794e-04`, the real
   exp1.5 v3 ckpt-500 moves erank **0.6143%**, versus isotropic noise mean
   **0.0234%** (range 0.0079%--0.0321%): **26.3x** the mean and above every
@@ -113,8 +115,43 @@ from the pinned Qwen2.5-0.5B Base revision, every Arm-A value is measured agains
 The ckpt-0 exact identity is a hard gate. At ckpt-500's matched dose, three
 isotropic directions moved erank 0.0321% / 0.0079% / 0.0301% (mean 0.0234%).
 The real response is therefore **26.3x the noise mean** and **19.2x the largest
-observed direction**. The non-monotone ckpt-100/500 response also shows that
-weight-norm dose alone does not determine the spectral effect.
+observed direction**.
+
+### The response does not order with the dose — and this is the point
+
+Dose rises monotonically from ckpt-100 to ckpt-500 (**+47%**, 4.88e-04 →
+7.18e-04) while the response **falls 29%** (0.8698% → 0.6143%). The 0.2555 pp
+gap is roughly **10x the spread across noise directions** and **180x** the
+0.0048% response at the smallest measured dose, so it is unlikely to be
+measurement scatter — though each checkpoint is a single measurement and this
+should be repeated before it carries weight.
+
+**This is the mechanism behind every null result in the project.** Q is not
+blind to training; it is not *ordered* by it. A quantity that moves when
+training happens but does not increase with how much training happened cannot
+serve as a progress or stall indicator, and no additional dose repairs that. It
+is the same failure claim (C) in `PROJECT_OVERVIEW_AND_NEXT_EXPERIMENTS.md`
+§3.2 records when two erank variants moved in opposite directions during one
+collapse — here a single variant moves non-monotonically along a single
+training trajectory.
+
+It also reconciles the two scales without comparing their levels: E1 measured
+the 7B Stage-A LoRA moving erank 0.53–0.73% at dose 5.46e-04, and exp1.5 v3
+moves it 0.61–0.87% at 4.88–7.18e-04. Same order of magnitude at the same dose
+range, from a different model and a different training regime.
+
+### An open confound, and what it would cost to close
+
+**Arm N perturbs `R_instruct`; Arm A starts from `R_base`.** The 26.3x
+therefore compares noise-on-Instruct against training-on-base, and those two
+starting models differ by ~10% in erank, so their sensitivity to a small
+perturbation need not be identical.
+
+**Three 0.5B passes on the 4070 would close it**: the same three noise seeds at
+7.179374e-04 applied to the Base model rather than Instruct. Until then the
+ratio is indicative rather than exact. It is very unlikely to be an artifact —
+a 10% difference in starting model cannot manufacture a factor of 26 — but the
+number should carry the caveat wherever it is quoted.
 
 This closes the comparison only at 0.5B. The equivalent 7B Arm A remains absent
 because its mixed bf16-base/fp32-adapter run wedged on MPS. It also does not turn
