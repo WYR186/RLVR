@@ -10,7 +10,9 @@ This run completes the 0.5B scale of E4 and adds the full-parameter Arm W that
 was unavailable on the other machines. Arm W reads all eight preserved exp1.5
 v3 Stage-A checkpoints. Arms R and N use the frozen 4,096-prompt E1 probe,
 layers `[4, 12, 22]`, float32 model weights, and batch size 8. The six Arm-N
-doses are `{1e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1}`.
+doses are `{1e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1}`. Direction repeats use
+seeds 42/43/44 at the exact ckpt-500 dose and at the first >1% response rung,
+`3e-2` (the original `3e-2` rung supplies seed 42 without duplication).
 
 Every R/N arm ran in a fresh Python/CUDA process. The first combined-process
 attempts at batch 16 and batch 8 exhausted the 8 GiB device when the Base arm
@@ -54,12 +56,15 @@ under the same contract.
 | N 1e-1 | 1.000079e-01 | 6.6633% | 4 |
 | R Base | uncontrolled | 11.0991% | 22 |
 
-The largest exp1.5 v3 dose, `7.179374e-04`, lies between the `1e-4` and
-`1e-3` Arm-N rungs. Those rungs move erank by 0.0048% and 0.0902%,
-respectively. This brackets detector sensitivity on the dose axis; it does not
-claim that a structured RLVR update behaves like isotropic noise. Arm R is also
-only an order-of-magnitude reference between released Base and Instruct
-checkpoints, not a controlled intervention.
+At the exact largest exp1.5 v3 dose, `7.179374e-04`, three independent noise
+directions produce maximum absolute erank changes of 0.0321%, 0.0079%, and
+0.0301%: mean **0.0234%**, range **[0.0079%, 0.0321%]**. At `3e-2`, the three
+directions give mean **1.5499%**, range **[1.1674%, 1.7658%]**. Thus the
+matched-dose response is small and direction-dependent, while the larger rung
+is consistently above 1%. This calibrates detector sensitivity; it does not
+claim that a structured RLVR update behaves like isotropic noise. Arm R is only
+an order-of-magnitude reference between released Base and Instruct checkpoints,
+not a controlled intervention.
 
 The 7B E1 response is deliberately not used to bracket this small-scale result.
 Erank levels and response magnitudes are not compared across model scales.
@@ -71,8 +76,8 @@ Erank levels and response magnitudes are not compared across model scales.
 - probe n=4,096, ID hash `1e61252e7b54793e`, no truncation relative to E1;
 - tokenizer identity gate passed;
 - gated-MLP hook reconstruction maximum error exactly 0.0;
-- all six achieved doses distinct, strictly increasing, and within 0.01% of
-  their requests over all 168 target modules;
+- all 11 unique `(requested dose, noise seed)` cells within 0.01% of their
+  requests over all 168 target modules, with no duplicate dose/seed pair;
 - all eight Arm-W checkpoints present and checkpoint 0 exactly zero.
 
 The complete machine-readable output is in `outputs/e4_small/`; the portable

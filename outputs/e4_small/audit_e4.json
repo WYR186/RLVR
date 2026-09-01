@@ -13,7 +13,12 @@
   "N_dose_1e-3",
   "N_dose_1e-4",
   "N_dose_3e-2",
+  "N_dose_3e-2_s43",
+  "N_dose_3e-2_s44",
   "N_dose_3e-3",
+  "N_dose_7e-4_s42",
+  "N_dose_7e-4_s43",
+  "N_dose_7e-4_s44",
   "R_base",
   "R_instruct"
  ],
@@ -23,7 +28,12 @@
   "N_dose_1e-3": 0.0,
   "N_dose_1e-4": 0.0,
   "N_dose_3e-2": 0.0,
+  "N_dose_3e-2_s43": 0.0,
+  "N_dose_3e-2_s44": 0.0,
   "N_dose_3e-3": 0.0,
+  "N_dose_7e-4_s42": 0.0,
+  "N_dose_7e-4_s43": 0.0,
+  "N_dose_7e-4_s44": 0.0,
   "R_base": 0.0,
   "R_instruct": 0.0
  },
@@ -32,36 +42,77 @@
    "requested": 0.1,
    "achieved": 0.10000790376751655,
    "rel_err": 7.903767516539983e-05,
+   "seed": 42,
    "n_modules": 168
   },
   "N_dose_1e-2": {
    "requested": 0.01,
    "achieved": 0.01000078997007243,
    "rel_err": 7.899700724296743e-05,
+   "seed": 42,
    "n_modules": 168
   },
   "N_dose_1e-3": {
    "requested": 0.001,
    "achieved": 0.0010000788585378163,
    "rel_err": 7.885853781628739e-05,
+   "seed": 42,
    "n_modules": 168
   },
   "N_dose_1e-4": {
    "requested": 0.0001,
    "achieved": 0.00010000787512333357,
    "rel_err": 7.87512333356923e-05,
+   "seed": 42,
    "n_modules": 168
   },
   "N_dose_3e-2": {
    "requested": 0.03,
    "achieved": 0.030002365276748995,
    "rel_err": 7.884255829986495e-05,
+   "seed": 42,
+   "n_modules": 168
+  },
+  "N_dose_3e-2_s43": {
+   "requested": 0.03,
+   "achieved": 0.030002358557045455,
+   "rel_err": 7.861856818186057e-05,
+   "seed": 43,
+   "n_modules": 168
+  },
+  "N_dose_3e-2_s44": {
+   "requested": 0.03,
+   "achieved": 0.030002358259315683,
+   "rel_err": 7.860864385614749e-05,
+   "seed": 44,
    "n_modules": 168
   },
   "N_dose_3e-3": {
    "requested": 0.003,
    "achieved": 0.003000236295946162,
    "rel_err": 7.876531538730687e-05,
+   "seed": 42,
+   "n_modules": 168
+  },
+  "N_dose_7e-4_s42": {
+   "requested": 0.0007179373567183973,
+   "achieved": 0.0007179938253245575,
+   "rel_err": 7.865394610233726e-05,
+   "seed": 42,
+   "n_modules": 168
+  },
+  "N_dose_7e-4_s43": {
+   "requested": 0.0007179373567183973,
+   "achieved": 0.0007179939917111035,
+   "rel_err": 7.88857024589011e-05,
+   "seed": 43,
+   "n_modules": 168
+  },
+  "N_dose_7e-4_s44": {
+   "requested": 0.0007179373567183973,
+   "achieved": 0.0007179939298858904,
+   "rel_err": 7.87995874064439e-05,
+   "seed": 44,
    "n_modules": 168
   }
  },
@@ -118,6 +169,26 @@
     "max_abs_change_layer": 4,
     "signed_change_at_max_pct": 1.167356349472094
    },
+   "N_dose_3e-2_s43": {
+    "per_layer_pct": {
+     "4": 1.7658178353986378,
+     "12": 0.8194703391569756,
+     "22": 0.6508944845532152
+    },
+    "max_abs_change_pct": 1.7658178353986378,
+    "max_abs_change_layer": 4,
+    "signed_change_at_max_pct": 1.7658178353986378
+   },
+   "N_dose_3e-2_s44": {
+    "per_layer_pct": {
+     "4": 1.7166676139968897,
+     "12": -0.2410877615867159,
+     "22": -0.7789070799609944
+    },
+    "max_abs_change_pct": 1.7166676139968897,
+    "max_abs_change_layer": 4,
+    "signed_change_at_max_pct": 1.7166676139968897
+   },
    "N_dose_3e-3": {
     "per_layer_pct": {
      "4": 0.06937365084028718,
@@ -127,6 +198,36 @@
     "max_abs_change_pct": 0.14785005863978357,
     "max_abs_change_layer": 22,
     "signed_change_at_max_pct": -0.14785005863978357
+   },
+   "N_dose_7e-4_s42": {
+    "per_layer_pct": {
+     "4": -0.03205941622087125,
+     "12": 0.012855911622517757,
+     "22": -0.01627018231377922
+    },
+    "max_abs_change_pct": 0.03205941622087125,
+    "max_abs_change_layer": 4,
+    "signed_change_at_max_pct": -0.03205941622087125
+   },
+   "N_dose_7e-4_s43": {
+    "per_layer_pct": {
+     "4": -0.0035705073870792936,
+     "12": 0.00529751090999947,
+     "22": -0.007855905231187206
+    },
+    "max_abs_change_pct": 0.007855905231187206,
+    "max_abs_change_layer": 22,
+    "signed_change_at_max_pct": -0.007855905231187206
+   },
+   "N_dose_7e-4_s44": {
+    "per_layer_pct": {
+     "4": -0.023707351819970197,
+     "12": 0.0007486988600539751,
+     "22": -0.030137313251073987
+    },
+    "max_abs_change_pct": 0.030137313251073987,
+    "max_abs_change_layer": 22,
+    "signed_change_at_max_pct": -0.030137313251073987
    },
    "R_base": {
     "per_layer_pct": {

@@ -52,15 +52,51 @@ def ladder_rows(arms: dict, ref_label: str) -> list[dict]:
             "max_abs_pct": abs(rel[peak]),
             "signed_pct": rel[peak],
             "layer": peak,
+            "seed": pert.get("seed") if pert else None,
             "kind": "ladder" if pert else "ruler",
         })
     rows.sort(key=lambda r: (r["kind"], r["dose"] if r["dose"] is not None else -1))
     return rows
 
 
+def seed_repeat_groups(rows: list[dict]) -> list[dict]:
+    """Summarize explicitly labelled direction repeats without double-counting.
+
+    The original ladder's un-suffixed rung uses the default seed too.  At a
+    dose with explicit ``*_s<seed>`` records, count that original as seed 42.
+    """
+    grouped = {}
+    for row in rows:
+        if row["kind"] != "ladder" or "_s" not in row["arm"]:
+            continue
+        grouped.setdefault(row["requested"], []).append(row)
+    # The original unsuffixed ladder cell is the default seed (42).  Whenever
+    # explicit repeats exist at that dose, include it as the seed-42 member.
+    for requested, members in grouped.items():
+        seen = {r["seed"] for r in members}
+        members.extend(
+            r for r in rows
+            if r["kind"] == "ladder" and "_s" not in r["arm"]
+            and r["requested"] == requested and r["seed"] not in seen)
+    summaries = []
+    for requested, members in sorted(grouped.items()):
+        values = [r["max_abs_pct"] for r in members]
+        summaries.append({
+            "requested": requested,
+            "dose": sum(r["dose"] for r in members) / len(members),
+            "n": len(members),
+            "mean": sum(values) / len(values),
+            "min": min(values),
+            "max": max(values),
+            "seeds": sorted(r["seed"] for r in members),
+        })
+    return summaries
+
+
 def bracket(rows: list[dict], target_pct: float):
     """Which two ladder rungs does `target_pct` fall between?"""
-    rungs = sorted((r for r in rows if r["kind"] == "ladder"),
+    rungs = sorted((r for r in rows
+                    if r["kind"] == "ladder" and "_s" not in r["arm"]),
                    key=lambda r: r["dose"])
     below = [r for r in rungs if r["max_abs_pct"] <= target_pct]
     above = [r for r in rungs if r["max_abs_pct"] > target_pct]
@@ -90,6 +126,15 @@ def write_figure(rows, arm_w, path: Path, scale: str, floor_pct=None):
     ax.plot([r["dose"] for r in rungs], [r["max_abs_pct"] for r in rungs],
             marker="o", lw=1.8, color="#1f4e79",
             label="Arm N: isotropic weight noise")
+    repeats = seed_repeat_groups(rows)
+    if repeats:
+        means = [g["mean"] for g in repeats]
+        ax.errorbar(
+            [g["dose"] for g in repeats], means,
+            yerr=[[m - g["min"] for m, g in zip(means, repeats)],
+                  [g["max"] - m for m, g in zip(means, repeats)]],
+            fmt="s", ms=5, capsize=4, color="#d35400", linestyle="none",
+            label="Arm N direction repeats (mean and range)")
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel("relative Frobenius weight dose  "
@@ -125,11 +170,16 @@ def write_figure(rows, arm_w, path: Path, scale: str, floor_pct=None):
     if arm_w:
         # Multiple nearby checkpoints would collide at one height. Spread all
         # nonzero Arm-W labels through a bounded mid-band of the log y-axis.
-        live = sorted((c, d) for c, d in arm_w.items() if d and d > 0)
+        live = sorted(((c, d) for c, d in arm_w.items() if d and d > 0),
+                      key=lambda item: item[1])
         y0, y1 = ax.get_ylim()
+        label_indices = {0, len(live) // 2, len(live) - 1}
         for i, (ckpt, dose) in enumerate(live):
             ax.axvline(dose, ls="-.", lw=1.2, color="#148f77")
-            frac = 0.55 - 0.43 * i / max(1, len(live) - 1)
+            if i not in label_indices:
+                continue
+            rank = sorted(label_indices).index(i)
+            frac = 0.50 - 0.34 * rank / max(1, len(label_indices) - 1)
             y = 10 ** (math.log10(y0) + frac * (math.log10(y1) - math.log10(y0)))
             ax.annotate(f"our {ckpt}  {dose:.2e}", xy=(dose, y),
                         xytext=(7, 0), textcoords="offset points",
@@ -157,6 +207,7 @@ def main():
     if args.reference not in arms:
         raise SystemExit(f"reference arm {args.reference!r} not in {sorted(arms)}")
     rows = ladder_rows(arms, args.reference)
+    repeats = seed_repeat_groups(rows)
     scale = arms[args.reference]["measurement_contract"].get("e4_scale", "?")
 
     arm_w = {}
@@ -188,10 +239,22 @@ def main():
              "| arm | requested dose | achieved dose | max \\|Δerank\\| | layer |",
              "|---|---|---|---|---|"]
     for r in rows:
+        if r["kind"] == "ladder" and "_s" in r["arm"]:
+            continue
         req = f"{r['requested']:.0e}" if r["requested"] is not None else "—"
         got = f"{r['dose']:.4e}" if r["dose"] is not None else "— (not a controlled dose)"
         lines.append(f"| {r['arm']} | {req} | {got} | "
                      f"{r['max_abs_pct']:.4f}% | {r['layer']} |")
+
+    if repeats:
+        lines += ["", "## Noise-direction seed repeats", "",
+                  "| requested dose | n | seeds | mean max \\|Δerank\\| | range |",
+                  "|---|---:|---|---:|---:|"]
+        for g in repeats:
+            seeds = ", ".join(str(s) for s in g["seeds"])
+            lines.append(
+                f"| {g['requested']:.6g} | {g['n']} | {seeds} | "
+                f"{g['mean']:.4f}% | [{g['min']:.4f}%, {g['max']:.4f}%] |")
 
     lines += ["", "## Where our Stage-A run falls", ""]
     if arm_w:
@@ -219,11 +282,19 @@ def main():
     elif arm_w:
         largest_ckpt, largest_dose = max(arm_w.items(), key=lambda x: x[1])
         dlo, dhi = dose_bracket(rows, largest_dose)
+        matched = next((g for g in repeats if math.isclose(
+            g["requested"], largest_dose, rel_tol=1e-6)), None)
         source = "full-parameter exp1.5 v3" if arm_w_mode == "full_parameter" \
             else "measured Stage-A"
         lines += ["", f"The largest {source} dose is `{largest_ckpt}` at "
                   f"**{largest_dose:.4e}**."]
-        if dlo and dhi:
+        if matched:
+            lines.append(
+                f"The direct matched-dose repeat ({matched['n']} directions; seeds "
+                f"{', '.join(str(s) for s in matched['seeds'])}) gives mean max "
+                f"|Δerank| **{matched['mean']:.4f}%**, range "
+                f"[{matched['min']:.4f}%, {matched['max']:.4f}%].")
+        elif dlo and dhi:
             lines.append(
                 f"On the Arm-N dose axis it lies between **{dlo['requested']:.0e}** "
                 f"(max |Δerank| {dlo['max_abs_pct']:.4f}%) and "

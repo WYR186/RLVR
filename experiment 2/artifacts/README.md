@@ -32,14 +32,15 @@ shutdown evidence are recorded in `eaaj-pilot/compute_log.md` and
 
 `e4_small_win4070_2026-09-01.tar.gz` is the complete audited 0.5B E4 output,
 including exp1.5 v3 full-parameter Arm W, both Arm-R records, all six Arm-N
-rungs, the frozen probe and manifest, audit JSON, summary, figure, and the
-preserved batch-16 OOM diagnostic record.
+rungs, direction repeats at the exact ckpt-500 dose and `3e-2`, the frozen
+probe and manifest, audit JSON, summary, figure, and the preserved batch-16 OOM
+diagnostic record.
 
 - Archive root: `e4_small/`
-- Files: 16
-- Uncompressed size: 3,329,503 bytes
-- Archive size: 777,129 bytes
-- SHA-256: `a172cc032ed5692290378441fb6903e218073d67461d6178655868e2c3bedd16`
+- Files: 21
+- Uncompressed size: 3,621,641 bytes
+- Archive size: 816,803 bytes
+- SHA-256: `d8bd01669a5c08674df1a3893e2f4d399766bc9b17675b252f3c5e6f82c96d65`
 
 Extract from the repository root with:
 

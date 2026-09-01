@@ -366,7 +366,7 @@ def main():
         p = out / f"{label}.json"
         if p.is_file() and not args.force:
             print(f"[{label}] already present, skipping (use --force to redo)")
-            records[label] = json.loads(p.read_text())
+            records[label] = json.loads(p.read_text(encoding="utf-8"))
             return True
         return False
 
@@ -483,12 +483,21 @@ def main():
             del m
 
     # -- assembly ---------------------------------------------------------
+    # Isolated one-cell-per-process execution is the safe path on an 8 GB GPU.
+    # Pick up every completed arm in the output directory so a final no-op
+    # assembly includes cells produced by earlier invocations (including
+    # noise-direction repeats) instead of only the labels requested this time.
+    for p in sorted(out.glob("*.json")):
+        if p.stem.startswith(("R_", "N_dose_", "A_")) and p.stem not in records:
+            records[p.stem] = json.loads(p.read_text(encoding="utf-8"))
+
     if "R_instruct" in records:
         table = e4.ruler_table(records, "R_instruct")
         table["hardware"] = mem
         table["scale"] = args.scale
         table["layers"] = list(layers)
-        (out / "ruler_table.json").write_text(json.dumps(table, indent=1))
+        (out / "ruler_table.json").write_text(
+            json.dumps(table, indent=1), encoding="utf-8")
         print(f"\nwrote {out / 'ruler_table.json'}")
         print(f"\n{'arm':>18}  {'max |d erank|':>14}  {'at layer':>8}")
         for label, row in sorted(table["arms"].items()):

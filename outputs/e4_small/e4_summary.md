@@ -12,6 +12,13 @@ Reference arm: `R_instruct`. Probe n=4096, layers [4, 12, 22], dtype torch.float
 | N_dose_1e-1 | 1e-01 | 1.0001e-01 | 6.6633% | 4 |
 | R_base | — | — (not a controlled dose) | 11.0991% | 22 |
 
+## Noise-direction seed repeats
+
+| requested dose | n | seeds | mean max \|Δerank\| | range |
+|---|---:|---|---:|---:|
+| 0.000717937 | 3 | 42, 43, 44 | 0.0234% | [0.0079%, 0.0321%] |
+| 0.03 | 3 | 42, 43, 44 | 1.5499% | [1.1674%, 1.7658%] |
+
 ## Where our Stage-A run falls
 
 - `ckpt-0` aggregate relative dose: **0.0000e+00**
@@ -24,7 +31,7 @@ Reference arm: `R_instruct`. Probe n=4096, layers [4, 12, 22], dtype torch.float
 - `ckpt-500` aggregate relative dose: **7.1794e-04**
 
 The largest full-parameter exp1.5 v3 dose is `ckpt-500` at **7.1794e-04**.
-On the Arm-N dose axis it lies between **1e-04** (max |Δerank| 0.0048%) and **1e-03** (0.0902%).
+The direct matched-dose repeat (3 directions; seeds 42, 43, 44) gives mean max |Δerank| **0.0234%**, range [0.0079%, 0.0321%].
 The 7B E1 erank reference is not plotted or bracketed here: erank levels and response magnitudes are not compared across scales.
 
 ## Reading rules

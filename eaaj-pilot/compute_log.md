@@ -320,6 +320,11 @@ reference-arm gate plus every operationalization axis in
   session time was longer because two combined-process attempts were preserved
   after CUDA OOM on the 8-GiB device. No formal arm was accepted from a failed
   process.
+- Seed-repeat extension: three directions at the exact ckpt-500 dose and three
+  at `3e-2` (the original `3e-2` seed-42 cell was reused, not counted twice).
+  The six isolated repeat processes took about 36.4 minutes in total. Matched
+  dose mean max |Δerank| was 0.0234% (range 0.0079%--0.0321%); at `3e-2` it was
+  1.5499% (range 1.1674%--1.7658%).
 - Engineering correction: the runner now releases caller-owned model
   references and supports `--r-only`; final execution used one model per fresh
   process without changing the scientific contract.
